@@ -34,11 +34,9 @@ opensy/
 │
 ├── standards/                      ← all reusable building blocks
 │   ├── units.py                    ← SI unit constants  (N, mm, MPa …)
-│   ├── analysis_utils.py           ← gravity / pushover / IDA helpers
-│   ├── vis_utils.py                ← opstool visualisation helpers  ← NEW
+│   ├── vis_utils.py                ← opstool visualisation helpers
 │   ├── material_library.py         ← named material factory functions
-│   ├── section_library.py          ← named fiber-section builders
-│   └── recorder_utils.py           ← recorder factory functions
+│   └── section_library.py          ← named fiber-section builders
 │
 ├── templates/                      ← copy-and-fill starters
 │   ├── template_1d_sdof.py
@@ -61,7 +59,7 @@ opensy/
 │       ├── model.py                ← main script (MUST pass audit)
 │       ├── README.md               ← auto-generated from catalogue entry
 │       ├── ground_motions/         ← .txt / .acc files (if any)
-│       └── output/                 ← recorder output (git-ignored)
+│       └── output/                 ← opstool ODB files + HTML vis (git-ignored)
 │
 ├── Opensees_references/            ← learning examples (no research intent)
 │   ├── AmirHosseinNamdchi/
@@ -102,9 +100,7 @@ from pathlib import Path
 # Add standards/ to path if running standalone
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from analysis_utils import run_gravity, run_pushover, run_dynamic
 from vis_utils import _headless   # CI headless guard shared across modules
-from recorder_utils import add_node_recorders, add_element_recorders
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 # All integer tags as NAMED CONSTANTS — no magic numbers anywhere else.
@@ -177,11 +173,27 @@ def vis_stage_model(output_dir: Path) -> None:
     fig = opst.vis.plotly.plot_model(show_node_label=True, show_ele_label=True)
     fig.write_html(str(output_dir / "vis_02_model.html"))
 
-# ── 10. RECORDERS ────────────────────────────────────────────────────────────
-def define_recorders(output_dir: Path) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    add_node_recorders(output_dir)
-    add_element_recorders(output_dir)
+# ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
+def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
+    """Initialise an opstool ODB and save model data snapshot.
+
+    Call this after all nodes and elements are defined and before the first
+    analysis step. The returned object must be passed into every analysis
+    helper so that fetch_response_step() is called each step.
+
+    Args:
+        odb_tag: Integer tag identifying this load-case ODB (default 1).
+
+    Returns:
+        Configured CreateODB instance ready to collect responses.
+    """
+    odb = opst.post.CreateODB(
+        odb_tag=odb_tag,
+        model_update=False,   # set True only if nodes/elements are added/removed mid-analysis
+        save_every=None,      # accumulate in memory; set an int for large models
+    )
+    odb.save_model_data()
+    return odb
 
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
 def define_gravity_loads() -> None:
@@ -211,8 +223,113 @@ def vis_stage_pre_analysis(output_dir: Path) -> None:
     fig.write_html(str(output_dir / "vis_04_pre_analysis.html"))
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
-def run_analysis(output_dir: Path) -> None:
+# Gravity — load-controlled static
+def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10) -> None:
+    """Apply gravity loads incrementally using SmartAnalyze (Static).
+
+    Args:
+        odb: Active CreateODB instance; fetch_response_step() called each step.
+        n_steps: Number of equal load increments (default 10).
+    """
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    ops.integrator("LoadControl", 1.0 / n_steps)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+    )
+    protocol = [1.0]
+    segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
+    for seg in segs:
+        analysis.StaticAnalyze(node=1, dof=1, seg=seg)
+        odb.fetch_response_step()
+    analysis.close()
+    ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
+
+
+# Pushover — displacement-controlled static
+def run_pushover(
+    odb: "opst.post.CreateODB",
+    ctrl_node: int,
+    ctrl_dof: int,
+    target_disp: float,
+    max_step: float | None = None,
+) -> None:
+    """Run a displacement-controlled pushover using SmartAnalyze (Static).
+
+    Args:
+        odb: Active CreateODB instance; fetch_response_step() called each step.
+        ctrl_node: Tag of the control node (usually roof node).
+        ctrl_dof: DOF direction (1 = X, 2 = Y, 3 = Z).
+        target_disp: Target displacement in mm (N-mm unit system).
+        max_step: Maximum step size in mm. Defaults to target_disp / 100.
+    """
+    if max_step is None:
+        max_step = target_disp / 100.0
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, max_step)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30, 50, 60],
+        tryAddTestTimes=True,
+        testIterTimesMore=[50, 100],
+        relaxation=0.5,
+        minStep=1.0e-4,
+    )
+    protocol = [target_disp]
+    segs = analysis.static_split(protocol, maxStep=max_step)
+    for seg in segs:
+        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+        odb.fetch_response_step()
+    analysis.close()
+
+
+# Dynamic (Transient)
+def run_dynamic(odb: "opst.post.CreateODB", npts: int, dt: float) -> None:
+    """Run a transient analysis using SmartAnalyze.
+
+    The integrator (e.g. Newmark) MUST be set by the caller before invoking
+    this function.
+
+    Args:
+        odb: Active CreateODB instance; fetch_response_step() called each step.
+        npts: Total number of time steps.
+        dt: Time step size in seconds.
+    """
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    # Integrator must be set externally, e.g.:
+    #   ops.integrator("Newmark", 0.5, 0.25)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Transient",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30, 50],
+        tryAddTestTimes=True,
+        testIterTimesMore=[50, 100],
+        relaxation=0.5,
+        minStep=1.0e-6,
+    )
+    segs = analysis.transient_split(npts)
+    for _ in segs:
+        analysis.TransientAnalyze(dt)
+        odb.fetch_response_step()
+    analysis.close()
+
+
+def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
+    """Build model, run gravity + pushover, return ODB for post-processing.
+
+    Returns:
+        The populated CreateODB instance (call odb.save_response() in post_process).
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
+    opst.post.set_odb_path(str(output_dir))   # direct all ODB files to output/
     init_model()
     define_materials()
     define_sections()
@@ -221,27 +338,36 @@ def run_analysis(output_dir: Path) -> None:
     vis_stage_nodes(output_dir)                    # ← V1: nodes + supports
     define_elements()
     vis_stage_model(output_dir)                    # ← V2: full geometry
-    define_recorders(output_dir)
+    odb = create_odb(odb_tag=1)                    # ← initialise ODB after model is built
     define_gravity_loads()
     define_lateral_loads()
     vis_stage_loads(output_dir)                    # ← V3: load vectors
     vis_stage_pre_analysis(output_dir)             # ← V4: pre-analysis check
-    run_gravity()
-    run_pushover(n_steps=100, d_target=100.0 * mm) # 100 mm target displacement
+    run_gravity(odb)
+    # TODO: replace NODE_BASE_1 / ctrl_dof / target_disp with your model values
+    run_pushover(odb, ctrl_node=NODE_BASE_1, ctrl_dof=1, target_disp=100.0 * mm)
+    return odb
 
 # ── 13. POST-PROCESSING ──────────────────────────────────────────────────────
-def post_process(output_dir: Path) -> None:
-    from plot_utils import plot_pushover
-    plot_pushover(output_dir / "pushover.txt")
+def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
+    """Flush ODB to disk and render deformed-shape HTML.
+
+    Args:
+        odb: Populated CreateODB returned by run_analysis().
+        output_dir: Folder where ODB and HTML files are written.
+    """
+    odb.save_response()   # write all accumulated responses to output/ as .nc / .h5
     if not _headless():
-        fig_defo = opst.vis.plotly.plot_defo(scale=10.0)
+        fig_defo = opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1, resp_type="disp", resp_dof="ux"
+        )
         fig_defo.write_html(str(output_dir / "vis_05_deformed.html"))
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
-    run_analysis(output_dir)
-    post_process(output_dir)
+    odb = run_analysis(output_dir)
+    post_process(odb, output_dir)
 ```
 
 ---
@@ -477,6 +603,157 @@ def vis_defo(
 
 ---
 
+## 3c. Analysis Patterns — `opst.anlys.SmartAnalyze` (MANDATORY)
+
+All solver loops MUST use `opst.anlys.SmartAnalyze`. Raw `ops.analyze()` calls are
+**forbidden** (see Section 10). The three canonical patterns below are already
+embedded in the canonical script (Section 3); copy and adapt them.
+
+### Gravity (load-controlled static)
+```python
+ops.constraints("Transformation")
+ops.numberer("RCM")
+ops.system("BandGeneral")
+ops.integrator("LoadControl", 1.0 / n_steps)
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30],
+)
+protocol = [1.0]
+segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
+for seg in segs:
+    analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+    odb.fetch_response_step()          # ← collect responses at this step
+analysis.close()
+ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
+```
+
+### Pushover (displacement-controlled static)
+```python
+ops.constraints("Transformation")
+ops.numberer("RCM")
+ops.system("BandGeneral")
+ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, max_step)
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30, 50, 60],
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+    relaxation=0.5,
+    minStep=1.0e-4,
+)
+protocol = [target_disp]          # e.g. 100.0 * mm
+segs = analysis.static_split(protocol, maxStep=max_step)
+for seg in segs:
+    analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+    odb.fetch_response_step()          # ← collect responses at this step
+analysis.close()
+```
+
+### Dynamic (transient)
+```python
+ops.constraints("Transformation")
+ops.numberer("RCM")
+ops.system("BandGeneral")
+ops.integrator("Newmark", 0.5, 0.25)   # set BEFORE SmartAnalyze
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Transient",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30, 50],
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+    relaxation=0.5,
+    minStep=1.0e-6,
+)
+segs = analysis.transient_split(npts)
+for _ in segs:
+    analysis.TransientAnalyze(dt)
+    odb.fetch_response_step()          # ← collect responses at this step
+analysis.close()
+```
+
+> **Key rules:**
+> - `test()` and `algorithm()` are managed internally by SmartAnalyze — do not call them manually.
+> - For transient analysis the `integrator()` (e.g. Newmark) MUST be set **before** instantiating `SmartAnalyze`.
+> - Always call `analysis.close()` after the loop.
+> - Always call `ops.loadConst("-time", 0.0)` after gravity to freeze gravity loads.
+> - Call `odb.fetch_response_step()` inside **every** analysis loop, once per converged step.
+
+---
+
+## 3d. Output Database — `opst.post.CreateODB` (MANDATORY)
+
+`recorder_utils.py` is removed. All response data collection is handled by
+`opst.post.CreateODB`. The lifecycle is:
+
+```
+create_odb()               → after model is fully built
+  odb.save_model_data()    → snapshot geometry (called inside create_odb)
+  odb.fetch_response_step() → inside every converged step loop
+  odb.save_response()      → once, at end of all analyses (in post_process)
+```
+
+### ODB initialisation (call after elements are defined, before first analysis)
+```python
+opst.post.set_odb_path(str(output_dir))   # direct all .nc/.h5 files to output/
+
+odb = opst.post.CreateODB(
+    odb_tag=1,           # integer or string tag — identifies this load case
+    model_update=False,  # True only if nodes/elements change mid-analysis
+    save_every=None,     # None = accumulate in memory (fast); int = flush periodically (large models)
+)
+odb.save_model_data()    # snapshot current node/element topology
+```
+
+### Per-step collection (inside every SmartAnalyze loop)
+```python
+for seg in segs:
+    analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+    odb.fetch_response_step()   # collect nodal + element responses at this step
+```
+
+### Finalise (in post_process, after all analyses complete)
+```python
+odb.save_response()   # write accumulated data to output/<odb_tag>.nc (or .h5)
+```
+
+### Selective saving (large models — reduce file size)
+```python
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=True,
+    save_truss_resp=False,   # omit what you don't need
+    save_shell_resp=False,
+    fiber_ele_tags="all",    # or list of element tags
+    node_tags=[NODE_ROOF, NODE_MID],  # only specific nodes if desired
+)
+```
+
+### Multiple load cases (e.g. gravity ODB then pushover ODB)
+```python
+odb_grav = opst.post.CreateODB(odb_tag="gravity")
+odb_grav.save_model_data()
+# … gravity loop with odb_grav.fetch_response_step() …
+odb_grav.save_response()
+
+odb_push = opst.post.CreateODB(odb_tag="pushover")
+odb_push.save_model_data()
+# … pushover loop with odb_push.fetch_response_step() …
+odb_push.save_response()
+```
+
+> **Key rules:**
+> - Call `set_odb_path(str(output_dir))` once before creating any ODB so files land in `output/`.
+> - `save_model_data()` MUST be called immediately after `CreateODB()` and before the first `fetch_response_step()`.
+> - `fetch_response_step()` goes inside the step loop — one call per converged step.
+> - `save_response()` is called exactly once per ODB, after the analysis loop closes.
+> - Never use `ops.recorder()` — all output goes through CreateODB.
+
+---
+
 ## 4. Coding Conventions (Enforced by Audit)
 
 | Rule | ✅ Required | ❌ Forbidden |
@@ -487,7 +764,10 @@ def vis_defo(
 | Functions | One function per section (see layout above) | Flat script with no functions |
 | Units | **N, mm, MPa** from `standards/units.py` | Any other system; redefined per file |
 | Unit multipliers | Every dimensional value carries `* <unit>` | Bare floats without unit annotation |
-| Visualisation | Four opstool stages via `vis_utils.py` | No visualisation / direct opstool calls |
+| Analysis | `opst.anlys.SmartAnalyze` for all solver loops | Raw `ops.analyze()` calls; `analysis_utils` imports |
+| Response collection | `opst.post.CreateODB` + `fetch_response_step()` per step | `ops.recorder()`; `recorder_utils` imports |
+| ODB finalisation | `odb.save_response()` in `post_process` | Omitting `save_response()` or writing raw text recorders |
+| Visualisation | Four opstool stages via `vis_utils.py` | No visualisation / direct opstool calls without `write_html()` |
 | Docstrings | Google-style on every public function | None |
 | Section banners | `# ── N. TITLE ──` exactly | Random comment styles |
 | Output paths | `Path` objects from `pathlib` | Hard-coded strings |
@@ -504,8 +784,8 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 ```
 [ ] 0.  Header docstring present with all required fields (Units field must read "N, mm, MPa")
 [ ] 1.  `import openseespy.opensees as ops` (not wildcard)
-[ ] 2.  `standards/` imports used (units, analysis_utils, vis_utils, recorder_utils)
-[ ] 3.  `import opstool as opst` present (alias must be `opst`, not `opsv`)
+[ ] 2.  `standards/` imports used (units, vis_utils) — no recorder_utils, no analysis_utils
+[ ] 3.  `import opstool as opst` present (alias must be `opst`)
 [ ] 4.  Tag Registry section present; all tags are named constants
 [ ] 5.  Parameters section present; ALL dimensional values carry unit multipliers
 [ ] 6.  All lengths in mm, forces in N, stresses in MPa — no kN/m/kip/ft/in survivors
@@ -513,18 +793,23 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 [ ] 8.  Each FEM phase is its own function
 [ ] 9.  Section banners follow `# ── N. TITLE ──` pattern
 [ ] 10. No magic numbers outside Tag Registry / Parameters
-[ ] 11. Recorders write to `output/` via `Path`
-[ ] 12. `if __name__ == "__main__":` guard present
-[ ] 13. UniqueID in header matches an entry in opensees_catalogue.json
-[ ] 14. Corresponding folder name == UniqueID
-[ ] 15. README.md exists in model folder
-[ ] 16. Ground motion files are in `ground_motions/` subfolder
-[ ] 17. No absolute file paths in script
-[ ] 18. vis_stage_nodes() called after define_boundary_conditions()
-[ ] 19. vis_stage_model() called after define_elements()
-[ ] 20. vis_stage_loads() called after load patterns are defined
-[ ] 21. vis_stage_pre_analysis() called immediately before the first solver step
-[ ] 22. JSON catalogue entry exists and has no blank required fields
+[ ] 11. `opst.post.set_odb_path()` called before first `CreateODB` in `run_analysis`
+[ ] 12. `create_odb()` called after elements defined; `odb.save_model_data()` inside it
+[ ] 13. `odb.fetch_response_step()` called inside every SmartAnalyze step loop
+[ ] 14. `odb.save_response()` called in `post_process` (not inside the analysis loop)
+[ ] 15. No `ops.recorder()` calls anywhere in the script
+[ ] 16. `if __name__ == "__main__":` guard present; `run_analysis` returns `odb`
+[ ] 17. UniqueID in header matches an entry in opensees_catalogue.json
+[ ] 18. Corresponding folder name == UniqueID
+[ ] 19. README.md exists in model folder
+[ ] 20. Ground motion files are in `ground_motions/` subfolder
+[ ] 21. No absolute file paths in script
+[ ] 22. All solver loops use `opst.anlys.SmartAnalyze` — no bare `ops.analyze()` calls
+[ ] 23. vis_stage_nodes() called after define_boundary_conditions()
+[ ] 24. vis_stage_model() called after define_elements()
+[ ] 25. vis_stage_loads() called after load patterns are defined
+[ ] 26. vis_stage_pre_analysis() called immediately before the first solver step
+[ ] 27. JSON catalogue entry exists and has no blank required fields
 ```
 
 ---
@@ -546,7 +831,7 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 ### 7a. Auditing an existing file
 ```
 1. Read the script.
-2. Run through Audit Checklist (Section 5) — items 0–22.
+2. Run through Audit Checklist (Section 5) — items 0–27.
 3. Print a table: item | status | note.
 4. List all FAIL items with a one-line fix description.
 5. Ask user: "Refactor now? (yes / no / show diff only)"
@@ -737,6 +1022,33 @@ h_story = 3.0 * m    # must be: h_story = 3000.0 * mm  (or 3.0 * m where m = 100
 h_story = 10.0   # ft?  in?  — WARN [UNIT_UNKNOWN]
 Es = 29000.0     # ksi — must become:  Es = 29000.0 * ksi  (= 200 GPa)
 
+# ❌ Raw OpenSees recorder — replaced by CreateODB
+ops.recorder("Node", "-file", str(output_dir / "disp.txt"), ...)   # use CreateODB
+
+# ❌ Importing the removed recorder_utils module
+from recorder_utils import add_node_recorders, add_element_recorders   # module deleted
+
+# ❌ Missing fetch_response_step inside the step loop
+for seg in segs:
+    analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+    # odb.fetch_response_step() missing — FAIL [ODB_FETCH]
+
+# ❌ save_response() called inside the loop instead of after it
+for seg in segs:
+    analysis.StaticAnalyze(...)
+    odb.fetch_response_step()
+    odb.save_response()   # must be outside the loop, in post_process
+
+# ❌ Raw OpenSees solver call — bypasses SmartAnalyze convergence management
+ops.analyze(100, 0.01)           # must use opst.anlys.SmartAnalyze
+
+# ❌ Importing the removed analysis_utils module
+from analysis_utils import run_gravity, run_pushover, run_dynamic   # module deleted
+
+# ❌ Manual test/algorithm calls alongside SmartAnalyze
+ops.test("NormDispIncr", 1.0e-6, 10)   # SmartAnalyze manages these internally
+ops.algorithm("Newton")                 # SmartAnalyze manages these internally
+
 # ❌ Wrong opstool alias or calling plot directly instead of via vis_utils
 import opstool as opsv           # must be: import opstool as opst
 opst.plot_model(...)             # must be: opst.vis.plotly.plot_model(...)
@@ -766,7 +1078,9 @@ def run_analysis(output_dir):
 |------|---------|--------|
 | 2025-05-08 | 1.0.0 | Initial AGENT.md created |
 | 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
-| 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; all vis helpers now write HTML files to `output/`; `_headless()` guard moved to `vis_utils.py`; stage table updated with output filenames |
+| 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; HTML output to `output/`; `_headless()` in `vis_utils.py` |
+| 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 24 items |
+| 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; audit checklist extended to 27 items; `ops.recorder()` added to prohibited patterns |
 
 ---
 
