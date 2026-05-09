@@ -150,7 +150,7 @@ def define_nodes() -> None:
     pass  # TODO
 
 # ── 7V. VISUALISE — NODES ────────────────────────────────────────────────────
-def vis_stage_nodes(output_dir: Path) -> None:
+def vis_nodes(output_dir: Path) -> None:
     """Render node positions and boundary conditions; saves HTML to output_dir."""
     if _headless():
         return
@@ -166,7 +166,7 @@ def define_elements() -> None:
     pass  # TODO
 
 # ── 9V. VISUALISE — MODEL (NODES + MEMBERS) ──────────────────────────────────
-def vis_stage_model(output_dir: Path) -> None:
+def vis_model(output_dir: Path) -> None:
     """Render full undeformed model geometry; saves HTML to output_dir."""
     if _headless():
         return
@@ -203,7 +203,7 @@ def define_lateral_loads() -> None:
     pass  # TODO  (pushover pattern or ground-motion input)
 
 # ── 11V. VISUALISE — LOADS ───────────────────────────────────────────────────
-def vis_stage_loads(output_dir: Path) -> None:
+def vis_loads(output_dir: Path) -> None:
     """Render applied load vectors; saves HTML to output_dir."""
     if _headless():
         return
@@ -211,7 +211,7 @@ def vis_stage_loads(output_dir: Path) -> None:
     fig.write_html(str(output_dir / "vis_03_loads.html"))
 
 # ── 11C. PRE-ANALYSIS CHECK ──────────────────────────────────────────────────
-def vis_stage_pre_analysis(output_dir: Path) -> None:
+def vis_pre_analysis(output_dir: Path) -> None:
     """Full model + loads — final sanity check before solver; saves HTML."""
     if _headless():
         return
@@ -224,12 +224,19 @@ def vis_stage_pre_analysis(output_dir: Path) -> None:
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
 # Gravity — load-controlled static
-def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10) -> None:
+def run_gravity(
+    odb: "opst.post.CreateODB",
+    n_steps: int = 10,
+    ctrl_node: int = 1,
+    ctrl_dof: int = 1,
+) -> None:
     """Apply gravity loads incrementally using SmartAnalyze (Static).
 
     Args:
         odb: Active CreateODB instance; fetch_response_step() called each step.
         n_steps: Number of equal load increments (default 10).
+        ctrl_node: Tag of the control node used by SmartAnalyze (default 1).
+        ctrl_dof: DOF direction for convergence monitoring (default 1).
     """
     ops.constraints("Transformation")
     ops.numberer("RCM")
@@ -243,7 +250,7 @@ def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10) -> None:
     protocol = [1.0]
     segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
     for seg in segs:
-        analysis.StaticAnalyze(node=1, dof=1, seg=seg)
+        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
         odb.fetch_response_step()
     analysis.close()
     ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
@@ -328,21 +335,21 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     Returns:
         The populated CreateODB instance (call odb.save_response() in post_process).
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)   # ← MUST be present; creates output/ if absent
     opst.post.set_odb_path(str(output_dir))   # direct all ODB files to output/
     init_model()
     define_materials()
     define_sections()
     define_nodes()
     define_boundary_conditions()
-    vis_stage_nodes(output_dir)                    # ← V1: nodes + supports
+    vis_nodes(output_dir)                           # ← V1: nodes + supports (after BCs)
     define_elements()
-    vis_stage_model(output_dir)                    # ← V2: full geometry
-    odb = create_odb(odb_tag=1)                    # ← initialise ODB after model is built
+    vis_model(output_dir)                           # ← V2: full geometry
+    odb = create_odb(odb_tag=1)                     # ← initialise ODB after model is built
     define_gravity_loads()
     define_lateral_loads()
-    vis_stage_loads(output_dir)                    # ← V3: load vectors
-    vis_stage_pre_analysis(output_dir)             # ← V4: pre-analysis check
+    vis_loads(output_dir)                           # ← V3: load vectors
+    vis_pre_analysis(output_dir)                    # ← V4: pre-analysis check
     run_gravity(odb)
     # TODO: replace NODE_BASE_1 / ctrl_dof / target_disp with your model values
     run_pushover(odb, ctrl_node=NODE_BASE_1, ctrl_dof=1, target_disp=100.0 * mm)
@@ -466,7 +473,7 @@ The helper wrappers live in `standards/vis_utils.py` and call `opstool` internal
 
 | Stage | Call after… | Function | Key opstool args | Output file |
 |---|---|---|---|---|
-| **V1 — Nodes** | `define_nodes()` + `define_boundary_conditions()` | `vis_nodes(output_dir)` | `show_node_label=True` | `vis_01_nodes.html` |
+| **V1 — Nodes** | `define_boundary_conditions()` (supports must be defined first) | `vis_nodes(output_dir)` | `show_node_label=True` | `vis_01_nodes.html` |
 | **V2 — Model** | `define_elements()` | `vis_model(output_dir)` | `show_node_label=True, show_ele_label=True` | `vis_02_model.html` |
 | **V3 — Loads** | `define_gravity_loads()` + `define_lateral_loads()` | `vis_loads(output_dir)` | `show_ele_loads=True` | `vis_03_loads.html` |
 | **V4 — Pre-analysis** | All definitions complete, before solver | `vis_pre_analysis(output_dir)` | `show_ele_loads=True, show_node_label=True, show_ele_label=True` | `vis_04_pre_analysis.html` |
@@ -475,8 +482,8 @@ Additional optional checkpoints (add as needed):
 
 | Stage | Call after… | Function | Output file |
 |---|---|---|---|
-| **V5 — Deformed (gravity)** | `run_gravity()` | `vis_defo(output_dir, filename="vis_05_defo_gravity.html", scale=10.0)` | `vis_05_defo_gravity.html` |
-| **V6 — Deformed (lateral)** | `run_pushover()` / `run_dynamic()` | `vis_defo(output_dir, filename="vis_06_defo_lateral.html", scale=10.0)` | `vis_06_defo_lateral.html` |
+| **V5 — Deformed (gravity)** | `run_gravity()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_05_defo_gravity.html", odb_tag=1, resp_dof="uy")` | `vis_05_defo_gravity.html` |
+| **V6 — Deformed (lateral)** | `run_pushover()` / `run_dynamic()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_06_defo_lateral.html", odb_tag=1, resp_dof="ux")` | `vis_06_defo_lateral.html` |
 
 ### `standards/vis_utils.py` (canonical wrapper)
 
@@ -583,18 +590,29 @@ def vis_pre_analysis(
 def vis_defo(
     output_dir: Path,
     filename: str = "vis_05_deformed.html",
+    odb_tag: int = 1,
+    resp_dof: str = "ux",
     scale: float = 10.0,
 ) -> None:
-    """V5 — Deformed shape at current solver state.
+    """V5/V6 — Deformed shape coloured by nodal response at end of analysis.
+
+    Uses plot_nodal_responses (ODB-based) rather than plot_defo (live model state),
+    so it can be called after the analysis loop has closed.
 
     Args:
         output_dir: Folder where the HTML file is written.
         filename: Output filename (default: vis_05_deformed.html).
-        scale: Displacement amplification factor for visualisation.
+        odb_tag: ODB tag to read responses from (default 1).
+        resp_dof: Response DOF to colour by, e.g. "ux", "uy", "uz" (default "ux").
+        scale: Displacement amplification factor for visualisation (default 10.0).
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_defo(scale=scale)
+    fig = opst.vis.plotly.plot_nodal_responses(
+        odb_tag=odb_tag,
+        resp_type="disp",
+        resp_dof=resp_dof,
+    )
     fig.write_html(str(output_dir / filename))
 ```
 
@@ -759,8 +777,8 @@ odb_push.save_response()
 | Rule | ✅ Required | ❌ Forbidden |
 |------|------------|-------------|
 | Import style | `import openseespy.opensees as ops` | `from openseespy.opensees import *` |
-| Naming | `snake_case` everywhere | `camelCase`, `PascalCase`, `ALLCAPS` vars |
-| Tags | Named `UPPERCASE` constants in Tag Registry | Bare integers inline (e.g. `ops.fix(1, …)`) |
+| Naming | `snake_case` for variables and functions | `camelCase`, `PascalCase` for variables/functions |
+| Tags | Named `UPPERCASE_CONSTANTS` in Tag Registry (e.g. `MAT_STEEL`, `NODE_BASE_1`) | Bare integers inline (e.g. `ops.fix(1, …)`); `ALLCAPS` names for non-tag variables |
 | Functions | One function per section (see layout above) | Flat script with no functions |
 | Units | **N, mm, MPa** from `standards/units.py` | Any other system; redefined per file |
 | Unit multipliers | Every dimensional value carries `* <unit>` | Bare floats without unit annotation |
@@ -784,7 +802,7 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 ```
 [ ] 0.  Header docstring present with all required fields (Units field must read "N, mm, MPa")
 [ ] 1.  `import openseespy.opensees as ops` (not wildcard)
-[ ] 2.  `standards/` imports used (units, vis_utils) — no recorder_utils, no analysis_utils
+[ ] 2.  `standards/` imports used (units, vis_utils) — no recorder_utils, no analysis_utils imports present
 [ ] 3.  `import opstool as opst` present (alias must be `opst`)
 [ ] 4.  Tag Registry section present; all tags are named constants
 [ ] 5.  Parameters section present; ALL dimensional values carry unit multipliers
@@ -805,11 +823,13 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 [ ] 20. Ground motion files are in `ground_motions/` subfolder
 [ ] 21. No absolute file paths in script
 [ ] 22. All solver loops use `opst.anlys.SmartAnalyze` — no bare `ops.analyze()` calls
-[ ] 23. vis_stage_nodes() called after define_boundary_conditions()
-[ ] 24. vis_stage_model() called after define_elements()
-[ ] 25. vis_stage_loads() called after load patterns are defined
-[ ] 26. vis_stage_pre_analysis() called immediately before the first solver step
-[ ] 27. JSON catalogue entry exists and has no blank required fields
+[ ] 23. `analysis.close()` called after every SmartAnalyze loop
+[ ] 24. vis_nodes() called after define_boundary_conditions()
+[ ] 25. vis_model() called after define_elements()
+[ ] 26. vis_loads() called after load patterns are defined
+[ ] 27. vis_pre_analysis() called immediately before the first solver step
+[ ] 28. `output_dir.mkdir(parents=True, exist_ok=True)` present at start of `run_analysis`
+[ ] 29. JSON catalogue entry exists and has no blank required fields
 ```
 
 ---
@@ -843,10 +863,10 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 2. For each FAIL: apply the fix.
 3. Convert all dimensional values to N / mm / MPa using the table in Section 3a.
    - For every converted value, append a comment: # originally X <old_unit>
-4. Insert vis_stage_* calls at the four mandatory checkpoints (Section 3b).
+4. Insert vis_* calls at the four mandatory checkpoints (Section 3b).
 5. Do NOT change model logic (element types, element topology, load patterns).
 6. Write refactored file to same path.
-7. Run audit again to confirm all 22 items PASS.
+7. Run audit again to confirm all 30 items (0–29) PASS.
 8. Summarise changes made.
 9. Create or update the JSON catalogue entry (Section 7e).
 ```
@@ -880,6 +900,9 @@ This step is **mandatory** after every conversion, refactor, or new model genera
 
 ```
 1. Read the existing opensees_catalogue.json (or start with [] if absent).
+   - If the file exists but contains malformed JSON, STOP and report:
+     "ERROR: opensees_catalogue.json is not valid JSON. Fix the file before proceeding."
+     Do NOT overwrite it.
 2. Check whether an entry with the same UniqueID already exists.
    - YES → update the existing entry in place.
    - NO  → append a new entry to the array.
@@ -892,6 +915,8 @@ This step is **mandatory** after every conversion, refactor, or new model genera
 ```
 
 **Catalogue entry schema (JSON):**
+
+> **Field types:** All values are JSON strings. `num_models` must be a numeric string (e.g. `"1"`, `"3"`) reflecting the number of `.py` model files in the folder. Use `"NA"` only for fields that are genuinely inapplicable.
 
 ```json
 {
@@ -1066,7 +1091,7 @@ ops.node(1, 0.0, 0.0)
 def run_analysis(output_dir):
     ...
     define_elements()
-    # vis_stage_model() missing — FAIL [VIS_MODEL]
+    # vis_model() missing — FAIL [VIS_MODEL]
     define_gravity_loads()
 ```
 
@@ -1079,8 +1104,9 @@ def run_analysis(output_dir):
 | 2025-05-08 | 1.0.0 | Initial AGENT.md created |
 | 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
 | 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; HTML output to `output/`; `_headless()` in `vis_utils.py` |
-| 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 24 items |
-| 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; audit checklist extended to 27 items; `ops.recorder()` added to prohibited patterns |
+| 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 28 items (0–27) |
+| 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; `ops.recorder()` added to prohibited patterns |
+| 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
 
 ---
 
