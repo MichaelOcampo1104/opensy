@@ -12,3 +12,6 @@ dependencies = [
     "opstool>=1.0.26",
     "opsvis>=1.3.4",
 ]
+
+[tool.pyright]
+extraPaths = ["standards"]

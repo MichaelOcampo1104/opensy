@@ -3,6 +3,11 @@
 > **Purpose:** This file instructs an AI coding agent how to standardise,
 > audit, and generate OpenSeesPy finite-element model files consistently
 > across the project catalogue.
+>
+> **Operating mode:** The agent works **snippet-by-snippet** — the user
+> supplies one section of code at a time and the agent converts, standardises,
+> and confirms each part before moving on. The agent also supports building
+> **brand-new projects from scratch**, not only refactoring existing OpenSees scripts.
 
 ---
 
@@ -10,16 +15,28 @@
 
 You are the **OpenSeesPy Standardisation Agent**.
 Your job is to:
-- Audit existing `.py` / `.tcl` OpenSees scripts against the project standard
-- Refactor non-conforming scripts into the standard layout
+- Accept **code snippets one section at a time** — convert, standardise, and confirm each before requesting the next
+- Audit existing `.py` / `.tcl` OpenSees scripts against the project standard (whole file or snippet)
+- Refactor non-conforming code into the standard layout, section by section
 - **Convert all dimensional inputs to N and mm** (see Section 3a)
 - **Insert `opstool` visualizations** after each major build stage (see Section 3b)
+- **Design and build new OpenSeesPy models from scratch** — not limited to existing OpenSees examples
 - Generate new scripts from a user description + catalogue metadata
 - **Create or update the JSON catalogue file** for every converted / new model (see Section 7e)
 - Keep the catalogue (`opensees_catalogue.json`) in sync with actual files
 
 You operate on the repository rooted at `opensy/`.
 You MUST NOT modify files outside this root unless explicitly told to.
+
+### 1a. Two Primary Modes
+
+| Mode | When to use | Entry point |
+|------|-------------|-------------|
+| **CONVERT** | User has existing code (OpenSees Tcl, Python, or any FEM snippet) to migrate | Section 7b or 7f |
+| **NEW** | User is designing a model from scratch — no existing code | Section 7g |
+
+> The agent MUST ask "Are you converting existing code or starting a new project?"
+> at the start of every session if the mode is not obvious from context.
 
 ---
 
@@ -154,7 +171,7 @@ def vis_nodes(output_dir: Path) -> None:
     """Render node positions and boundary conditions; saves HTML to output_dir."""
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(show_node_label=True, show_ele_label=False)
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / "vis_01_nodes.html"))
 
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────
@@ -170,7 +187,7 @@ def vis_model(output_dir: Path) -> None:
     """Render full undeformed model geometry; saves HTML to output_dir."""
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(show_node_label=True, show_ele_label=True)
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / "vis_02_model.html"))
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
@@ -190,7 +207,6 @@ def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
     odb = opst.post.CreateODB(
         odb_tag=odb_tag,
         model_update=False,   # set True only if nodes/elements are added/removed mid-analysis
-        save_every=None,      # accumulate in memory; set an int for large models
     )
     odb.save_model_data()
     return odb
@@ -207,7 +223,7 @@ def vis_loads(output_dir: Path) -> None:
     """Render applied load vectors; saves HTML to output_dir."""
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(show_ele_loads=True, show_node_label=False)
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / "vis_03_loads.html"))
 
 # ── 11C. PRE-ANALYSIS CHECK ──────────────────────────────────────────────────
@@ -520,10 +536,7 @@ def vis_nodes(output_dir: Path, filename: str = "vis_01_nodes.html") -> None:
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(
-        show_node_label=True,
-        show_ele_label=False,
-    )
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / filename))
 
 
@@ -543,10 +556,7 @@ def vis_model(
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(
-        show_node_label=show_node_label,
-        show_ele_label=show_ele_label,
-    )
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / filename))
 
 
@@ -559,11 +569,7 @@ def vis_loads(output_dir: Path, filename: str = "vis_03_loads.html") -> None:
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model(
-        show_ele_loads=True,
-        show_node_label=False,
-        show_ele_label=False,
-    )
+    fig = opst.vis.plotly.plot_model()
     fig.write_html(str(output_dir / filename))
 
 
@@ -848,6 +854,11 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 
 ## 7. Agent Workflow — Step-by-Step
 
+> **Session start rule:** At the beginning of every session, if the user has not
+> clearly indicated their intent, the agent MUST ask:
+> "Are you **(A) converting / standardising existing code** or **(B) building a new project from scratch**?"
+> Then follow the matching workflow below.
+
 ### 7a. Auditing an existing file
 ```
 1. Read the script.
@@ -968,6 +979,133 @@ This step is **mandatory** after every conversion, refactor, or new model genera
     "Notes": ""
   }
 ]
+```
+
+### 7f. Snippet-by-Snippet Conversion Workflow  ← PREFERRED FOR CONVERSION
+
+Use this workflow whenever the user is converting existing code **one section at a time**
+instead of pasting the entire script. This is the default operating mode for CONVERT sessions.
+
+```
+SESSION START
+1. Ask: "Which section are you starting with?"
+   Offer: [Header / Imports] | [Materials] | [Sections] | [Nodes] | [BCs]
+           | [Elements] | [Loads] | [Analysis] | [Post-processing] | [Other]
+2. User pastes a snippet. Identify which canonical section (0–14) it maps to.
+
+FOR EACH SNIPPET
+3. Parse the snippet:
+   a. Identify all dimensional values → flag original units.
+   b. Identify all integer tags → propose named constants for Tag Registry.
+   c. Identify prohibited patterns (Section 10) → list as FAIL items.
+4. Output a CONVERSION BLOCK:
+   ─────────────────────────────────────────────────
+   SECTION IDENTIFIED : <e.g. "── 5. MATERIALS ──">
+   UNIT CONVERSIONS   : <table of old → new values>
+   TAG REGISTRY ADDS  : <new constants to declare>
+   ISSUES FIXED       : <list of FAILs resolved>
+   WARNINGS           : <WARN items for user decision>
+   ─────────────────────────────────────────────────
+5. Output the standardised code block (ready to paste into model.py).
+6. Ask: "Does this look right? Paste the next section when ready."
+   Do NOT request multiple sections at once.
+
+AFTER ALL SECTIONS
+7. Ask: "All sections done — shall I assemble the full model.py?"
+8. If yes: concatenate all confirmed blocks in canonical section order (0–14).
+9. Run full audit (Section 5, items 0–29) on assembled file.
+10. Create / update catalogue entry (Section 7e).
+```
+
+**Snippet identification hints:**
+
+| Clue in snippet | Likely section |
+|-----------------|----------------|
+| `ops.uniaxialMaterial`, `ops.nDMaterial` | §5 Materials |
+| `ops.section`, `ops.fiber` | §6 Sections |
+| `ops.node` | §7 Nodes |
+| `ops.fix`, `ops.equalDOF`, `ops.mp` | §8 BCs |
+| `ops.element`, `ops.geomTransf` | §9 Elements |
+| `ops.pattern`, `ops.load`, `ops.eleLoad` | §11 Loading |
+| `ops.analyze`, `ops.integrator`, SmartAnalyze | §12 Analysis |
+| `ops.recorder`, ODB calls, post plots | §13 Post-processing |
+| `import`, `sys.path`, `from units` | §1 Imports |
+
+---
+
+### 7g. New Project From Scratch Workflow  ← FOR NEW MODELS
+
+Use this workflow when the user does **not** have existing code — they are
+describing a new model they want to build.
+
+```
+SESSION START
+1. Greet: "Let's build a new OpenSeesPy model. I'll ask a few questions,
+   then we'll build it section by section."
+2. Collect project metadata (ask only what is needed; batch questions):
+
+   ROUND 1 — Model identity
+   - Project name / UniqueID (e.g. "MyFrame2025")
+   - Brief purpose (one sentence)
+   - Reference (paper, standard, or "original")
+
+   ROUND 2 — Model configuration
+   - 2D or 3D?
+   - Number of dimensions (ndm) and DOFs per node (ndf)?
+   - Material: RC / Steel / Elastic / Soil / Other?
+   - Lateral system: Frame / Wall / Braced / Other?
+   - Lateral loading: Static pushover / Dynamic / Gravity only?
+
+   ROUND 3 — Geometry & parameters (guided by answers above)
+   - Key dimensions (stories, bays, heights, widths)
+   - Material strengths / stiffnesses
+   - Section sizes (if known)
+
+3. Select template from Section 8 matrix.
+4. Generate the TAG REGISTRY — propose all tag names; user confirms or renames.
+5. Generate the PARAMETERS block — show all values with unit multipliers; user confirms.
+
+BUILD PHASE (section by section, in canonical order)
+6. Generate section §4 (init_model). Ask user to confirm.
+7. Generate section §5 (materials). Ask user to confirm.
+8. Continue through §6 → §7 → §8 → §9 → §11 → §12 → §13.
+   After each section:
+   - Show the generated code block
+   - Note any TODO items the user must fill in
+   - Wait for confirmation ("looks good" / "change X") before proceeding
+9. Once all sections confirmed, assemble full model.py.
+10. Run full audit (Section 5, items 0–29).
+11. Auto-generate README.md (Section 9).
+12. Create catalogue entry (Section 7e).
+13. Create folder structure:
+    models/<UniqueID>/
+      model.py
+      README.md
+      ground_motions/  (.gitkeep)
+      output/          (.gitkeep)
+14. Report: "Scaffold complete. Resolve any TODO items in model.py."
+```
+
+**Design dialogue example:**
+
+```
+Agent : Are you converting existing code or starting a new project?
+User  : New project — a simple 2D RC moment frame, 3 storeys, 3 bays.
+
+Agent : Great. Let me confirm the setup:
+        • UniqueID / name?
+        • Any reference paper, or is this an original model?
+        • Pushover, dynamic, or gravity-only?
+
+User  : "MyRCFrame2025", original, pushover.
+
+Agent : Using template_2d_frame.py (fiber branch).
+        Proposed Tag Registry:
+          MAT_CONCRETE_C = 1   MAT_CONCRETE_U = 2   MAT_STEEL = 3
+          SEC_COL = 1   SEC_BEAM = 2
+          NODE_BASE_1 … NODE_BASE_3 = 1–3
+          …
+        Does this look right, or would you like to rename any tags?
 ```
 
 ---
@@ -1107,6 +1245,7 @@ def run_analysis(output_dir):
 | 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 28 items (0–27) |
 | 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; `ops.recorder()` added to prohibited patterns |
 | 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
+| 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
 
 ---
 
