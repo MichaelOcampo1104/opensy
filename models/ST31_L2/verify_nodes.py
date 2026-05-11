@@ -7,9 +7,6 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 import openseespy.opensees as ops
 import opstool as opst
 import numpy as np
-# Workaround: older opstool uses np.NAN (removed in newer numpy)
-if not hasattr(np, 'NAN'):
-    np.NAN = np.nan
 from units import *
 
 # ── Parameters ──
