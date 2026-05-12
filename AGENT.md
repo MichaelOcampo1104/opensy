@@ -167,12 +167,24 @@ def define_nodes() -> None:
     pass  # TODO
 
 # ── 7V. VISUALISE — NODES ────────────────────────────────────────────────────
-def vis_nodes(output_dir: Path) -> None:
-    """Render node positions and boundary conditions; saves HTML to output_dir."""
+def _snapshot_and_render(output_dir: Path, filename: str, **kwargs) -> None:
+    """Render model geometry via opstool.vis.plotly.plot_model (v1.0+).
+
+    Returns a plotly Figure; we save it as a self-contained HTML file.
+    Keyword args are forwarded to plot_model (e.g. show_node_numbering=True).
+    """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model()
-    fig.write_html(str(output_dir / "vis_01_nodes.html"))
+
+    from opstool.vis.plotly import plot_model
+
+    fig = plot_model(**kwargs)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(output_dir / filename))
+
+def vis_nodes(output_dir: Path) -> None:
+    _snapshot_and_render(output_dir, "vis_01_nodes.html",
+                         show_node_numbering=True, show_ele_numbering=False)
 
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────
 def define_boundary_conditions() -> None:
@@ -184,11 +196,9 @@ def define_elements() -> None:
 
 # ── 9V. VISUALISE — MODEL (NODES + MEMBERS) ──────────────────────────────────
 def vis_model(output_dir: Path) -> None:
-    """Render full undeformed model geometry; saves HTML to output_dir."""
-    if _headless():
-        return
-    fig = opst.vis.plotly.plot_model()
-    fig.write_html(str(output_dir / "vis_02_model.html"))
+    """V2 — Full undeformed model geometry (nodes + members + fixities)."""
+    _snapshot_and_render(output_dir, "vis_02_model.html",
+                         show_node_numbering=False, show_ele_numbering=True)
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
 def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
@@ -220,23 +230,15 @@ def define_lateral_loads() -> None:
 
 # ── 11V. VISUALISE — LOADS ───────────────────────────────────────────────────
 def vis_loads(output_dir: Path) -> None:
-    """Render applied load vectors; saves HTML to output_dir."""
-    if _headless():
-        return
-    fig = opst.vis.plotly.plot_model()
-    fig.write_html(str(output_dir / "vis_03_loads.html"))
+    """V3 — Applied load vectors (placeholder until loads are defined)."""
+    _snapshot_and_render(output_dir, "vis_03_loads.html",
+                         show_ele_loads=True, show_node_numbering=False, show_ele_numbering=False)
 
 # ── 11C. PRE-ANALYSIS CHECK ──────────────────────────────────────────────────
 def vis_pre_analysis(output_dir: Path) -> None:
-    """Full model + loads — final sanity check before solver; saves HTML."""
-    if _headless():
-        return
-    fig = opst.vis.plotly.plot_model(
-        show_ele_loads=True,
-        show_node_label=True,
-        show_ele_label=True,
-    )
-    fig.write_html(str(output_dir / "vis_04_pre_analysis.html"))
+    """V4 — Full model + loads — final sanity check before solver."""
+    _snapshot_and_render(output_dir, "vis_04_pre_analysis.html",
+                         show_ele_loads=True, show_node_numbering=True, show_ele_numbering=True)
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
 # Gravity — load-controlled static
@@ -270,7 +272,6 @@ def run_gravity(
         odb.fetch_response_step()
     analysis.close()
     ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
-
 
 # Pushover — displacement-controlled static
 def run_pushover(
@@ -489,10 +490,10 @@ The helper wrappers live in `standards/vis_utils.py` and call `opstool` internal
 
 | Stage | Call after… | Function | Key opstool args | Output file |
 |---|---|---|---|---|
-| **V1 — Nodes** | `define_boundary_conditions()` (supports must be defined first) | `vis_nodes(output_dir)` | `show_node_label=True` | `vis_01_nodes.html` |
-| **V2 — Model** | `define_elements()` | `vis_model(output_dir)` | `show_node_label=True, show_ele_label=True` | `vis_02_model.html` |
+| **V1 — Nodes** | `define_boundary_conditions()` (supports must be defined first) | `vis_nodes(output_dir)` | `show_node_numbering=True` | `vis_01_nodes.html` |
+| **V2 — Model** | `define_elements()` | `vis_model(output_dir)` | `show_node_numbering=True, show_ele_numbering=True` | `vis_02_model.html` |
 | **V3 — Loads** | `define_gravity_loads()` + `define_lateral_loads()` | `vis_loads(output_dir)` | `show_ele_loads=True` | `vis_03_loads.html` |
-| **V4 — Pre-analysis** | All definitions complete, before solver | `vis_pre_analysis(output_dir)` | `show_ele_loads=True, show_node_label=True, show_ele_label=True` | `vis_04_pre_analysis.html` |
+| **V4 — Pre-analysis** | All definitions complete, before solver | `vis_pre_analysis(output_dir)` | `show_ele_loads=True, show_node_numbering=True, show_ele_numbering=True` | `vis_04_pre_analysis.html` |
 
 Additional optional checkpoints (add as needed):
 
@@ -536,27 +537,33 @@ def vis_nodes(output_dir: Path, filename: str = "vis_01_nodes.html") -> None:
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model()
+    fig = opst.vis.plotly.plot_model(
+        show_node_numbering=True,
+        show_ele_numbering=False,
+    )
     fig.write_html(str(output_dir / filename))
 
 
 def vis_model(
     output_dir: Path,
     filename: str = "vis_02_model.html",
-    show_node_label: bool = True,
-    show_ele_label: bool = True,
+    show_node_numbering: bool = True,
+    show_ele_numbering: bool = True,
 ) -> None:
     """V2 — Render full undeformed model geometry (nodes + members).
 
     Args:
         output_dir: Folder where the HTML file is written.
         filename: Output filename (default: vis_02_model.html).
-        show_node_label: Annotate node tags on the figure.
-        show_ele_label: Annotate element tags on the figure.
+        show_node_numbering: Annotate node tags on the figure.
+        show_ele_numbering: Annotate element tags on the figure.
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model()
+    fig = opst.vis.plotly.plot_model(
+        show_node_numbering=show_node_numbering,
+        show_ele_numbering=show_ele_numbering,
+    )
     fig.write_html(str(output_dir / filename))
 
 
@@ -569,7 +576,9 @@ def vis_loads(output_dir: Path, filename: str = "vis_03_loads.html") -> None:
     """
     if _headless():
         return
-    fig = opst.vis.plotly.plot_model()
+    fig = opst.vis.plotly.plot_model(
+        show_ele_loads=True,
+    )
     fig.write_html(str(output_dir / filename))
 
 
@@ -587,8 +596,8 @@ def vis_pre_analysis(
         return
     fig = opst.vis.plotly.plot_model(
         show_ele_loads=True,
-        show_node_label=True,
-        show_ele_label=True,
+        show_node_numbering=True,
+        show_ele_numbering=True,
     )
     fig.write_html(str(output_dir / filename))
 
@@ -726,7 +735,6 @@ opst.post.set_odb_path(str(output_dir))   # direct all .nc/.h5 files to output/
 odb = opst.post.CreateODB(
     odb_tag=1,           # integer or string tag — identifies this load case
     model_update=False,  # True only if nodes/elements change mid-analysis
-    save_every=None,     # None = accumulate in memory (fast); int = flush periodically (large models)
 )
 odb.save_model_data()    # snapshot current node/element topology
 ```
@@ -751,7 +759,7 @@ odb = opst.post.CreateODB(
     save_frame_resp=True,
     save_truss_resp=False,   # omit what you don't need
     save_shell_resp=False,
-    fiber_ele_tags="all",    # or list of element tags
+    save_fiber_sec_resp=False,   # bool flag, not a list of tags
     node_tags=[NODE_ROOF, NODE_MID],  # only specific nodes if desired
 )
 ```
@@ -1246,6 +1254,7 @@ def run_analysis(output_dir):
 | 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; `ops.recorder()` added to prohibited patterns |
 | 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
 | 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
+| 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
 
 ---
 
