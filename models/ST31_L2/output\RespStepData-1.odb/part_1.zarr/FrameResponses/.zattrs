@@ -1,0 +1,7 @@
+{
+  "localDofs": "local coord system dofs at end 1 and end 2",
+  "basicDofs": "basic coord system dofs at end 1 and end 2",
+  "secPoints": "section points No.",
+  "secDofs": "section forces and deformations Dofs. Note that the section DOFs are only valid for <Elastic Section>, <Elastic Shear Section>, and <Fiber Section>. For <Aggregator Section>, you should carefully check the data, as it may not correspond directly to the DOFs.",
+  "Notes": "Note that the deformations are displacements and rotations in the basicDofs;And strains and curvatures in the secDofs"
+}
