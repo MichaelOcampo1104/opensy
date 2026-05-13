@@ -109,7 +109,7 @@ Units    : N, mm, MPa  (see standards/units.py)
 
 # ── 1. IMPORTS ───────────────────────────────────────────────────────────────
 import openseespy.opensees as ops
-import opstool as opst          # visualisation  — use opst.vis.plotly.*
+import opstool as opst          # visualisation — use opst.vis.plotly.*
 import numpy as np
 import sys
 from pathlib import Path
@@ -198,7 +198,7 @@ def define_elements() -> None:
 def vis_model(output_dir: Path) -> None:
     """V2 — Full undeformed model geometry (nodes + members + fixities)."""
     _snapshot_and_render(output_dir, "vis_02_model.html",
-                         show_node_numbering=False, show_ele_numbering=True)
+                         show_node_numbering=True, show_ele_numbering=True)
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
 def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
@@ -383,7 +383,7 @@ def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
     odb.save_response()   # write all accumulated responses to output/ as .nc / .h5
     if not _headless():
         fig_defo = opst.vis.plotly.plot_nodal_responses(
-            odb_tag=1, resp_type="disp", resp_dof="ux"
+            odb_tag=1, resp_type="disp", resp_dof="UX"
         )
         fig_defo.write_html(str(output_dir / "vis_05_deformed.html"))
 
@@ -499,8 +499,8 @@ Additional optional checkpoints (add as needed):
 
 | Stage | Call after… | Function | Output file |
 |---|---|---|---|
-| **V5 — Deformed (gravity)** | `run_gravity()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_05_defo_gravity.html", odb_tag=1, resp_dof="uy")` | `vis_05_defo_gravity.html` |
-| **V6 — Deformed (lateral)** | `run_pushover()` / `run_dynamic()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_06_defo_lateral.html", odb_tag=1, resp_dof="ux")` | `vis_06_defo_lateral.html` |
+| **V5 — Deformed (gravity)** | `run_gravity()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_05_defo_gravity.html", odb_tag=1, resp_dof="UY")` | `vis_05_defo_gravity.html` |
+| **V6 — Deformed (lateral)** | `run_pushover()` / `run_dynamic()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_06_defo_lateral.html", odb_tag=1, resp_dof="UX")` | `vis_06_defo_lateral.html` |
 
 ### `standards/vis_utils.py` (canonical wrapper)
 
@@ -606,7 +606,7 @@ def vis_defo(
     output_dir: Path,
     filename: str = "vis_05_deformed.html",
     odb_tag: int = 1,
-    resp_dof: str = "ux",
+    resp_dof: str = "UX",
     scale: float = 10.0,
 ) -> None:
     """V5/V6 — Deformed shape coloured by nodal response at end of analysis.
@@ -618,7 +618,8 @@ def vis_defo(
         output_dir: Folder where the HTML file is written.
         filename: Output filename (default: vis_05_deformed.html).
         odb_tag: ODB tag to read responses from (default 1).
-        resp_dof: Response DOF to colour by, e.g. "ux", "uy", "uz" (default "ux").
+        resp_dof: Response DOF to colour by, e.g. "UX", "UY", "UZ" (default "UX").
+                  Must be uppercase — opstool requires "UX"/"UY"/"UZ"/"RX"/"RY"/"RZ".
         scale: Displacement amplification factor for visualisation (default 10.0).
     """
     if _headless():
@@ -627,6 +628,7 @@ def vis_defo(
         odb_tag=odb_tag,
         resp_type="disp",
         resp_dof=resp_dof,
+        scale=scale,
     )
     fig.write_html(str(output_dir / filename))
 ```
@@ -870,7 +872,7 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 ### 7a. Auditing an existing file
 ```
 1. Read the script.
-2. Run through Audit Checklist (Section 5) — items 0–27.
+2. Run through Audit Checklist (Section 5) — items 0–29.
 3. Print a table: item | status | note.
 4. List all FAIL items with a one-line fix description.
 5. Ask user: "Refactor now? (yes / no / show diff only)"
@@ -1255,6 +1257,7 @@ def run_analysis(output_dir):
 | 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
 | 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
 | 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
+| 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
 
 ---
 
