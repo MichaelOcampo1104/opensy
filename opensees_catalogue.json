@@ -1,0 +1,23 @@
+[
+  {
+    "UniqueID": "ST31_L2",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "2D soil-structure interaction analysis of a cut-and-cover underground structure with diaphragm walls and base slab on Winkler spring supports.",
+    "Description of Building Structural System": "Underground H-frame cut-and-cover structure with reinforced concrete diaphragm walls and base slab, supported on compression-only Winkler springs representing surrounding soil.",
+    "Description of Model": "2D finite element model using dispBeamColumn elements for diaphragm walls (30 elements each) and base slab (9 elements), with ENT (Elastic No Tension) uniaxial materials for horizontal and vertical Winkler springs across 5 soil layers. Two load cases: uniform earth pressure (15 kPa) and hydrostatic water pressure (triangular distribution). Static analysis with gravity freeze then lateral load application using opst.anlys.SmartAnalyze.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC",
+    "Lateral system": "Underground cut-and-cover frame",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static (earth pressure + hydrostatic water pressure)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "ST31 (L2) underground structure model with two selectable lateral load cases: case 1 = uniform earth pressure (15 kPa), case 2 = hydrostatic water pressure (triangular). Model uses --case argument to switch."
+  }
+]

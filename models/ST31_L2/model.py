@@ -19,16 +19,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
+from vis_utils import _headless
 
 # Compatibility: opstool v0.8.7 uses deprecated np.NAN
 np.NAN = np.nan
-
-
-def _headless() -> bool:
-    """Return True in CI / headless environments (output from vis_utils)."""
-    import os
-    return os.getenv("OPENSEES_HEADLESS", "0") == "1"
-
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────────
 # ── Materials
@@ -38,6 +32,7 @@ MAT_SOIL_2   = 3       # ENT — layer 2  (-6 m  to -12 m)
 MAT_SOIL_3   = 4       # ENT — layer 3  (-12 m to -18 m)
 MAT_SOIL_4   = 5       # ENT — layer 4  (-18 m to -24 m)
 MAT_SOIL_5   = 6       # ENT — layer 5  (-24 m to -30 m)
+MAT_SOIL_SLAB = 7       # Vertical subgrade reaction for the slab
 
 # ── Sections
 SEC_DWALL    = 1
@@ -72,7 +67,7 @@ NODE_SOIL_R_START = 132
 # ── Spring element ranges (100–130 left, 200–230 right)
 ELE_SPRING_L_START = 100
 ELE_SPRING_R_START = 200
-
+ELE_SPRING_S_START = 300 # Range for slab springs
 
 # ── 3. PARAMETERS ────────────────────────────────────────────────────────────────
 h_dwall    = 30000.0 * mm
@@ -83,7 +78,7 @@ depth_slab = 10000.0 * mm
 elem_size  = 1000.0  * mm
 
 n_ele_wall  = 30
-n_ele_slab  = 9
+n_ele_slab  = 9 
 n_node_wall = n_ele_wall + 1
 
 # ── Concrete properties
@@ -104,9 +99,13 @@ k_soil_2 =    20_000.0   # N/mm
 k_soil_3 =    30_000.0   # N/mm
 k_soil_4 =    40_000.0   # N/mm
 k_soil_5 =    50_000.0   # N/mm
+k_v_slab =    40_000.0   # N/mm   (Vertical subgrade modulus × tributary area)
+
+# ── Physical constants
+gamma_w  = 9.81e-6       # N/mm³  (unit weight of water)
 
 
-# ── Helper: soil layer → material tag ───────────────────────────────────────────
+# Helper: soil layer → material tag
 def _soil_mat_for_node(i: int) -> int:
     """Return MAT_SOIL_X for a wall node at 0-based index *i* from top."""
     if i < 6:
@@ -121,7 +120,7 @@ def _soil_mat_for_node(i: int) -> int:
         return MAT_SOIL_5
 
 
-# ── Visualisation helper (opstool v0.8.7 compatible) ────────────────────────────
+# Visualisation helper (opstool v0.8.7 compatible)
 def _snapshot_and_render(output_dir: Path, filename: str, **kwargs) -> None:
     """Render model geometry via opstool.vis.plotly.plot_model (v1.0+).
 
@@ -160,8 +159,8 @@ def define_sections() -> None:
     ops.beamIntegration("Lobatto", INT_DWALL, SEC_DWALL, 5)
     ops.beamIntegration("Lobatto", INT_SLAB,  SEC_SLAB,  5)
 
-    ops.geomTransf("PDelta",  TRANSF_DWALL, 0,0,1.0)
-    ops.geomTransf("Linear",  TRANSF_SLAB, 0,0,1.0)
+    ops.geomTransf("PDelta",  TRANSF_DWALL)
+    ops.geomTransf("Linear",  TRANSF_SLAB)
 
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────────
@@ -236,6 +235,28 @@ def define_boundary_conditions() -> None:
             1, 0, 0,
             0, 1, 0
         )
+    slab_nodes = [NODE_LWALL_SLAB] + list(range(NODE_SLAB_START, NODE_SLAB_END + 1)) + [NODE_RWALL_SLAB]
+    ops.uniaxialMaterial("ENT", MAT_SOIL_SLAB, k_v_slab)
+    for i, s_node in enumerate(slab_nodes):
+            x_coord = ops.nodeCoord(s_node, 1)
+            soil_node_s = 200 + i # Unique ID for slab soil nodes
+            ele_s       = ELE_SPRING_S_START + i
+
+            # Create fixed soil node below the slab
+            ops.node(soil_node_s, x_coord, -depth_slab)
+            ops.fix(soil_node_s, 1, 1, 1)
+
+            # Vertical Spring: soil is on negative global Y side
+            ops.element(
+                "zeroLength",
+                ele_s,
+                s_node,
+                soil_node_s,
+                "-mat", MAT_SOIL_SLAB,
+                "-dir", 2, # Direction 2 is UY (Vertical)
+                "-orient", 0, -1, 0, 1, 0, 0 #
+        )
+
 # ── 7V. VISUALISE — NODES ────────────────────────────────────────────────────────
 def vis_nodes(output_dir: Path) -> None:
     _snapshot_and_render(output_dir, "vis_01_nodes.html",
@@ -285,7 +306,7 @@ def define_gravity_loads() -> None:
     # Slab elements: tags 61 … 69  (= 2 × n_ele_wall + 1 … 2 × n_ele_wall + n_ele_slab)
     for i in range(n_ele_slab):
         ele_tag = 2 * n_ele_wall + i + 1
-        ops.eleLoad(ele_tag, "-type", "-beamUniform", -10.0)
+        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -10.0)
 
 
 # Load-case 1: 15 kPa earth pressure (both walls)
@@ -302,15 +323,11 @@ def define_lateral_loads() -> None:
 
     # Left wall (elements 1 … 30): soil outside pushes right → +local y
     for i in range(n_ele_wall):
-        ops.eleLoad(i + 1, "-type", "-beamUniform", 15.0)
+        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", 15.0)
 
     # Right wall (elements 31 … 60): soil outside pushes left → −local y
     for i in range(n_ele_wall):
-        ops.eleLoad(n_ele_wall + i + 1, "-type", "-beamUniform", -15.0)
-
-
-# Load-case 2: hydrostatic water pressure (triangular full height)
-gamma_w = 9.81e-6  # N/mm³  (unit weight of water)
+        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -15.0)
 
 
 def define_water_pressure() -> None:
@@ -329,9 +346,9 @@ def define_water_pressure() -> None:
         w = gamma_w * d_mid * b_strip        # N/mm — line load for 1 m strip
 
         # Left wall: water pushes right → +local y
-        ops.eleLoad(i + 1, "-type", "-beamUniform", w)
+        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", w)
         # Right wall: water pushes left → −local y
-        ops.eleLoad(n_ele_wall + i + 1, "-type", "-beamUniform", -w)
+        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -w)
 
 
 # ── 10. OUTPUT DATABASE (ODB) ───────────────────────────────────────────────────
@@ -393,6 +410,7 @@ def run_gravity(
         analysis_type="Static",
         tryAlterAlgoTypes=True,
         algoTypes=[40, 10, 20, 30],
+        minStep=1e-12,
     )
     protocol = [1.0]
     segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)

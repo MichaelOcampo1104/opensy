@@ -1,2 +1,0 @@
-WARNING DisplacementControl::domainChanged() - zero reference loadStaticAnalysis::setAlgorithm() - Integrator::domainChanged() failedStaticAnalysis::analyze() - domainChanged failed at step 0 of 1
-OpenSees > analyze failed, returned: -1 error flag
