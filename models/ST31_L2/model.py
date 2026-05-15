@@ -2,7 +2,7 @@
 """
 Model    : ST31_L2 — Underground H-Frame Structure (Cut-and-Cover)
 UniqueID : ST31_L2
-Author   : <your name>
+Author   : Michael Ocampo
 Date     : 2026-05-12
 Purpose  : 2D soil-structure interaction analysis of a cut-and-cover underground
            structure with diaphragm walls and base slab on Winkler spring supports.
