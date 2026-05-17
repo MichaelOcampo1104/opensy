@@ -46,14 +46,6 @@ INT_SLAB     = 2
 TRANSF_DWALL = 1
 TRANSF_SLAB  = 2
 
-# ── TimeSeries & Patterns
-TS_GRAVITY       = 1
-PATTERN_GRAVITY  = 1
-TS_EARTH         = 2
-PATTERN_EARTH    = 2
-TS_WATER         = 3
-PATTERN_WATER    = 3
-
 # -- element partions
 n_ele_wall  = 32
 n_ele_slab  = 9 
@@ -120,7 +112,7 @@ k_soil_5 =    50_000.0 * N / mm
 k_v_slab =    40_000.0 * N / mm  # (Vertical subgrade modulus × tributary area)
 
 # ── Physical constants
-gamma_w  = 9.81e-6 * (N / mm**3)       # unit weight of water
+gamma_w  = 9.81e-6       # N/mm³  (unit weight of water)
 
 # Helper: soil layer → material tag
 def _soil_mat_for_node(i: int) -> int:
@@ -281,13 +273,19 @@ def define_elements() -> None:
 def define_gravity_loads() -> None:
     """Apply 10 kPa uniform gravity load on base slab (downward)."""
     # 10 kPa = 0.01 N/mm²; for 1 000 mm strip → 10 N/mm
-    ops.timeSeries("Linear", TS_GRAVITY)
-    ops.pattern("Plain", PATTERN_GRAVITY, TS_GRAVITY)
+    ops.timeSeries("Linear", 1)
+    ops.pattern("Plain", 1, 1)
 
     # Slab elements: tags 65 … 73  (= 2 × n_ele_wall + 1 … 2 × n_ele_wall + n_ele_slab)
     for i in range(n_ele_slab):
         ele_tag = 2 * n_ele_wall + i + 1
-        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -10.0 * (N / mm))
+        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -10.0)
+
+    """Apply 25 kPa uniform gravity load on top slab (downward)."""
+    # 25 kPa = 0.025 N/mm²; for 1 000 mm strip → 25 N/mm
+    for i in range(n_ele_slab):
+        ele_tag = 2 * n_ele_wall + n_ele_slab + i + 1
+        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -25.0)
 
 # Load-case 1: 15 kPa earth pressure (both walls)
 def define_lateral_loads() -> None:
@@ -298,16 +296,16 @@ def define_lateral_loads() -> None:
     """
     # ── Load Case 1: Earth pressure ──
     # 15 kPa = 0.015 N/mm²; for 1 000 mm strip → 15 N/mm
-    ops.timeSeries("Linear", TS_EARTH)
-    ops.pattern("Plain", PATTERN_EARTH, TS_EARTH)
+    ops.timeSeries("Linear", 2)
+    ops.pattern("Plain", 2, 2)
 
     # Left wall (elements 1 … 30): soil outside pushes right → +local y
     for i in range(n_ele_wall):
-        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", 15.0 * (N / mm))
+        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", 15.0)
 
     # Right wall (elements 31 … 60): soil outside pushes left → −local y
     for i in range(n_ele_wall):
-        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -15.0 * (N / mm))
+        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -15.0)
 
 
 def define_water_pressure() -> None:
@@ -318,8 +316,8 @@ def define_water_pressure() -> None:
 
     Load Case 2 — uses pattern tag 3.
     """
-    ops.timeSeries("Linear", TS_WATER)
-    ops.pattern("Plain", PATTERN_WATER, TS_WATER)
+    ops.timeSeries("Linear", 3)
+    ops.pattern("Plain", 3, 3)
 
     for i in range(n_ele_wall):
         d_mid = (i + 0.5) * elem_size        # mm — mid-height of this element
@@ -489,7 +487,7 @@ def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="ST31_L1 — Underground Box-with_leg-Frame")
+    parser = argparse.ArgumentParser(description="ST31_L1 — Underground H-Frame")
     parser.add_argument(
         "--case", type=int, choices=[1, 2], default=1,
         help="Lateral load case: 1 = earth pressure, 2 = water pressure (default 1)",
