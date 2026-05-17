@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from vis_utils import vis_nodes, _headless
+from vis_utils import vis_nodes, vis_model, _headless
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────────
 # ── Materials
@@ -54,19 +54,23 @@ n_node_wall = n_ele_wall + 1 #33
 
 # ── Left wall nodes (1–33)
 NODE_LWALL_TOP  = 1
-NODE_LWALL_TOP_SlAB = 2   # y = -1 000 mmm
+NODE_LWALL_TOP_SLAB = 3   # y = -2 000 mm (1 + 2 = 3)
 NODE_LWALL_SLAB = 11      # y = -10 000 mm
 NODE_LWALL_BASE = 33      # y = -32 000 mm
 
 # ── Right wall nodes (34–66)
 NODE_RWALL_TOP  = 34
-NODE_RWALL_TOP_SLAB = 35
+NODE_RWALL_TOP_SLAB = 36  # y = -2 000 mm (34 + 2 = 36)
 NODE_RWALL_SLAB = 44      # y = -10 000 mm (34 + 10 = 44)
 NODE_RWALL_BASE = 66      # y = -32 000 mm (34 + 32 = 66)
 
 # ── Slab nodes (67-74)
 NODE_SLAB_START = 67
 NODE_SLAB_END   = NODE_SLAB_START + n_ele_slab - 2
+
+# ── Top Slab nodes (75-82)
+NODE_TOP_SLAB_START = 75
+NODE_TOP_SLAB_END   = NODE_TOP_SLAB_START + n_ele_slab - 2
 
 # ── Soil node ranges (101–133 left, 134–162 right)
 NODE_SOIL_L_START = 101
@@ -84,6 +88,7 @@ t_dwall    = 1000.0  * mm
 t_slab     = 800.0   * mm
 l_center   = 9000.0  * mm        # centre-to-centre wall spacing
 depth_slab = 10000.0 * mm
+depth_top_slab = 2000.0 * mm
 elem_size  = 1000.0  * mm
 
 # ── Concrete properties
@@ -166,6 +171,11 @@ def define_nodes() -> None:
         ops.node(nid, i * elem_size, -depth_slab)
         nid += 1
 
+    # ── Top Slab nodes between the walls at y = -depth_top_slab (x = 1 000 … 8 000 mm)
+    for i in range(1, n_ele_slab):
+        ops.node(nid, i * elem_size, -depth_top_slab)
+        nid += 1
+
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────────
 def define_boundary_conditions() -> None:
     # ── Wall base fixity
@@ -223,6 +233,42 @@ def define_boundary_conditions() -> None:
             "-orient", 0, -1, 0, 1, 0, 0
         )
 
+# ── 9. ELEMENTS ──────────────────────────────────────────────────────────────────
+def define_elements() -> None:
+    # ── Left wall
+    for i in range(n_ele_wall):
+        n1 = NODE_LWALL_TOP + i
+        n2 = n1 + 1
+        ops.element("dispBeamColumn", i + 1, n1, n2, TRANSF_DWALL, INT_DWALL)
+
+    # ── Right wall
+    for i in range(n_ele_wall):
+        n1 = NODE_RWALL_TOP + i
+        n2 = n1 + 1
+        ops.element("dispBeamColumn", n_ele_wall + i + 1, n1, n2, TRANSF_DWALL, INT_DWALL)
+
+    # ── Base slab  (left wall  →  right wall at y = -10 000 mm, 9 elements)
+    slab_nodes = (
+        [NODE_LWALL_SLAB]
+        + list(range(NODE_SLAB_START, NODE_SLAB_END + 1))
+        + [NODE_RWALL_SLAB]
+    )
+    for i in range(n_ele_slab):
+        n1 = slab_nodes[i]
+        n2 = slab_nodes[i + 1]
+        ops.element("dispBeamColumn", 2 * n_ele_wall + i + 1, n1, n2, TRANSF_SLAB, INT_SLAB)
+
+    # ── Top slab (left wall → right wall at y = -2 000 mm, 9 elements)
+    top_slab_nodes = (
+        [NODE_LWALL_TOP_SLAB]
+        + list(range(NODE_TOP_SLAB_START, NODE_TOP_SLAB_END + 1))
+        + [NODE_RWALL_TOP_SLAB]
+    )
+    for i in range(n_ele_slab):
+        n1 = top_slab_nodes[i]
+        n2 = top_slab_nodes[i + 1]
+        ops.element("dispBeamColumn", 2 * n_ele_wall + n_ele_slab + i + 1, n1, n2, TRANSF_SLAB, INT_SLAB)
+
 
 # ── MAIN ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -236,6 +282,8 @@ if __name__ == "__main__":
     define_sections()
     define_nodes()
     define_boundary_conditions()
+    define_elements()
 
     vis_nodes(output_dir)
+    vis_model(output_dir)
     print(f"Model built. Open output/vis_01_nodes.html to view nodes.")
