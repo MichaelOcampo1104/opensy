@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from vis_utils import vis_nodes, vis_model, _headless
+from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, _headless
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────────
 # ── Materials
@@ -269,21 +269,230 @@ def define_elements() -> None:
         n2 = top_slab_nodes[i + 1]
         ops.element("dispBeamColumn", 2 * n_ele_wall + n_ele_slab + i + 1, n1, n2, TRANSF_SLAB, INT_SLAB)
 
+# ── 10. LOADING ──────────────────────────────────────────────────────────────────
+def define_gravity_loads() -> None:
+    """Apply 10 kPa uniform gravity load on base slab (downward)."""
+    # 10 kPa = 0.01 N/mm²; for 1 000 mm strip → 10 N/mm
+    ops.timeSeries("Linear", 1)
+    ops.pattern("Plain", 1, 1)
 
-# ── MAIN ────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    from pathlib import Path
+    # Slab elements: tags 65 … 73  (= 2 × n_ele_wall + 1 … 2 × n_ele_wall + n_ele_slab)
+    for i in range(n_ele_slab):
+        ele_tag = 2 * n_ele_wall + i + 1
+        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -10.0)
 
-    output_dir = Path(__file__).parent / "output"
+# Load-case 1: 15 kPa earth pressure (both walls)
+def define_lateral_loads() -> None:
+    """Define lateral earth pressure on both diaphragm walls.
+
+    Load Case 1 — Earth pressure: 15 kPa uniform full height.
+    (Load Case 2 — Water pressure: to be added.)
+    """
+    # ── Load Case 1: Earth pressure ──
+    # 15 kPa = 0.015 N/mm²; for 1 000 mm strip → 15 N/mm
+    ops.timeSeries("Linear", 2)
+    ops.pattern("Plain", 2, 2)
+
+    # Left wall (elements 1 … 30): soil outside pushes right → +local y
+    for i in range(n_ele_wall):
+        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", 15.0)
+
+    # Right wall (elements 31 … 60): soil outside pushes left → −local y
+    for i in range(n_ele_wall):
+        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -15.0)
+
+
+def define_water_pressure() -> None:
+    """Apply hydrostatic water pressure on both diaphragm walls.
+
+    Assumes water table at ground surface (y = 0).  Triangular distribution
+    with depth, acting inward on each wall.
+
+    Load Case 2 — uses pattern tag 3.
+    """
+    ops.timeSeries("Linear", 3)
+    ops.pattern("Plain", 3, 3)
+
+    for i in range(n_ele_wall):
+        d_mid = (i + 0.5) * elem_size        # mm — mid-height of this element
+        w = gamma_w * d_mid * b_strip        # N/mm — line load for 1 m strip
+
+        # Left wall: water pushes right → +local y
+        ops.eleLoad("-ele", i + 1, "-type", "-beamUniform", w)
+        # Right wall: water pushes left → −local y
+        ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -w)
+
+# ── 11. OUTPUT DATABASE (ODB) ───────────────────────────────────────────────────
+def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
+    """Initialise an opstool ODB and save model data snapshot.
+
+    Call this after all nodes and elements are defined and before the first
+    analysis step.
+
+    Args:
+        odb_tag: Integer tag identifying this load-case ODB (default 1).
+
+    Returns:
+        Configured CreateODB instance ready to collect responses.
+    """
+    odb = opst.post.CreateODB(
+        odb_tag=odb_tag,
+        model_update=False,
+    )
+    odb.save_model_data()
+    return odb
+
+# ── 12. ANALYSIS ─────────────────────────────────────────────────────────────────
+# Gravity — load-controlled static
+def run_gravity(
+    odb: "opst.post.CreateODB",
+    n_steps: int = 10,
+    ctrl_node: int = NODE_SLAB_START,
+    ctrl_dof: int = 2,
+) -> None:
+    """Apply gravity loads incrementally using SmartAnalyze (Static).
+
+    Args:
+        odb: Active CreateODB instance; fetch_response_step() called each step.
+        n_steps: Number of equal load increments (default 10).
+        ctrl_node: Tag of the control node used by SmartAnalyze (default slab start).
+        ctrl_dof: DOF direction for convergence monitoring (default 2 = UY).
+    """
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    ops.integrator("LoadControl", 1.0 / n_steps)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+        minStep=1e-12,
+    )
+    protocol = [1.0]
+    segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
+    for seg in segs:
+        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+        odb.fetch_response_step()
+    analysis.close()
+    ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
+
+# Lateral — load-controlled static (pattern defined after loadConst)
+def run_lateral_case(
+    odb: "opst.post.CreateODB",
+    pattern_tag: int,
+    n_steps: int = 10,
+    ctrl_node: int = NODE_LWALL_SLAB,
+    ctrl_dof: int = 1,
+) -> None:
+    """Apply a lateral load case (pattern defined after loadConst).
+
+    The lateral pattern (2 = earth, 3 = water) must already be defined in the
+    model.  Because it was created after ops.loadConst(), its Linear time series
+    responds to pseudo-time while the frozen gravity loads stay constant.
+
+    Args:
+        odb: Active CreateODB instance; fetch_response_step() called each step.
+        pattern_tag: Tag of the lateral load pattern (2 or 3).
+        n_steps: Number of load increments (default 10).
+        ctrl_node: Convergence-monitoring node (default NODE_LWALL_SLAB).
+        ctrl_dof: Convergence-monitoring DOF (1 = UX, default).
+    """
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    ops.integrator("LoadControl", 1.0 / n_steps)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+    )
+    protocol = [1.0]
+    segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
+    for seg in segs:
+        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
+        odb.fetch_response_step()
+    analysis.close()
+
+def run_analysis(
+    output_dir: Path,
+    lateral_case: int = 1,
+) -> "opst.post.CreateODB":
+    """Build model, run gravity + lateral case, return populated ODB.
+
+    Two-phase approach:
+      1. Gravity loads (pattern 1) — load-controlled, then frozen.
+      2. Lateral pattern defined AFTER freeze so it alone scales with pseudo-time.
+
+    Args:
+        output_dir: Folder for output files.
+        lateral_case: 1 = earth pressure (pattern 2), 2 = water pressure (pattern 3).
+
+    Returns:
+        CreateODB with all response steps collected.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
+    opst.post.set_odb_path(str(output_dir))
 
+    # ── Build ──
     init_model()
     define_materials()
     define_sections()
     define_nodes()
     define_boundary_conditions()
+    vis_nodes(output_dir)                           # V1
     define_elements()
+    vis_model(output_dir)                           # V2
+    odb = create_odb(odb_tag=1)                     # ODB after full model definition
 
-    vis_nodes(output_dir)
-    vis_model(output_dir)
-    print(f"Model built. Open output/vis_01_nodes.html to view nodes.")
+    # ── Phase 1: Gravity ──
+    define_gravity_loads()                          # pattern 1
+    run_gravity(odb)                                # gravity → 100 %, then frozen
+
+    # ── Phase 2: Lateral (defined AFTER loadConst so TS responds to time) ──
+    if lateral_case == 1:
+        define_lateral_loads()                      # earth pressure → pattern 2
+    else:
+        define_water_pressure()                     # water pressure → pattern 3
+
+    vis_loads(output_dir)                           # V3 — all loads shown
+    vis_pre_analysis(output_dir)                    # V4 — final sanity check
+
+    run_lateral_case(odb, pattern_tag=lateral_case + 1)
+
+    return odb
+
+# ── 13. POST-PROCESSING ──────────────────────────────────────────────────────────
+def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
+    """Flush ODB to disk and render deformed-shape HTML.
+
+    Args:
+        odb: Populated CreateODB returned by run_analysis().
+        output_dir: Folder where ODB and HTML files are written.
+    """
+    odb.save_response()   # write all accumulated responses to output/ as .nc / .h5
+    if not _headless():
+        fig_defo = opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1, resp_type="disp", resp_dof="UX",
+        )
+        fig_defo.write_html(str(output_dir / "vis_05_deformed.html"))
+
+
+# ── 14. MAIN ─────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="ST31_L2 — Underground H-Frame")
+    parser.add_argument(
+        "--case", type=int, choices=[1, 2], default=1,
+        help="Lateral load case: 1 = earth pressure, 2 = water pressure (default 1)",
+    )
+    args = parser.parse_args()
+
+    output_dir = Path(__file__).parent / "output"
+    odb = run_analysis(output_dir, lateral_case=args.case)
+    post_process(odb, output_dir)
+    print(
+        f"ST31_L2 case {args.case} analysis complete. "
+        f"Open output/vis_05_deformed.html to view results."
+    )
+
