@@ -46,25 +46,32 @@ INT_SLAB     = 2
 TRANSF_DWALL = 1
 TRANSF_SLAB  = 2
 
+# -- element partions
+n_ele_wall  = 32
+n_ele_slab  = 9 
+n_node_slab = n_ele_slab + 1
+n_node_wall = n_ele_wall + 1 #33
+
 # ── Left wall nodes (1–33)
 NODE_LWALL_TOP  = 1
 NODE_LWALL_TOP_SlAB = 2   # y = -1 000 mmm
 NODE_LWALL_SLAB = 11      # y = -10 000 mm
 NODE_LWALL_BASE = 33      # y = -32 000 mm
 
-# ── Right wall nodes (32–63)
+# ── Right wall nodes (34–66)
 NODE_RWALL_TOP  = 34
 NODE_RWALL_TOP_SLAB = 35
-NODE_RWALL_SLAB = 42      # y = -10 000 mm
-NODE_RWALL_BASE = 63      # y = -32 000 mm
+NODE_RWALL_SLAB = 44      # y = -10 000 mm (34 + 10 = 44)
+NODE_RWALL_BASE = 66      # y = -32 000 mm (34 + 32 = 66)
 
-# ── Slab nodes (64-71)
-NODE_SLAB_START = 64
-NODE_SLAB_END   = 71
+# ── Slab nodes (67-74)
+NODE_SLAB_START = 67
+NODE_SLAB_END   = NODE_SLAB_START + n_ele_slab - 2
 
-# ── Soil node ranges (101–133 left, 132–162 right)
+# ── Soil node ranges (101–133 left, 134–162 right)
 NODE_SOIL_L_START = 101
-NODE_SOIL_R_START = 133
+NODE_SOIL_R_START = 101 + n_node_wall
+NODE_SOIL_S_START = 300
 
 # ── Spring element ranges (100–130 left, 200–230 right)
 ELE_SPRING_L_START = 100
@@ -79,10 +86,6 @@ l_center   = 9000.0  * mm        # centre-to-centre wall spacing
 depth_slab = 10000.0 * mm
 elem_size  = 1000.0  * mm
 
-n_ele_wall  = 31
-n_ele_slab  = 9 
-n_node_wall = n_ele_wall + 1
-
 # ── Concrete properties
 fc = 40.0 * MPa
 Ec = 4700.0 * (fc / MPa)**0.5 * MPa
@@ -96,12 +99,12 @@ I_slab  = b_strip * t_slab**3 / 12.0
 
 # ── Soil spring stiffnesses (PLACEHOLDER — replace with k_h × tributary area)
 #   k_spring = k_h · 1000 mm · 1000 mm
-k_soil_1 =    10_000.0   # N/mm   (≈ k_h = 0.01 MPa/mm)
-k_soil_2 =    20_000.0   # N/mm
-k_soil_3 =    30_000.0   # N/mm
-k_soil_4 =    40_000.0   # N/mm
-k_soil_5 =    50_000.0   # N/mm
-k_v_slab =    40_000.0   # N/mm   (Vertical subgrade modulus × tributary area)
+k_soil_1 =    10_000.0 * N / mm  # (≈ k_h = 0.01 MPa/mm)
+k_soil_2 =    20_000.0 * N / mm
+k_soil_3 =    30_000.0 * N / mm
+k_soil_4 =    40_000.0 * N / mm
+k_soil_5 =    50_000.0 * N / mm
+k_v_slab =    40_000.0 * N / mm  # (Vertical subgrade modulus × tributary area)
 
 # ── Physical constants
 gamma_w  = 9.81e-6       # N/mm³  (unit weight of water)
@@ -147,7 +150,7 @@ def define_sections() -> None:
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────────
 def define_nodes() -> None:
-    # ── Left wall (x = 0), nodes numbered from top (y = 0) to base (y = -30 000)
+    # ── Left wall (x = 0), nodes numbered from top (y = 0) to base (y = -32 000)
     nid = 1
     for i in range(n_node_wall):
         ops.node(nid, 0.0, -i * elem_size)
@@ -181,20 +184,13 @@ def define_boundary_conditions() -> None:
 
         ops.node(soil_node_l, 0.0, y)
         ops.fix(soil_node_l, 1, 1, 1)
-        # LEFT WALL — soil located on negative global X side
-        # Local spring axis points outward toward soil (-X).
-        # Wall displacement toward soil activates ENT compression spring.
         ops.element(
-            "zeroLength",
-            ele_l,
-            wall_node_l,
-            soil_node_l,
-            "-mat", mat_l,
-            "-dir", 1,
-            "-orient",
-            -1, 0, 0,
-            0, 1, 0
+            "zeroLength", ele_l, wall_node_l, soil_node_l,
+            "-mat", mat_l, "-dir", 1,
+            "-orient", -1, 0, 0, 0, 1, 0
         )
+        
+        # Right wall - soils is on the right (+x) side
         wall_node_r = NODE_RWALL_TOP + i
         soil_node_r = NODE_SOIL_R_START + i
         ele_r       = ELE_SPRING_R_START + i
@@ -202,40 +198,29 @@ def define_boundary_conditions() -> None:
 
         ops.node(soil_node_r, l_center, y)
         ops.fix(soil_node_r, 1, 1, 1)
-        # RIGHT WALL — soil located on positive global X side
-        # Local spring axis points outward toward soil (+X).
-        # Wall displacement toward soil activates ENT compression spring.
         ops.element(
-            "zeroLength",
-            ele_r,
-            wall_node_r,
-            soil_node_r,
-            "-mat", mat_r,
-            "-dir", 1,
-            "-orient",
-            1, 0, 0,
-            0, 1, 0
+            "zeroLength", ele_r, wall_node_r, soil_node_r,
+            "-mat", mat_r, "-dir", 1,
+            "-orient", 1, 0, 0, 0, 1, 0
         )
-    slab_nodes = [NODE_LWALL_SLAB] + list(range(NODE_SLAB_START, NODE_SLAB_END + 1)) + [NODE_RWALL_SLAB]
+    
+    # ── Base slab Winkler springs
+    n_interior_slab = n_ele_slab - 1
+    slab_nodes = [NODE_LWALL_SLAB] + list(range(NODE_SLAB_START, NODE_SLAB_START + n_interior_slab)) + [NODE_RWALL_SLAB]
     ops.uniaxialMaterial("ENT", MAT_SOIL_SLAB, k_v_slab)
+    
     for i, s_node in enumerate(slab_nodes):
-            x_coord = ops.nodeCoord(s_node, 1)
-            soil_node_s = 200 + i # Unique ID for slab soil nodes
-            ele_s       = ELE_SPRING_S_START + i
+        x_coord = ops.nodeCoord(s_node, 1)
+        soil_node_s = NODE_SOIL_S_START + i  # Fixed: using defined constant
+        ele_s = ELE_SPRING_S_START + i
 
-            # Create fixed soil node below the slab
-            ops.node(soil_node_s, x_coord, -depth_slab)
-            ops.fix(soil_node_s, 1, 1, 1)
+        ops.node(soil_node_s, x_coord, -depth_slab)
+        ops.fix(soil_node_s, 1, 1, 1)
 
-            # Vertical Spring: soil is on negative global Y side
-            ops.element(
-                "zeroLength",
-                ele_s,
-                s_node,
-                soil_node_s,
-                "-mat", MAT_SOIL_SLAB,
-                "-dir", 2, # Direction 2 is UY (Vertical)
-                "-orient", 0, -1, 0, 1, 0, 0 #
+        ops.element(
+            "zeroLength", ele_s, s_node, soil_node_s,
+            "-mat", MAT_SOIL_SLAB, "-dir", 1,
+            "-orient", 0, -1, 0, 1, 0, 0
         )
 
 
