@@ -12,8 +12,9 @@ Units    : N, mm, MPa
 # ── 1. IMPORTS ───────────────────────────────────────────────────────────────────
 import numpy as np
 
-# Compatibility: opstool v0.8.7 uses deprecated np.NAN (patch BEFORE opstool import)
+# Compatibility: opstool v0.8.7 uses deprecated np.NAN / np.NaN (patch BEFORE opstool import)
 np.NAN = np.nan
+np.NaN = np.nan
 
 import openseespy.opensees as ops
 import opstool as opst
@@ -285,7 +286,7 @@ def define_gravity_loads() -> None:
     # 25 kPa = 0.025 N/mm²; for 1 000 mm strip → 25 N/mm
     for i in range(n_ele_slab):
         ele_tag = 2 * n_ele_wall + n_ele_slab + i + 1
-        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -25.0)
+        ops.eleLoad("-ele", ele_tag, "-type", "-beamUniform", -50.0)
 
 # Load-case 1: 15 kPa earth pressure (both walls)
 def define_lateral_loads() -> None:
@@ -329,29 +330,26 @@ def define_water_pressure() -> None:
         ops.eleLoad("-ele", n_ele_wall + i + 1, "-type", "-beamUniform", -w)
 
 # ── 11. OUTPUT DATABASE (ODB) ───────────────────────────────────────────────────
-def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
-    """Initialise an opstool ODB and save model data snapshot.
+def create_odb(output_dir: Path) -> "opst.GetFEMdata":
+    """Initialise an opstool GetFEMdata instance and snapshot model data.
 
     Call this after all nodes and elements are defined and before the first
     analysis step.
 
     Args:
-        odb_tag: Integer tag identifying this load-case ODB (default 1).
+        output_dir: Folder where response HDF5 files are written.
 
     Returns:
-        Configured CreateODB instance ready to collect responses.
+        Configured GetFEMdata instance ready to collect responses.
     """
-    odb = opst.post.CreateODB(
-        odb_tag=odb_tag,
-        model_update=False,
-    )
-    odb.save_model_data()
+    odb = opst.GetFEMdata(results_dir=str(output_dir))
+    odb.get_model_data(save_file=False)
     return odb
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────────
 # Gravity — load-controlled static
 def run_gravity(
-    odb: "opst.post.CreateODB",
+    odb: "opst.GetFEMdata",
     n_steps: int = 10,
     ctrl_node: int = NODE_SLAB_START,
     ctrl_dof: int = 2,
@@ -359,7 +357,7 @@ def run_gravity(
     """Apply gravity loads incrementally using SmartAnalyze (Static).
 
     Args:
-        odb: Active CreateODB instance; fetch_response_step() called each step.
+        odb: Active GetFEMdata instance; get_resp_step() called each step.
         n_steps: Number of equal load increments (default 10).
         ctrl_node: Tag of the control node used by SmartAnalyze (default slab start).
         ctrl_dof: DOF direction for convergence monitoring (default 2 = UY).
@@ -368,7 +366,7 @@ def run_gravity(
     ops.numberer("RCM")
     ops.system("BandGeneral")
     ops.integrator("LoadControl", 1.0 / n_steps)
-    analysis = opst.anlys.SmartAnalyze(
+    analysis = opst.analysis.SmartAnalyze(
         analysis_type="Static",
         tryAlterAlgoTypes=True,
         algoTypes=[40, 10, 20, 30],
@@ -378,13 +376,13 @@ def run_gravity(
     segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
     for seg in segs:
         analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
-        odb.fetch_response_step()
-    analysis.close()
+        odb.get_resp_step()
+    # SmartAnalyze v0.8.7 has no close() — let scope clean up
     ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
 
 # Lateral — load-controlled static (pattern defined after loadConst)
 def run_lateral_case(
-    odb: "opst.post.CreateODB",
+    odb: "opst.GetFEMdata",
     pattern_tag: int,
     n_steps: int = 10,
     ctrl_node: int = NODE_LWALL_SLAB,
@@ -397,7 +395,7 @@ def run_lateral_case(
     responds to pseudo-time while the frozen gravity loads stay constant.
 
     Args:
-        odb: Active CreateODB instance; fetch_response_step() called each step.
+        odb: Active GetFEMdata instance; get_resp_step() called each step.
         pattern_tag: Tag of the lateral load pattern (2 or 3).
         n_steps: Number of load increments (default 10).
         ctrl_node: Convergence-monitoring node (default NODE_LWALL_SLAB).
@@ -407,7 +405,7 @@ def run_lateral_case(
     ops.numberer("RCM")
     ops.system("BandGeneral")
     ops.integrator("LoadControl", 1.0 / n_steps)
-    analysis = opst.anlys.SmartAnalyze(
+    analysis = opst.analysis.SmartAnalyze(
         analysis_type="Static",
         tryAlterAlgoTypes=True,
         algoTypes=[40, 10, 20, 30],
@@ -416,14 +414,14 @@ def run_lateral_case(
     segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
     for seg in segs:
         analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
-        odb.fetch_response_step()
-    analysis.close()
+        odb.get_resp_step()
+    # SmartAnalyze v0.8.7 has no close() — let scope clean up
 
 def run_analysis(
     output_dir: Path,
     lateral_case: int = 1,
-) -> "opst.post.CreateODB":
-    """Build model, run gravity + lateral case, return populated ODB.
+) -> "opst.GetFEMdata":
+    """Build model, run gravity + lateral case, return populated GetFEMdata.
 
     Two-phase approach:
       1. Gravity loads (pattern 1) — load-controlled, then frozen.
@@ -434,10 +432,9 @@ def run_analysis(
         lateral_case: 1 = earth pressure (pattern 2), 2 = water pressure (pattern 3).
 
     Returns:
-        CreateODB with all response steps collected.
+        GetFEMdata with all response steps collected.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    opst.post.set_odb_path(str(output_dir))
 
     # ── Build ──
     init_model()
@@ -448,7 +445,7 @@ def run_analysis(
     vis_nodes(output_dir)                           # V1
     define_elements()
     vis_model(output_dir)                           # V2
-    odb = create_odb(odb_tag=1)                     # ODB after full model definition
+    odb = create_odb(output_dir)                    # ODB after full model definition
 
     # ── Phase 1: Gravity ──
     define_gravity_loads()                          # pattern 1
@@ -468,19 +465,17 @@ def run_analysis(
     return odb
 
 # ── 13. POST-PROCESSING ──────────────────────────────────────────────────────────
-def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
-    """Flush ODB to disk and render deformed-shape HTML.
-
+def post_process(odb: "opst.GetFEMdata", output_dir: Path) -> None:
+    """Flush all response data to HDF5 and render deformed-shape HTML.
     Args:
-        odb: Populated CreateODB returned by run_analysis().
-        output_dir: Folder where ODB and HTML files are written.
+        odb: Populated GetFEMdata returned by run_analysis().
+        output_dir: Folder where HDF5 and HTML files are written.
     """
-    odb.save_response()   # write all accumulated responses to output/ as .nc / .h5
+    odb.save_resp_all()
     if not _headless():
-        fig_defo = opst.vis.plotly.plot_nodal_responses(
-            odb_tag=1, resp_type="disp", resp_dof="UX",
-        )
-        fig_defo.write_html(str(output_dir / "vis_05_deformed.html"))
+        viz = opst.vis.OpsVisPlotly(results_dir=str(output_dir))
+        fig = viz.deform_vis(alpha=30.0, input_file="RespStepData-1.hdf5")
+        fig.write_html(str(output_dir / "vis_05_deformed.html"))
 
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────────
