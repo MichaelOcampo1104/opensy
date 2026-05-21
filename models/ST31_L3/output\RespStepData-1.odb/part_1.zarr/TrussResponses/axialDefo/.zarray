@@ -1,11 +1,11 @@
 {
   "shape": [
     21,
-    1
+    9
   ],
   "chunks": [
     21,
-    1
+    9
   ],
   "dtype": "<f4",
   "fill_value": "NaN",

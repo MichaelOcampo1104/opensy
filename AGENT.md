@@ -166,26 +166,6 @@ def define_sections() -> None:
 def define_nodes() -> None:
     pass  # TODO
 
-# ── 7V. VISUALISE — NODES ────────────────────────────────────────────────────
-def _snapshot_and_render(output_dir: Path, filename: str, **kwargs) -> None:
-    """Render model geometry via opstool.vis.plotly.plot_model (v1.0+).
-
-    Returns a plotly Figure; we save it as a self-contained HTML file.
-    Keyword args are forwarded to plot_model (e.g. show_node_numbering=True).
-    """
-    if _headless():
-        return
-
-    from opstool.vis.plotly import plot_model
-
-    fig = plot_model(**kwargs)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    fig.write_html(str(output_dir / filename))
-
-def vis_nodes(output_dir: Path) -> None:
-    _snapshot_and_render(output_dir, "vis_01_nodes.html",
-                         show_node_numbering=True, show_ele_numbering=False)
-
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────
 def define_boundary_conditions() -> None:
     pass  # TODO  ops.fix(node_tag, *dofs)
@@ -194,31 +174,11 @@ def define_boundary_conditions() -> None:
 def define_elements() -> None:
     pass  # TODO
 
-# ── 9V. VISUALISE — MODEL (NODES + MEMBERS) ──────────────────────────────────
-def vis_model(output_dir: Path) -> None:
-    """V2 — Full undeformed model geometry (nodes + members + fixities)."""
-    _snapshot_and_render(output_dir, "vis_02_model.html",
-                         show_node_numbering=True, show_ele_numbering=True)
-
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
-def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
-    """Initialise an opstool ODB and save model data snapshot.
-
-    Call this after all nodes and elements are defined and before the first
-    analysis step. The returned object must be passed into every analysis
-    helper so that fetch_response_step() is called each step.
-
-    Args:
-        odb_tag: Integer tag identifying this load-case ODB (default 1).
-
-    Returns:
-        Configured CreateODB instance ready to collect responses.
-    """
-    odb = opst.post.CreateODB(
-        odb_tag=odb_tag,
-        model_update=False,   # set True only if nodes/elements are added/removed mid-analysis
-    )
-    odb.save_model_data()
+def create_odb(odb_tag: int = 1, output_dir: Path) -> "opst.post.CreateODB":
+    opst.post.set_odb_path(str(output_dir))
+    opst.post.save_model_data(odb_tag=odb_tag)
+    odb = opst.post.CreateODB(odb_tag=odb_tag)
     return odb
 
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
@@ -228,22 +188,11 @@ def define_gravity_loads() -> None:
 def define_lateral_loads() -> None:
     pass  # TODO  (pushover pattern or ground-motion input)
 
-# ── 11V. VISUALISE — LOADS ───────────────────────────────────────────────────
-def vis_loads(output_dir: Path) -> None:
-    """V3 — Applied load vectors (placeholder until loads are defined)."""
-    _snapshot_and_render(output_dir, "vis_03_loads.html",
-                         show_ele_loads=True, show_node_numbering=False, show_ele_numbering=False)
-
-# ── 11C. PRE-ANALYSIS CHECK ──────────────────────────────────────────────────
-def vis_pre_analysis(output_dir: Path) -> None:
-    """V4 — Full model + loads — final sanity check before solver."""
-    _snapshot_and_render(output_dir, "vis_04_pre_analysis.html",
-                         show_ele_loads=True, show_node_numbering=True, show_ele_numbering=True)
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
 # Gravity — load-controlled static
 def run_gravity(
-    odb: "opst.post.CreateODB",
+    odb: "opst.GetFEMdata",
     n_steps: int = 10,
     ctrl_node: int = 1,
     ctrl_dof: int = 1,
@@ -275,7 +224,7 @@ def run_gravity(
 
 # Pushover — displacement-controlled static
 def run_pushover(
-    odb: "opst.post.CreateODB",
+    odb: "opst.GetFEMdata",
     ctrl_node: int,
     ctrl_dof: int,
     target_disp: float,
@@ -314,7 +263,7 @@ def run_pushover(
 
 
 # Dynamic (Transient)
-def run_dynamic(odb: "opst.post.CreateODB", npts: int, dt: float) -> None:
+def run_dynamic(odb: "opst.GetFEMdata", npts: int, dt: float) -> None:
     """Run a transient analysis using SmartAnalyze.
 
     The integrator (e.g. Newmark) MUST be set by the caller before invoking

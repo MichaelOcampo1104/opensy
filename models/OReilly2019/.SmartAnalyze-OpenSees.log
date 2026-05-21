@@ -1,0 +1,6 @@
+WARNING - ForceBeamColumn3d::update - failed to get compatible element forces & deformations for element: 5313(dW: << 1.21455e-11, dW0: 5.02586e+17)
+Domain::update - domain failed in update
+DisplacementControl::update - model failed to update for new dU
+WARNING AcceleratedNewton::solveCurrentStep() -the Integrator failed in update()
+StaticAnalysis::analyze() - the Algorithm failed at step: 0 with domain at load factor -1515.79
+OpenSees > analyze failed, returned: -3 error flag

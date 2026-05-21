@@ -10,20 +10,21 @@ Ref      : https://github.com/gerardjoreilly/Numerical-Modelling-of-GLD-RC-Frame
            O'Reilly & Sullivan (2019) J. Earthquake Eng., 23(8), 1262-1296.
 Units    : N, mm, MPa  (see standards/units.py)
 """
+# ── 1. IMPORTS ───────────────────────────────────────────────────────────────────
+import numpy as np
+import math
+# Compatibility: opstool v0.8.7 uses deprecated np.NAN (patch BEFORE opstool import)
+np.NAN = np.nan
 
-# ── 1. IMPORTS ───────────────────────────────────────────────────────────────
 import openseespy.opensees as ops
 import opstool as opst
-from opstool.vis import GetFEMdata
-from opstool.vis.ops_vis_plotly import OpsVisPlotly
-import numpy as np
 import sys
-import math
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from vis_utils import _headless
+from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, _headless
+
 
 sys.path.insert(0, str(Path(__file__).parent))
 from joint_model import create_joint
@@ -32,8 +33,6 @@ from rc_bc_non_duct import create_rc_column
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 # Ground nodes (grid g → tag = 1000 + idx(g,0) where idx = {g}1{0})
 #   idx(1,0)=110 → tag 1110, idx(2,0)=210 → tag 1210, etc.
-for _g in (1, 2, 3, 4):
-    pass  # NODE_1A = 1110 etc. — defined below as computed constants
 
 def _idx(grid: int, floor: int) -> int:
     """Joint index in original Tcl convention: {grid}{1}{floor}."""
@@ -78,20 +77,20 @@ dbL = 10.0 * mm                  # longitudinal bar diameter
 dbV = 4.0 * mm                   # transverse (stirrup) bar diameter
 
 # Material strengths  [MPa]
-fyL  = 345.9
-fuL  = 458.6
-fyV  = 385.6
-fuV  = 451.9
-Es   = 200.0e3
+fyL  = 345.9 * MPa
+fuL  = 458.6 * MPa
+fyV  = 385.6 * MPa
+fuV  = 451.9 * MPa
+Es   = 200.0e3 * MPa
 
 # Concrete — per floor
-fcb1 = 13.28;  Ecb1 = 3320.0 * math.sqrt(fcb1) + 6900.0
-fcb2 = 13.84;  Ecb2 = 3320.0 * math.sqrt(fcb2) + 6900.0
-fcb3 = 12.72;  Ecb3 = 3320.0 * math.sqrt(fcb3) + 6900.0
+fcb1 = 13.28 * MPa;  Ecb1 = (3320.0 * math.sqrt(fcb1) + 6900.0) * MPa
+fcb2 = 13.84 * MPa;  Ecb2 = (3320.0 * math.sqrt(fcb2) + 6900.0) * MPa
+fcb3 = 12.72 * MPa;  Ecb3 = (3320.0 * math.sqrt(fcb3) + 6900.0) * MPa
 
-fcc1 = 17.06;  Ecc1 = 3320.0 * math.sqrt(fcc1) + 6900.0
-fcc2 = 13.19;  Ecc2 = 3320.0 * math.sqrt(fcc2) + 6900.0
-fcc3 = 13.47;  Ecc3 = 3320.0 * math.sqrt(fcc3) + 6900.0
+fcc1 = 17.06 * MPa;  Ecc1 = (3320.0 * math.sqrt(fcc1) + 6900.0) * MPa
+fcc2 = 13.19 * MPa;  Ecc2 = (3320.0 * math.sqrt(fcc2) + 6900.0) * MPa
+fcc3 = 13.47 * MPa;  Ecc3 = (3320.0 * math.sqrt(fcc3) + 6900.0) * MPa
 
 # Reinforcement ratios
 rC_top  = 0.0043836176561718
@@ -137,20 +136,27 @@ def init_model() -> None:
     ops.wipe()
     ops.model("BasicBuilder", "-ndm", 3, "-ndf", 6)
 
-# ── 5 & 6. MATERIALS & SECTIONS ─────────────────────────────────────────────
-# Handled internally by create_joint() and create_rc_column().
+# ── 5. MATERIALS ─────────────────────────────────────────────────────────────
+# Materials are created internally by create_joint() and create_rc_column()
+# during define_elements(). No standalone material definitions needed.
+
+
+def define_materials() -> None:
+    pass
+
+
+# ── 6. SECTIONS ─────────────────────────────────────────────────────────────
+# Sections are created internally by create_joint() and create_rc_column()
+# during define_elements(). No standalone section definitions needed.
+
+
+def define_sections() -> None:
+    pass
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────
 def define_nodes() -> None:
     for g, x in zip((1, 2, 3, 4), GRID_X):
         ops.node(NODE_GROUND[g], x, 0.0, 0.0)
-
-# ── 7V. VISUALISE — NODES ────────────────────────────────────────────────────
-def vis_nodes(output_dir: Path) -> None:
-    if _headless():
-        return
-    fig = opst.vis.plot_model(show_node_label=True, show_ele_label=False)
-    fig.write_html(str(output_dir / "vis_01_nodes.html"))
 
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────
 def define_boundary_conditions() -> None:
@@ -289,18 +295,12 @@ def define_elements(output_dir: Path) -> None:
     pfile_cols.close()
     print("Elements created")
 
-# ── 9V. VISUALISE — MODEL ────────────────────────────────────────────────────
-def vis_model(output_dir: Path) -> None:
-    if _headless():
-        return
-    fig = opst.vis.plot_model(show_node_label=True, show_ele_label=True)
-    fig.write_html(str(output_dir / "vis_02_model.html"))
-
-# ── 10. OUTPUT DATABASE ──────────────────────────────────────────────────────
-def create_odb(output_dir: Path) -> GetFEMdata:
-    femdata = GetFEMdata(results_dir=str(output_dir))
-    femdata.get_model_data(print_model_info=False)
-    return femdata
+# ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
+def create_odb(output_dir: Path) -> "opst.post.CreateODB":
+    opst.post.set_odb_path(str(output_dir))
+    opst.post.save_model_data(odb_tag=1)
+    odb = opst.post.CreateODB(odb_tag=1)
+    return odb
 
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
 def _load_gravity_tag(g: int, f: int) -> int:
@@ -330,143 +330,161 @@ def define_lateral_loads() -> None:
     ops.load(_load_gravity_tag(1, 2), f2 * kN, 0.0, 0.0, 0.0, 0.0, 0.0)
     ops.load(_load_gravity_tag(1, 3), f3 * kN, 0.0, 0.0, 0.0, 0.0, 0.0)
 
-# ── 11V. VISUALISE — LOADS ───────────────────────────────────────────────────
-def vis_loads(output_dir: Path) -> None:
-    if _headless():
-        return
-    fig = opst.vis.plot_model(show_load=True, show_node_label=False)
-    fig.write_html(str(output_dir / "vis_03_loads.html"))
-
-# ── 11C. PRE-ANALYSIS CHECK ──────────────────────────────────────────────────
-def vis_pre_analysis(output_dir: Path) -> None:
-    if _headless():
-        return
-    fig = opst.vis.plot_model(
-        show_load=True, show_node_label=True, show_ele_label=True,
-    )
-    fig.write_html(str(output_dir / "vis_04_pre_analysis.html"))
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
-def _run_steps(odb: GetFEMdata, n_steps: int) -> bool:
-    """Run n_steps of static analysis, recording each step."""
-    for i in range(n_steps):
+def run_gravity(
+    odb: "opst.post.CreateODB",
+    n_steps: int = 10,
+) -> None:
+    """Apply gravity loads incrementally using standard OpenSees load control."""
+    import openseespy.opensees as ops
+    
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
+    ops.system("BandGeneral")
+    
+    # 1.0e-6 tolerance is standard for well-behaved gravity loads
+    ops.test("NormDispIncr", 1.0e-6, 100)
+    ops.algorithm("Newton")
+    
+    # Apply 100% of gravity evenly over n_steps
+    step_size = 1.0 / n_steps
+    ops.integrator("LoadControl", step_size)
+    ops.analysis("Static")
+    
+    for _ in range(n_steps):
         ok = ops.analyze(1)
+        
+        # Fallback step-cutting if the standard Newton algorithm fails
         if ok != 0:
-            return False
-        odb.get_resp_step()
-    return True
+            print("  Warning: standard Newton failed, trying Newton with Initial Tangent...")
+            ops.algorithm("Newton", "-initial")
+            ok = ops.analyze(1)
+            
+            if ok != 0:
+                print("  Error: Gravity analysis completely failed to converge.")
+                break
+                
+            # Revert back to normal Newton for the next steps
+            ops.algorithm("Newton")
+            
+        # Manually save the response at each load increment
+        odb.fetch_response_step()
+        
+    # Freeze gravity and reset pseudo-time to 0.0 for the subsequent pushover
+    ops.loadConst("-time", 0.0)   
+    print("Gravity analysis completed")
 
+def _push_segment(
+    odb: "opst.post.CreateODB", 
+    ctrl_node: int,
+    ctrl_dof: int,
+    target_disp: float,
+) -> None:
+    """Displacement-controlled push to target_disp with automatic step cutting."""
+    
+    current = ops.nodeDisp(ctrl_node, ctrl_dof)
+    remaining = target_disp - current
+    
+    if abs(remaining) < 1e-12:
+        return
 
-def run_gravity(odb: GetFEMdata, n_steps: int = 100) -> None:
+    # Use a step size of 1.0 mm for efficiency; SmartAnalyze automatically cuts it if needed.
+    step_size = 1.0
+    steps = max(int(abs(remaining) / step_size), 10)
+    dU = remaining / steps
+
     ops.wipeAnalysis()
     ops.constraints("Transformation")
     ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.test("EnergyIncr", 1.0e-6, 100)
-    ops.algorithm("Newton")
-    ops.integrator("LoadControl", 1.0 / n_steps)
-    ops.analysis("Static")
-    if not _run_steps(odb, n_steps):
-        print("Warning: gravity analysis did not fully converge")
-    ops.loadConst("-time", 0.0)
-    print("Gravity analysis completed")
+    ops.test("NormDispIncr", 1.0e-5, 1000)
 
+    # 1. Initialize the SmartAnalyzer with solver parameters
+    analyzer = opst.anlys.SmartAnalyze(
+        analysis_type="Static",        # Tell opstool we are doing static analysis
+        minStep=abs(dU) / 1.0e5,       # Allow it to cut steps down to this size if it fails
+        tryAlterAlgoTypes=True,        # Automatically switch Newton algorithms if needed
+        debugMode=False
+    )
 
-def _push_segment(
-    odb: GetFEMdata,
-    ctrl_node: int, ctrl_dof: int,
-    target_disp: float,
-) -> None:
-    """Displacement-controlled push to target_disp with automatic step cutting."""
-    current = ops.nodeDisp(ctrl_node, ctrl_dof)
-    remaining = target_disp - current
-    if abs(remaining) < 1e-12:
-        return
-
-    sign = 1.0 if remaining >= 0.0 else -1.0
-    abs_remaining = abs(remaining)
-    pushed = 0.0
-
-    dU = abs_remaining / 500.0
-    min_step = dU / 1.0e5
-    algo_fallback = ("Newton", "NewtonLineSearch", "BFGS")
-
-    ops.test("EnergyIncr", 1.0e-6, 1000)
-    ops.algorithm("KrylovNewton")
-    ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, sign * dU)
-    ops.analysis("Static")
-
-    while abs_remaining - pushed > 1e-12:
-        step = min(dU, abs_remaining - pushed)
-        if step < min_step:
-            print(f"  Warning: step too small ({step:.2e}), at {pushed:.4f}/{abs_remaining:.4f}")
-            return
-
-        if step != dU:
-            ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, sign * step)
-            ops.analysis("Static")
-
-        ops.algorithm("KrylovNewton")
-        ok = ops.analyze(1)
-        if ok == 0:
-            pushed += step
-            odb.get_resp_step()
-            continue
-
-        for algo in algo_fallback:
-            ops.algorithm(algo)
-            ok = ops.analyze(1)
-            if ok == 0:
-                pushed += step
-                odb.get_resp_step()
-                break
-
-        if ok == 0:
-            continue
-
-        dU = step / 2.0
-        ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, sign * dU)
-        ops.analysis("Static")
+    # 2. Push incrementally and record data
+    for i in range(steps):
+        # Apply a single increment
+        ok = analyzer.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=dU)
+        
+        # 0 means converged successfully, anything else is a failure
+        if ok != 0:
+            print(f"  Warning: smart_analyze failed to reach target displacement {target_disp:.4f} at step {i+1}/{steps}")
+            break
+            
+        # 3. Save the data for this specific step!
+        odb.fetch_response_step()
+        
+    # Close the analyzer to free resources
+    analyzer.close()
 
 
 def run_cyclic_pushover(
-    odb: GetFEMdata,
+    odb: "opst.post.CreateODB",
     ctrl_node: int = CTRL_NODE,
     ctrl_dof: int = 1,
     dref_local: float = 1.0,
 ) -> None:
-    amplitudes = [12, 36, 72, 96]
+    """Run a cyclic pushover protocol at increasing amplitude levels.
+
+    Protocol: 3 cycles at ±12, ±36, ±72 mm, then 1 cycle at ±96 mm.
+
+    Args:
+        odb: Active GetFEMdata instance.
+        ctrl_node: Control node tag (default CTRL_NODE).
+        ctrl_dof: Control DOF (default 1 = X).
+        dref_local: Reference displacement increment (default 1.0 mm).
+    """
+    amplitudes = [12, 36, 72, 80]
     n_cycles_list = [3, 3, 3, 1]
 
     for amp_mult, n_cyc in zip(amplitudes, n_cycles_list):
         peak = amp_mult * dref_local
         for cyc in range(n_cyc):
             print(f"  Cycle {cyc + 1}/{n_cyc} at ±{peak:.1f} mm")
-            _push_segment(odb, ctrl_node, ctrl_dof, peak)
-            _push_segment(odb, ctrl_node, ctrl_dof, 0.0)
-            _push_segment(odb, ctrl_node, ctrl_dof, -peak)
-            _push_segment(odb, ctrl_node, ctrl_dof, 0.0)
+            try:
+                _push_segment(odb, ctrl_node, ctrl_dof, peak)
+                _push_segment(odb, ctrl_node, ctrl_dof, 0.0)
+                _push_segment(odb, ctrl_node, ctrl_dof, -peak)
+                _push_segment(odb, ctrl_node, ctrl_dof, 0.0)
+            except Exception as e:
+                print(f"  Pushover failed at cycle {cyc + 1}/{n_cyc}, ±{peak:.1f} mm: {e}")
+                print("  Continuing with post-processing (partial results available).")
+                return
 
 
-def run_analysis(output_dir: Path) -> GetFEMdata:
+def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
+    """Build model, run gravity + cyclic pushover, return ODB.
+
+    Returns:
+        The populated GetFEMdata instance (call save_resp_all() in post_process).
+
+    NOTE: Lateral loads are defined AFTER gravity (loadConst) so that
+    DisplacementControl has an active (non-frozen) pattern to scale during
+    the pushover. The frozen gravity pattern supplies constant vertical loads.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     init_model()
     define_nodes()
-
     define_elements(output_dir)
-
     define_boundary_conditions()
-    vis_nodes(output_dir)                     # V1: nodes + supports
-
-    vis_model(output_dir)                     # V2: full geometry
-
-    odb = create_odb(output_dir)
-
-    define_gravity_loads()
-    define_lateral_loads()
-    vis_loads(output_dir)                     # V3: load vectors
-    vis_pre_analysis(output_dir)              # V4: pre-analysis check
-
-    run_gravity(odb)
+    define_materials()
+    define_sections()
+    vis_nodes(output_dir)                         # V1: nodes + supports
+    vis_model(output_dir)                         # V2: full geometry
+    odb = create_odb(output_dir)                  # initialise ODB after model built
+    define_gravity_loads()                        # gravity pattern (frozen later)
+    vis_pre_analysis(output_dir)                  # V4: pre-analysis check
+    run_gravity(odb)                              # applies gravity + loadConst
+    vis_loads(output_dir)                         # V3: loads
+    define_lateral_loads()                        # lateral pattern (AFTER loadConst, still active)
     run_cyclic_pushover(odb,
                         ctrl_node=CTRL_NODE,
                         ctrl_dof=1,
@@ -476,19 +494,24 @@ def run_analysis(output_dir: Path) -> GetFEMdata:
 
 
 # ── 13. POST-PROCESSING ──────────────────────────────────────────────────────
-def post_process(odb: GetFEMdata, output_dir: Path) -> None:
-    odb.save_resp_all()
+def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
+    odb.save_response()
     if not _headless():
-        vis = OpsVisPlotly()
-        fig_defo = vis.deform_vis(
-            input_file="RespStepData-1.hdf5",
-            response="disp",
+        fig = opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1,
+            slides=True,
+            defo_scale=30.0,
+            resp_type="disp",
+            resp_dof=("UX",),
         )
-        fig_defo.write_html(str(output_dir / "vis_05_deformed.html"))
-
+        fig.write_html(str(output_dir / "vis_05_deformed_UX.html"))
+        print("HTML written.")
+    
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
+    print("--- OReilly2019: Quasi-static cyclic pushover ---")
     odb = run_analysis(output_dir)
     post_process(odb, output_dir)
+    print(f"Analysis complete. Results in {output_dir}/")

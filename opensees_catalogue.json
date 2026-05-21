@@ -21,6 +21,27 @@
     "Notes": "ST31 (L2) underground structure model with two selectable lateral load cases: case 1 = uniform earth pressure (15 kPa), case 2 = hydrostatic water pressure (triangular). Model uses --case argument to switch."
   },
   {
+    "UniqueID": "OReilly2019",
+    "URL": "https://github.com/gerardjoreilly/Numerical-Modelling-of-GLD-RC-Frames",
+    "num_models": "1",
+    "purpose": "Quasi-static cyclic pushover of a 3D non-ductile RC frame representative of Italian pre-1970s construction (gravity-only design).",
+    "Description of Building Structural System": "Model of a 2/3 scale RC frame designed for gravity loads only and tested by Calvi et al. (2003). Reinforced concrete frames typical of Italy (1950s–1970s), designed for gravity loads only. Masonry infill provides additional stiffness and strength. Uses smooth bars with insufficient detailing and anchorage.",
+    "Description of Model": "3D finite element model of a 3-story, 3-bay moment-resisting frame with fiber-section forceBeamColumn elements, zero-length joint rotational springs (Pinching4), and lumped plasticity hinges. Quasi-static cyclic pushover using opst.anlys.SmartAnalyze with displacement-controlled loading. ODB-based response collection via opst.post.CreateODB.",
+    "Year of design and construction": "Typical of Italian construction 1950s–1970s",
+    "2D/3D": "3D",
+    "Material": "RC",
+    "Lateral system": "Frame",
+    "building occupancy class": "NA",
+    "Lateral Loading": "quasi-static cyclic pushover",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "O'Reilly, G. J., Sullivan, T. J. (2019). Modeling Techniques for the Seismic Assessment of Existing Italian RC Frame Structures, Journal of Earthquake Engineering, 23(8), pp.1262–1296. DOI: 10.1080/13632469.2017.1360224.",
+    "Links to Papers / Design Reports": "Calvi, G. M., Magenes, G., Pampanin, S. (2002). Experimental Test on a Three Storey RC Frame Designed for Gravity Only, 12th European Conference on Earthquake Engineering, London.",
+    "Notes": "Port of the Tcl model by Gerard J. O'Reilly (github.com/gerardjoreilly/Numerical-Modelling-of-GLD-RC-Frames). Non-ductile detailing typical of Italian pre-1970s construction with smooth bars and end-hooks."
+  },
+  {
     "UniqueID": "ST31_L1",
     "URL": "NA",
     "num_models": "1",

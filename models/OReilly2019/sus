@@ -1,0 +1,14 @@
+Help on function save_model_data in module opstool.post.model_data:
+
+ssaavvee__mmooddeell__ddaattaa(odb_tag: Union[str, int] = 1)
+    Save the model data from the current domain.
+    
+    .. Note::
+       Since this package chooses `xarray <https://docs.xarray.dev/en/stable/index.html>`_
+       as the data structure, it is saved in
+       `netCDF <https://docs.xarray.dev/en/stable/user-guide/io.html>`_ format.
+    
+    Parameters
+    ----------
+    odb_tag: Union[str, int], default = 1
+        Output database tag, the data will be saved in ``ModelData-{odb_tag}.nc``.
