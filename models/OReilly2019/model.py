@@ -39,7 +39,10 @@ def _idx(grid: int, floor: int) -> int:
     return int(f"{grid}1{floor}")
 
 # Ground (floor 0) node tags → 1{idx}
-NODE_GROUND = {g: 1000 + _idx(g, 0) for g in (1, 2, 3, 4)}
+NODE_OFFSET = 1000
+NODE_INT_OFFSET = 6000
+
+NODE_GROUND = {g: NODE_OFFSET + _idx(g, 0) for g in (1, 2, 3, 4)}
 NODE_1A = NODE_GROUND[1]   # 1110
 NODE_2A = NODE_GROUND[2]   # 1210
 NODE_3A = NODE_GROUND[3]   # 1310
@@ -54,7 +57,7 @@ PATTERN_GRAVITY = 101
 PATTERN_LATERAL = 1
 
 # Control node for pushover (grid 1, floor 3 outer joint node)
-CTRL_NODE = 1000 + _idx(1, 3)   # 1113
+CTRL_NODE = NODE_OFFSET + _idx(1, 3)   # 1113
 
 # ── 3. PARAMETERS ────────────────────────────────────────────────────────────
 # All lengths in mm, forces in N, stresses in MPa (= N/mm²)
@@ -128,8 +131,8 @@ hyst_int = [0.6, 0.2, 0.0, 0.01, 0.3]
 dref     = 1.0 * mm
 
 # Grid geometry  [mm]
-GRID_X = [0.0, 3000.0, 4330.0, 6660.0]   # grids 1, 2, 3, 4
-FLOOR_Z = [0.0, 2000.0, 4000.0, 6000.0]  # ground, floor 1, 2, 3
+GRID_X = [0.0 * mm, 3000.0 * mm, 4330.0 * mm, 6660.0 * mm]   # grids 1, 2, 3, 4
+FLOOR_Z = [0.0 * mm, 2000.0 * mm, 4000.0 * mm, 6000.0 * mm]  # ground, floor 1, 2, 3
 
 # ── 4. MODEL INITIALISATION ──────────────────────────────────────────────────
 def init_model() -> None:
@@ -168,7 +171,7 @@ def define_boundary_conditions() -> None:
     for g in (1, 2, 3, 4):
         for f in (1, 2, 3):
             idx = _idx(g, f)          # e.g. 111, 211, 311, 411, 112, …
-            ops.fix(1000 + idx, 0, 1, 0, 0, 0, 0)
+            ops.fix(NODE_OFFSET + idx, 0, 1, 0, 0, 0, 0)
 
 # ── 9. ELEMENTS ──────────────────────────────────────────────────────────────
 def define_elements(output_dir: Path) -> None:
@@ -227,10 +230,10 @@ def define_elements(output_dir: Path) -> None:
     # ── Column elements ─────────────────────────────────────────────────
     col_P_Ls = [
         # floor 1          floor 2          floor 3
-        (43.0, 1000.0),  (27.1, 1000.0),  (11.2, 1000.0),  # grid 1
-        (61.8, 1000.0),  (38.9, 1000.0),  (15.9, 1000.0),  # grid 2
-        (57.1, 1000.0),  (36.5, 1000.0),  (15.9, 1000.0),  # grid 3
-        (38.3, 1000.0),  (24.8, 1000.0),  (11.2, 1000.0),  # grid 4
+        (43.0 * kN, 1000.0 * mm),  (27.1 * kN, 1000.0 * mm),  (11.2 * kN, 1000.0 * mm),  # grid 1
+        (61.8 * kN, 1000.0 * mm),  (38.9 * kN, 1000.0 * mm),  (15.9 * kN, 1000.0 * mm),  # grid 2
+        (57.1 * kN, 1000.0 * mm),  (36.5 * kN, 1000.0 * mm),  (15.9 * kN, 1000.0 * mm),  # grid 3
+        (38.3 * kN, 1000.0 * mm),  (24.8 * kN, 1000.0 * mm),  (11.2 * kN, 1000.0 * mm),  # grid 4
     ]
     col_n = 0
     for g in (1, 2, 3, 4):
@@ -238,16 +241,16 @@ def define_elements(output_dir: Path) -> None:
             base_idx = _idx(g, f - 1)      # floor below
             top_idx  = _idx(g, f)          # this floor
             ET = int(f"7{g}1{f}")
-            P_kN, Ls = col_P_Ls[col_n]
+            P_N, Ls_mm = col_P_Ls[col_n]
             col_n += 1
             create_rc_column(
                 1, ET, GT_COLUMN,
-                1000 + base_idx,            # base node tag
-                1000 + top_idx,             # top (joint) node tag
+                NODE_OFFSET + base_idx,            # base node tag
+                NODE_OFFSET + top_idx,             # top (joint) node tag
                 fyL, fyV, Es,
                 conc_col[f - 1][0], conc_col[f - 1][1],
                 bc, hc, sc, cv, dbL, dbV,
-                P_kN * kN, Ls,
+                P_N, Ls_mm,
                 rC_shr,
                 rC_top, rC_web, rC_bot,
                 rC_top, rC_web, rC_bot,
@@ -263,7 +266,7 @@ def define_elements(output_dir: Path) -> None:
         (rB3_top, rB3_web, rB3_bot, rB3_shr),
         (rB5_top, rB5_web, rB5_bot, rB5_shr),
     ]
-    beam_Ls = [1500.0, 665.0, 1665.0]
+    beam_Ls = [1500.0 * mm, 665.0 * mm, 1665.0 * mm]
 
     for f in (1, 2, 3):
         for span in (0, 1, 2):   # spans between grid (s+1) and (s+2)
@@ -272,8 +275,8 @@ def define_elements(output_dir: Path) -> None:
             ET = int(f"5{span + 1}1{f}")
             idx_i = _idx(g_i, f)
             idx_j = _idx(g_j, f)
-            i_node = 6000 + idx_i     # internal joint node
-            j_node = 6000 + idx_j
+            i_node = NODE_INT_OFFSET + idx_i     # internal joint node
+            j_node = NODE_INT_OFFSET + idx_j
             rho_t, rho_w, rho_b, rho_sh = beam_rhos[span]
             create_rc_column(
                 0, ET, GT_BEAM, i_node, j_node,
@@ -296,10 +299,9 @@ def define_elements(output_dir: Path) -> None:
     print("Elements created")
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
-def create_odb(output_dir: Path) -> "opst.post.CreateODB":
-    opst.post.set_odb_path(str(output_dir))
-    opst.post.save_model_data(odb_tag=1)
-    odb = opst.post.CreateODB(odb_tag=1)
+def create_odb(odb_tag: int = 1) -> "opst.post.CreateODB":
+    odb = opst.post.CreateODB(odb_tag=odb_tag)
+    odb.save_model_data()
     return odb
 
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
@@ -310,15 +312,15 @@ def _load_gravity_tag(g: int, f: int) -> int:
 def define_gravity_loads() -> None:
     ops.timeSeries("Constant", PATTERN_GRAVITY)
     ops.pattern("Plain", PATTERN_GRAVITY, PATTERN_GRAVITY)
-    # Floor loads in N  (converted from original kN values)
+    # Floor loads (converted to N natively)
     grav = {
-        1: [(-15.90, -22.95, -20.60, -13.55)],
-        2: [(-15.90, -22.95, -20.60, -13.55)],
-        3: [(-11.20, -15.90, -15.90, -11.20)],
+        1: [(-15.90 * kN, -22.95 * kN, -20.60 * kN, -13.55 * kN)],
+        2: [(-15.90 * kN, -22.95 * kN, -20.60 * kN, -13.55 * kN)],
+        3: [(-11.20 * kN, -15.90 * kN, -15.90 * kN, -11.20 * kN)],
     }
     for f, loads in grav.items():
         for g, val in enumerate(loads[0], start=1):
-            ops.load(_load_gravity_tag(g, f), 0.0, 0.0, val * kN, 0.0, 0.0, 0.0)
+            ops.load(_load_gravity_tag(g, f), 0.0, 0.0, val, 0.0, 0.0, 0.0)
 
 def define_lateral_loads() -> None:
     f1 = 0.45 / (0.45 + 0.90 + 1.0)   # 0.1915
@@ -335,42 +337,28 @@ def define_lateral_loads() -> None:
 def run_gravity(
     odb: "opst.post.CreateODB",
     n_steps: int = 10,
+    ctrl_node: int = CTRL_NODE,
+    ctrl_dof: int = 1,
 ) -> None:
-    """Apply gravity loads incrementally using standard OpenSees load control."""
+    """Apply gravity loads incrementally using SmartAnalyze (Static)."""
     import openseespy.opensees as ops
     
     ops.constraints("Transformation")
     ops.numberer("RCM")
     ops.system("BandGeneral")
-    
-    # 1.0e-6 tolerance is standard for well-behaved gravity loads
-    ops.test("NormDispIncr", 1.0e-6, 100)
-    ops.algorithm("Newton")
-    
-    # Apply 100% of gravity evenly over n_steps
-    step_size = 1.0 / n_steps
-    ops.integrator("LoadControl", step_size)
-    ops.analysis("Static")
-    
-    for _ in range(n_steps):
-        ok = ops.analyze(1)
-        
-        # Fallback step-cutting if the standard Newton algorithm fails
-        if ok != 0:
-            print("  Warning: standard Newton failed, trying Newton with Initial Tangent...")
-            ops.algorithm("Newton", "-initial")
-            ok = ops.analyze(1)
-            
-            if ok != 0:
-                print("  Error: Gravity analysis completely failed to converge.")
-                break
-                
-            # Revert back to normal Newton for the next steps
-            ops.algorithm("Newton")
-            
-        # Manually save the response at each load increment
+    ops.integrator("LoadControl", 1.0 / n_steps)
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+    )
+    protocol = [1.0]
+    segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
+    for seg in segs:
+        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
         odb.fetch_response_step()
-        
+    analysis.close()
+    
     # Freeze gravity and reset pseudo-time to 0.0 for the subsequent pushover
     ops.loadConst("-time", 0.0)   
     print("Gravity analysis completed")
@@ -464,12 +452,9 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 
     Returns:
         The populated GetFEMdata instance (call save_resp_all() in post_process).
-
-    NOTE: Lateral loads are defined AFTER gravity (loadConst) so that
-    DisplacementControl has an active (non-frozen) pattern to scale during
-    the pushover. The frozen gravity pattern supplies constant vertical loads.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    opst.post.set_odb_path(str(output_dir))
 
     init_model()
     define_nodes()
@@ -479,12 +464,12 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     define_sections()
     vis_nodes(output_dir)                         # V1: nodes + supports
     vis_model(output_dir)                         # V2: full geometry
-    odb = create_odb(output_dir)                  # initialise ODB after model built
+    odb = create_odb(odb_tag=1)                   # initialise ODB after model built
     define_gravity_loads()                        # gravity pattern (frozen later)
+    define_lateral_loads()                        # lateral pattern
+    vis_loads(output_dir)                         # V3: loads
     vis_pre_analysis(output_dir)                  # V4: pre-analysis check
     run_gravity(odb)                              # applies gravity + loadConst
-    vis_loads(output_dir)                         # V3: loads
-    define_lateral_loads()                        # lateral pattern (AFTER loadConst, still active)
     run_cyclic_pushover(odb,
                         ctrl_node=CTRL_NODE,
                         ctrl_dof=1,

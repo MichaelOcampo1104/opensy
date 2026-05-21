@@ -10,10 +10,6 @@ import os
 from pathlib import Path
 import opstool as opst
 
-import os
-from pathlib import Path
-import opstool as opst
-
 def _headless() -> bool:
     """Return True when running in a headless / CI environment."""
     return os.getenv("OPENSEES_HEADLESS", "0") == "1"
