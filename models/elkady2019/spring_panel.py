@@ -1,3 +1,32 @@
+########################################################################################################
+# Spring_Panel
+#
+# SubRoutine to construct a rotational spring with a trilinear hysteretic beahviour (Panel Zone Spring)                                                            
+#                                                                                                      
+# Input Arguments
+# 	P_Elm			Element ID
+# 	iNode			Node i ID
+# 	jNode			Node j ID
+# 	E				Young's Modulus
+# 	Fy				Expected Yield Stress
+# 	tp				Column Web + Doubler Plates Thickness
+# 	d_Col			Column Depth
+# 	d_Beam			Beam Depth
+# 	tf_Col			Column Flange Thickness
+# 	bf_Col			Beam Flange Thickness
+# 	SH_Panel		Strain Hardeing (ratio of hardening-to-elastic slopes)
+# 	Response_ID		ID for Panel Zone Response: 0 --> Interior Steel Panel Zone with Composite Action
+#												1 --> Exterior Steel Panel Zone with Composite Action
+#												2 --> Bare Steel Interior/Exterior Steel Panel Zone
+# 	transfTag		Geometric Transformation ID
+# 	Units			1 --> mm 
+#					2 --> inches	
+#                                                                                                      
+# Written by: Ahmed Elkady
+# Created:       02/07/2012
+#
+########################################################################################################
+
 import openseespy.opensees as ops
 
 # ── HELPER: PANEL ZONE SPRING (SIMPLIFIED) ───────────────────────────────────

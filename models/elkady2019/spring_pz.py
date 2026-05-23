@@ -1,3 +1,48 @@
+##################################################################################################################
+# Spring_PZ
+#
+# SubRoutine to construct a rotational spring with a trilinear hysteretic response representative of steel 
+# panel zone response                                                            
+#  
+# The subroutine also considers modeling uncertainty based on the logarithmic standard deviations specified by the user.
+#      
+# References: 
+#--------------	
+# Elkady, A. and D. G. Lignos (2014). "Modeling of the Composite Action in Fully Restrained Beam-to-Column
+# 	Connections: ‎Implications in the Seismic Design and Collapse Capacity of Steel Special Moment Frames." 
+# 	Earthquake Eng. & Structural Dynamics 43(13).
+#
+# Skiadopoulos, A., Elkady, A. and D. G. Lignos (2020). "Proposed Panel Zone Model for Seismic Design of 
+#   Steel Moment-Resisting Frames." ASCE Journal of Structural Engineering (under review). 
+#
+##################################################################################################################
+#
+# Input Arguments:                                                                               
+#------------------
+# P_Elm			Element ID
+# NodeI			Node i ID
+# NodeJ			Node j ID
+# E				Young's Modulus
+# mu			Poisson's Ratio
+# fy			Expected Yield Stress
+# tdp			Doubler Plate(s) Thickness
+# d_Col			Column Depth
+# d_Beam		Beam Depth
+# tf_Col		Column Flange Thickness
+# bf_Col		Column Flange Width
+# tw_Col		Column Web Thickness
+# Ic			Column second-moment-of-interia about the strong axis
+# trib			Steel deck rib depth
+# ts			Concrete slab depth above the rib
+# Response_ID	ID for Panel Zone Response: 0 --> Interior Steel Panel Zone with Composite Action
+#											1 --> Exterior Steel Panel Zone with Composite Action
+#											2 --> Bare Steel Interior/Exterior Steel Panel Zone
+# transfTag		Geometric Transformation ID
+#                                                                                                      
+# Written by: Dr. Ahmed Elkady, University of Southampton, UK
+# 
+########################################################################################################
+
 import openseespy.opensees as ops
 from lognrmrand import generate_lognrmrand
 
