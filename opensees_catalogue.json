@@ -61,5 +61,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "NA",
     "Notes": "ST31 (L1) underground box-with_leg-frame model with two selectable lateral load cases: case 1 = uniform earth pressure (15 kPa), case 2 = hydrostatic water pressure (triangular). Model uses --case argument to switch."
+  },
+  {
+    "UniqueID": "elkady2019",
+    "URL": "https://doi.org/10.1002/eqe.2430",
+    "num_models": "1",
+    "purpose": "Nonlinear dynamic earthquake and pushover analysis of a 4-story 3-bay steel special moment frame (SMF) with panel zones and IMK springs to study seismic collapse capacity.",
+    "Description of Building Structural System": "4-story, 3-bay steel special moment-resisting frame (SMF) per AISC 341 seismic provisions with W14 columns (W14x68 upper stories, W14x132 lower stories) and W21 beams with Reduced Beam Section (RBS) connections. An elastic gravity frame (EGF) leaning column captures P-Delta effects from tributary gravity loads. Column splices located at mid-height of stories 3-4.",
+    "Description of Model": "2D finite element model with 16 panel zones (ConstructPanel_Rectangle parallelogram model), Skiadopoulos-Elkady-Lignos Hysteretic panel zone springs (Spring_PZ), and IMKBilin rotational springs (Spring_IMK) at all beam and column ends calibrated with Lignos-Krawinkler (2011) and Lignos et al. (2019) regression equations. Column elastics use ModElasticBeam2d with stiffness modifier n=10. Gravity uses SmartAnalyze (load-controlled static); dynamic uses DynamicAnalysisCollapseSolverX with Newmark integration, Rayleigh damping zeta=2% applied to modes 1 and 3. ODB response collection via opst.post.CreateODB.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel",
+    "Lateral system": "Special Moment-Resisting Frame (SMF) with RBS connections and panel zones",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake + static pushover",
+    "Earthquake records": "1994 Northridge - Canoga Park (NR94cnp.txt), dt=0.01s, 2495 points",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "Elkady, A. and Lignos, D.G. (2014). Modeling of the Composite Action in Fully Restrained Beam-to-Column Connections: Implications in the Seismic Design and Collapse Capacity of Steel Special Moment Frames. Earthquake Engineering & Structural Dynamics 43(13).",
+    "Links to Papers / Design Reports": "Lignos, D.G. and Krawinkler, H. (2011). Deterioration Modeling of Steel Components in Support of Collapse Prediction of Steel Moment Frames under Earthquake Loading. Journal of Structural Engineering 137(11). Lignos, D.G. et al. (2019). Proposed Updates to the ASCE 41 Nonlinear Modeling Parameters for Wide-Flange Steel Columns. Journal of Structural Engineering 145(9). Skiadopoulos, A., Elkady, A. and Lignos, D.G. (2020). Proposed Panel Zone Model for Seismic Design of Steel MRFs. ASCE Journal of Structural Engineering.",
+    "Notes": "Converted from original Tcl script (SMF4B.tcl) by Dr. Ahmed Elkady. All units converted from imperial (ksi, inches, kips) to N-mm-MPa. Model folder contains all Python helper modules (spring_imk, spring_pz, constructpanel_rectangle, etc.) and ground motion file NR94cnp.txt."
   }
 ]

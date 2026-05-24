@@ -1,6 +1,6 @@
 import openseespy.opensees as ops
 import opstool as opst
-from sdrlimittertester import sdr_limit_tester
+from sdrlimittester import sdr_limit_tester
 from pathlib import Path
 import time
 def dynamic_analysis_collapse_solver(
