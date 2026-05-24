@@ -1011,8 +1011,6 @@ def run_pushover(
         analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
         odb.fetch_response_step()
     analysis.close()
-    odb.save_response()
-    vis_defo(output_dir, "vis_06_defo_pushover.html", odb_tag=1, resp_dof="UX")
 
 
 def _define_rayleigh_damping(w1: float, w3: float) -> None:
@@ -1129,10 +1127,10 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     define_sections()
     define_nodes()
 
-    vis_nodes(output_dir)                       # V1: nodes + supports
-
     define_elements()
     define_boundary_conditions()
+
+    vis_nodes(output_dir)                       # V1: nodes + supports
 
     vis_model(output_dir)                       # V2: full geometry
 
