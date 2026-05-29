@@ -21,10 +21,12 @@ import openseespy.opensees as ops
 import opstool as opst
 import sys
 from pathlib import Path
-
+import time
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
 from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, _headless
+
+from transientsolver import _transient_smart_analyze
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 
@@ -523,7 +525,13 @@ def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10,
     print("Gravity Analysis Done.")
 
 
-def run_dynamic(odb: "opst.post.CreateODB", periods: list[float], gm_file: Path) -> None:
+def run_dynamic(
+    odb: "opst.post.CreateODB",
+    periods: list[float],
+    gm_file: Path,
+    max_run_time: float = 1800.0,
+) -> None:
+    """Run transient earthquake analysis using opstool SmartAnalyze."""
     w1 = 2.0 * np.pi / periods[0]
     w3 = 2.0 * np.pi / periods[2]
     _define_rayleigh_damping(w1, w3)
@@ -535,27 +543,15 @@ def run_dynamic(odb: "opst.post.CreateODB", periods: list[float], gm_file: Path)
     ops.wipeAnalysis()
     ops.constraints("Plain")
     ops.numberer("RCM")
-    ops.system("BandGeneral")
-    ops.test("EnergyIncr", 1.0e-6, 100)
-    ops.algorithm("Newton")          # ← was "Linear"; needs Newton for nonlinear
+    ops.system("UmfPack")             # more robust than BandGeneral for nonlinear
     ops.integrator("Newmark", 0.5, 0.25)
-    ops.analysis("Transient")
+    # NOTE: do NOT call ops.test() or ops.algorithm() here —
+    # SmartAnalyze manages those internally.
 
-    dt_anal = 0.01
-    n_steps = int(GM_DT / dt_anal * GM_POINTS)  # 5000
+    dt_anal = 0.5 * GM_DT            # half-step: 0.01 s, matches original
+    gm_time = GM_DT * GM_POINTS      # 0.02 * 2500 = 50.0 s
 
-    failed = 0
-    for i_anal in range(n_steps):
-        ok = ops.analyze(1, dt_anal)
-        if ok != 0:
-            print(f"Warning: dynamic analysis failed at step {i_anal}")
-            failed += 1
-            if failed > 10:          # abort after 10 consecutive failures
-                print("Too many failures, aborting dynamic analysis.")
-                break
-        else:
-            failed = 0
-        odb.fetch_response_step()
+    _transient_smart_analyze(odb, dt_anal, gm_time, max_run_time=max_run_time)
     print("Dynamic Analysis Done.")
 
 
@@ -592,8 +588,8 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 
 
 # ── 13. POST-PROCESSING ──────────────────────────────────────────────────────
-def post_process(data: "opst.post.CreateODB", output_dir: Path) -> None:
-    data.save_resp_all()
+def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
+    odb.save_response()
     if not _headless():
         try:
             vis = opst.vis.OpsVisPlotly()
