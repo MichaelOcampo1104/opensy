@@ -73,9 +73,12 @@ MAT_BRACE_BASE_L3 = 104  # Steel02
 MAT_BRACE_FAT_L3  = 105  # Fatigue wrapped
 
 # Column Sections/Materials (Wide Flange)
-SEC_COL_L3 = 101
-SEC_COL_L2 = 103
-SEC_COL_L1 = 105
+SEC_COL_L3 = 201
+SEC_COL_L2 = 203
+SEC_COL_L1 = 205
+SEC_COL_R202  = 202
+SEC_COL_R204  = 204
+SEC_COL_R206  = 206
 
 # Brace Section Types
 SEC_BRACE_L1 = 1
@@ -181,6 +184,11 @@ def define_materials() -> None:
         29000.0 * ksi, 55.0 * ksi, 18.0, 10.0, 0.0, 1.0, 2,
         3500.0 * ksi, 180.0, 345.0 * ksi, 10.0
     )
+    # Fatigue-wrapped brace materials (Steel02 base + Fatigue wrapper).
+    # Must be defined here — before define_sections() references them.
+    fatigue_mat(MAT_BRACE_BASE_L1, 2, fy_b, E, 202.3709 * inch, 3.2400 * inch, 20.7000, 0.0 * inch, 0.0 * inch)
+    fatigue_mat(MAT_BRACE_BASE_L2, 2, fy_b, E, 200.3084 * inch, 2.8900 * inch, 18.5000, 0.0 * inch, 0.0 * inch)
+    fatigue_mat(MAT_BRACE_BASE_L3, 2, fy_b, E, 195.5584 * inch, 2.9500 * inch, 28.8000, 0.0 * inch, 0.0 * inch)
 
 # ── 6. SECTIONS ──────────────────────────────────────────────────────────────
 def define_sections() -> None:
@@ -192,12 +200,12 @@ def define_sections() -> None:
 
     # Wide-Flange Sections for Columns (all identical geometry in this model)
     # fiber_wf(secID, matID, d, bf, tf, tw, nfdw, nftw, nfbf, nftf)
-    fiber_wf(101, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
-    fiber_wf(102, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
-    fiber_wf(103, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
-    fiber_wf(104, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
-    fiber_wf(105, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
-    fiber_wf(106, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_L3, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_R202, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_L2, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_R204, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_L1, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
+    fiber_wf(SEC_COL_R206, MAT_VOCE_CHABOCHE, 13.1000 * inch, 12.3000 * inch, 1.1100 * inch, 0.7100 * inch, 6, 2, 6, 2)
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────
 def define_nodes() -> None:
@@ -405,15 +413,7 @@ def _define_gusset_springs() -> None:
 
 
 def _define_brace_members() -> None:
-    """Fatigue materials, brace elements, and ghost braces."""
-    # Fatigue materials
-    for base, sec, l, ry, wt in [
-        (MAT_BRACE_BASE_L1, 2, 202.3709 * inch, 3.2400 * inch, 20.7000),
-        (MAT_BRACE_BASE_L2, 2, 200.3084 * inch, 2.8900 * inch, 18.5000),
-        (MAT_BRACE_BASE_L3, 2, 195.5584 * inch, 2.9500 * inch, 28.8000),
-    ]:
-        fatigue_mat(base, 2, fy_b, E, l, ry, wt, 0.0 * inch, 0.0 * inch)
-
+    """Brace elements and ghost braces (fatigue materials already defined in define_materials)."""
     # Brace members
     for bid, ni, nj, sec in [
         (8101100, 101141, 202113, SEC_BRACE_L1),
@@ -438,9 +438,9 @@ def _define_brace_members() -> None:
 def _define_mf_columns() -> None:
     """Fiber-section columns for the moment frame."""
     for eid, ni, nj, sec in [
-        (603100, 313, 411, SEC_COL_L3), (603200, 323, 421, 102),
-        (602100, 213, 311, SEC_COL_L2), (602200, 223, 321, 104),
-        (601100, 113, 211, SEC_COL_L1), (601200, 123, 221, 106),
+        (603100, 313, 411, SEC_COL_L3), (603200, 323, 421, SEC_COL_R202),
+        (602100, 213, 311, SEC_COL_L2), (602200, 223, 321, SEC_COL_R204),
+        (601100, 113, 211, SEC_COL_L1), (601200, 123, 221, SEC_COL_R206),
     ]:
         construct_fiber_column(eid, ni, nj, sec, 5, 0.0010, 5, TRANS_SELECTED, 0)
 
@@ -654,8 +654,6 @@ def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10, ctrl_node: int = 
     ops.constraints("Plain")
     ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-5, 60)
-    ops.algorithm("Newton")
     ops.integrator("LoadControl", 1.0 / n_steps)
 
     analysis = opst.anlys.SmartAnalyze(
@@ -709,11 +707,11 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     define_materials()
     define_sections()
     define_nodes()
+
+    define_elements()
     define_boundary_conditions()
 
     vis_nodes(output_dir)
-
-    define_elements()
 
     vis_model(output_dir)
 
