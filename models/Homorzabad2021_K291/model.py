@@ -18,14 +18,13 @@ np.NAN = np.nan
 np.NaN = np.nan
 
 import openseespy.opensees as ops
-import opstool as opst         # post-processing — ODB + visualisation
 
 import sys
 from pathlib import Path
 import time
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis, vis_defo
+from units import *
 
 
 
@@ -137,7 +136,6 @@ def define_materials() -> None:
 
 # ── 6. SECTIONS ──────────────────────────────────────────────────────────────
 def define_sections() -> None:
-    """Section properties are embedded in _SEC list (line 47); no additional section objects needed."""
     pass
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────
@@ -436,15 +434,6 @@ def define_elements() -> None:
     _define_fuses()
 
 
-# ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
-def create_odb(odb_tag: int = 1, output_dir: Path = Path("output")) -> "opst.post.CreateODB":
-    """Initialise the opstool ODB after model geometry is fully built."""
-    opst.post.set_odb_path(str(output_dir))
-    odb = opst.post.CreateODB(odb_tag=odb_tag, model_update=False)
-    odb.save_model_data()
-    return odb
-
-
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
 # All gravity-loaded nodes per floor
 _GRAV_NODES = {
@@ -484,7 +473,88 @@ def define_gravity_loads() -> None:
         for tag in nodes:
             ops.load(tag, 0.0, 0.0, f, 0.0, 0.0, 0.0)
 
-# ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
+# ── 12. STRUCTURE DATA ───────────────────────────────────────────────────────
+def save_structure_data(output_dir: Path) -> None:
+    """Save node coordinates and element connectivity for 3D plotting."""
+    odb_dir = output_dir / ".." / "CRSBF_ODB"
+    odb_dir = (output_dir / ".." / "CRSBF_ODB").resolve()
+    odb_dir.mkdir(parents=True, exist_ok=True)
+
+    # Nodes: [tag, x, y, z]
+    node_tags = list(ops.getNodeTags())
+    node_data = np.zeros((len(node_tags), 4))
+    for i, tag in enumerate(node_tags):
+        x, y, z = ops.nodeCoord(tag)
+        node_data[i] = [tag, x, y, z]
+    np.savetxt(odb_dir / "Nodes.out", node_data, fmt="%.6e")
+
+    # 2-node elements: [tag, n1, n2]
+    ele_tags = list(ops.getEleTags())
+    ele_rows = []
+    for tag in ele_tags:
+        # Try to get connected nodes — elasticBeamColumn, truss, twoNodeLink
+        try:
+            n1, n2 = ops.eleNodes(tag)
+            ele_rows.append([tag, n1, n2])
+        except Exception:
+            pass
+    ele_data = np.array(ele_rows)
+    np.savetxt(odb_dir / "Elements_2Node.out", ele_data, fmt="%d")
+    print(f"Structure data saved ({len(node_tags)} nodes, {len(ele_data)} elements)")
+
+
+# ── 13. RECORDERS ────────────────────────────────────────────────────────────
+def define_recorders(output_dir: Path) -> None:
+    """Set up recorders to capture analysis results."""
+    out = str(output_dir / "{}")
+
+    # Roof displacement (node 604)
+    ops.recorder("Node", "-file", out.format("disp604.out"), "-time",
+                 "-node", 604, "-dof", 1, 2, 3, "disp")
+    # Fuse deformation (nodes 2011, 2051)
+    ops.recorder("Node", "-file", out.format("disp2011.out"), "-time",
+                 "-node", 2011, "-dof", 1, 2, 3, "disp")
+    ops.recorder("Node", "-file", out.format("disp2051.out"), "-time",
+                 "-node", 2051, "-dof", 1, 2, 3, "disp")
+
+    # Base reactions at fixed ground nodes
+    base_nodes = [2, 4, 5, 7, 31, 32, 34, 35, 37, 38, 62, 64, 65, 67]
+    ops.recorder("Node", "-file", out.format("BaseReactions.out"), "-time",
+                 "-node", *base_nodes, "-dof", 1, 2, 3, 4, 5, 6, "reaction")
+
+    # Strand forces
+    ops.recorder("Element", "-file", out.format("Strand1.out"), "-time",
+                 "-ele", 6011, "localForce")
+    ops.recorder("Element", "-file", out.format("Strand2.out"), "-time",
+                 "-ele", 6051, "localForce")
+
+    # Column forces (batched)
+    col_eles = [1001, 1002, 1004, 1021, 1022, 1024,
+                1201, 1202, 1204, 1221, 1222, 1224,
+                1401, 1402, 1404, 1421, 1422, 1424]
+    ops.recorder("Element", "-file", out.format("ColumnForces.out"), "-time",
+                 "-ele", *col_eles, "localForce")
+
+    # Brace forces (batched)
+    brace_eles = [5001, 5021, 5041, 5061, 5201, 5221, 5241, 5261,
+                  5401, 5421, 5441, 5461]
+    ops.recorder("Element", "-file", out.format("BraceForces.out"), "-time",
+                 "-ele", *brace_eles, "localForce")
+
+    # Beam forces (batched)
+    beam_eles = [3101, 3102, 3104, 3121, 3122, 3124,
+                 3301, 3302, 3304, 3321, 3322, 3324,
+                 3501, 3502, 3504, 3521, 3522, 3524]
+    ops.recorder("Element", "-file", out.format("BeamForces.out"), "-time",
+                 "-ele", *beam_eles, "localForce")
+
+    # ── All-node displacement (for deformed shape) ──
+    node_tags = ops.getNodeTags()
+    ops.recorder("Node", "-file", out.format("NodeDisp_All.out"), "-time",
+                 "-node", *node_tags, "-dof", 1, 2, 3, "disp")
+
+
+# ── 14. ANALYSIS ─────────────────────────────────────────────────────────────
 def _run_eigen(n_modes: int = 3) -> list[float]:
     lam = ops.eigen("-genBandArpack", n_modes)
     periods = [2.0 * np.pi / np.sqrt(l) for l in lam]
@@ -499,7 +569,7 @@ def _define_rayleigh_damping(w1: float, w3: float) -> None:
     ops.rayleigh(aM, 0.0, 0.0, bK)
 
 
-def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10,
+def run_gravity(n_steps: int = 10,
                 ctrl_node: int = 604, ctrl_dof: int = 3) -> None:
     ops.constraints("Plain")
     ops.numberer("RCM")
@@ -510,27 +580,14 @@ def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10,
     ops.analysis("Static")
     for _ in range(n_steps):
         ops.analyze(1)
-        odb.fetch_response_step()
     ops.loadConst("-time", 0.0)
     print("Gravity Analysis Done.")
 
 
-def define_recorders(output_dir: Path) -> None:
-    """Set up recorders for dynamic analysis output (node displacements + base reactions)."""
-    all_nodes: list[int] = []
-    for fl in range(1, n_stories + 1):
-        all_nodes.extend(_floor_nodes(fl))
-    ops.recorder("Node", "-file", str(output_dir / "NodeDisplacements.out"),
-                 "-node", *all_nodes, "-dof", 1, 2, 3, "disp")
-    ops.recorder("Node", "-file", str(output_dir / "BaseReactions.out"),
-                 "-node", *[n for n, _, _ in _GROUND], "-dof", 1, 2, 3, "reaction")
-
-
 def run_dynamic(
-    odb: "opst.post.CreateODB",
     periods: list[float],
     gm_file: Path,
-    output_dir: Path,
+    max_run_time: float = 1800.0,
 ) -> None:
     """Run transient earthquake analysis using manual loop instead of SmartAnalyze."""
     w1 = 2.0 * np.pi / periods[0]
@@ -542,7 +599,6 @@ def run_dynamic(
     ops.pattern("UniformExcitation", 2, 2, "-accel", 2)
 
     ops.wipeAnalysis()
-    define_recorders(output_dir)
     ops.constraints("Plain")
     ops.numberer("RCM")
     ops.system("BandGeneral")
@@ -558,12 +614,11 @@ def run_dynamic(
         if ErrorState != 0:
             print('Error: The dynamic analysis failed!!')
             break
-        odb.fetch_response_step()
 
     print("Dynamic Analysis Done.")
 
 
-def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
+def run_analysis(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     init_model()
@@ -573,42 +628,26 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 
     define_elements()
 
-    vis_nodes(output_dir)
-    vis_model(output_dir)
-
-    odb = create_odb(odb_tag=1, output_dir=output_dir)
-
     define_nodal_masses()
     define_gravity_loads()
-
-    vis_loads(output_dir)
-    vis_pre_analysis(output_dir)
 
     periods = _run_eigen(n_modes=3)
     with open(output_dir / "EigenPeriod.out", "w") as f:
         for t in periods:
             f.write(f"{t}\n")
 
-    run_gravity(odb, n_steps=10)
+    run_gravity(n_steps=10)
 
-    gm_file = Path(__file__).parent / "ground_motions" / "kobe.txt"
-    run_dynamic(odb, periods=periods, gm_file=gm_file, output_dir=output_dir)
+    # Save structure data (node coords, element connectivity) for 3D plotting
+    save_structure_data(output_dir)
 
-    return odb
+    # Add recorders (displacements, reactions, element forces)
+    define_recorders(output_dir)
 
+    gm_file = Path(__file__).parent /"ground_motions"/ "kobe.txt"
+    run_dynamic(periods=periods, gm_file=gm_file)
 
-# ── 13. POST-PROCESSING ─────────────────────────────────────────────────────
-def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
-    """Flush ODB to disk and render deformed-shape visualisation."""
-    odb.save_response()
-
-    if not _headless():
-        vis_defo(output_dir, "vis_05_defo_dynamic.html", odb_tag=1, resp_dof="UX")
-
-
-# ── 14. MAIN ─────────────────────────────────────────────────────────────────
+# ── 15. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
-    odb = run_analysis(output_dir)
-    post_process(odb, output_dir)
-    ops.wipe()
+    run_analysis(output_dir)
