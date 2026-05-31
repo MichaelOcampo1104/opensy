@@ -318,7 +318,35 @@ pyvista
 
 # Status
 
-This repository is an actively evolving engineering framework focused on robust, scalable, and AI-compatible OpenSeesPy modelling workflows.
+This repository is an actively evolving engineering framework. As of 2026-05-31.
+
+## Model Inventory
+
+| UniqueID | Type | Material | Loading | SmartAnalyze | ODB | Status |
+|----------|------|----------|---------|-------------|-----|--------|
+| [ST31_L2](models/ST31_L2/) | 2D underground | RC | Static | Static (DispControl) | Full | ✅ Working |
+| [ST31_L1](models/ST31_L1/) | 2D underground | RC | Static | Static (DispControl) | Full | ✅ Working |
+| [OReilly2019](models/OReilly2019/) | 3D frame | RC | Cyclic pushover | Static (DispControl) | Full | ✅ Working |
+| [elkady2019](models/elkady2019/) | 2D frame | Steel | Dynamic + pushover | Transient + Static | Full | ✅ Working |
+| [Homorzabad2021_K291](models/Homorzabad2021_K291/) | 3D braced frame | Steel | Dynamic earthquake | Transient only¹ | Selective + throttled² | ✅ Working |
+
+> ¹ **SmartAnalyze Static exception:** Gravity uses manual LoadControl loop — SmartAnalyze forces DisplacementControl which is incompatible with load-controlled gravity for this model ([AGENT.md §3c](AGENT.md)).
+>
+> ² **ODB throttling:** Dynamic fetch_response_step every 10th step; frame/truss/link tags limited to key elements ([AGENT.md §3d](AGENT.md)).
+
+## Lessons Learned (by model)
+
+### Homorzabad2021_K291 (2026-05-31)
+
+1. **SmartAnalyze Static forces DisplacementControl.** `StaticAnalyze()` calls `ops.integrator("DisplacementControl", ...)` internally, overriding any preset integrator. Load-controlled gravity (LoadControl + Linear algorithm) cannot work through SmartAnalyze Static. The approved workaround is a manual `ops.analyze()` loop with `odb.fetch_response_step()`. This is the **only** permitted exception to the SmartAnalyze mandate. Pushover and other displacement-controlled analyses are unaffected.
+
+2. **ODB fetch_response_step() scales with tracked element count.** On a 300-node, 500-element 3D model at 2500 time steps, calling `fetch_response_step()` for every node/element at every step means ~2M+ OpenSees API calls — enough to appear as a hang. Mitigation: (a) pass `node_tags`/`frame_tags`/`truss_tags`/`link_tags` kwargs to `CreateODB` to only track what's needed for post-processing; (b) throttle collection to every Nth step for transient analyses (`if i % 10 == 0: odb.fetch_response_step()`). Aim for ≤500 total fetch calls per analysis phase.
+
+### OReilly2019 (2025-05)
+
+3. **Fiber-section ODB collection is expensive but manageable for pushover.** For a 3D RC frame with fiber sections under cyclic pushover (~200 steps), full ODB collection is acceptable. No throttling needed below 500 steps.
+
+4. **Joint2D elements need explicit link_tags in CreateODB.** Zero-length rotational springs (Pinching4) won't appear in `frame_tags` — they must be listed separately in `link_tags` for force-deformation data in the ODB.
 
 ---
 

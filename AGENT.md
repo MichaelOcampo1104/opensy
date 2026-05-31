@@ -476,35 +476,80 @@ Usage example (mirrors the opstool pattern):
 ## 3c. Analysis Patterns — `opst.anlys.SmartAnalyze` (MANDATORY)
 
 All solver loops MUST use `opst.anlys.SmartAnalyze`. Raw `ops.analyze()` calls are
-**forbidden** (see Section 10). The three canonical patterns below are already
-embedded in the canonical script (Section 3); copy and adapt them.
+**forbidden** (see Section 10), with one documented exception: **load-controlled gravity
+analysis** (see "Gravity (load-controlled static)" below and Section 10 Exceptions).
 
-### Gravity (load-controlled static)
+The three canonical patterns below are already embedded in the canonical script
+(Section 3); copy and adapt them.
+
+### Gravity (load-controlled static) — SmartAnalyze Limitation
+
+**IMPORTANT:** `SmartAnalyze.StaticAnalyze()` internally calls
+`ops.integrator("DisplacementControl", node, dof, seg)`, forcibly overriding any
+integrator set beforehand (including `LoadControl`). This means SmartAnalyze
+**cannot** run a true load-controlled static analysis — it always converts it to
+displacement control.
+
+For models where load-controlled gravity is required (e.g. elastic models using
+`algorithm("Linear")`), use a manual loop with ODB integration. This is the ONE
+permitted exception to the SmartAnalyze mandate:
+
+```python
+# Permitted exception: LoadControl gravity with manual loop + ODB
+ops.constraints("Plain")                     # or "Transformation"
+ops.numberer("RCM")
+ops.system("BandGeneral")
+ops.integrator("LoadControl", 1.0 / n_steps)
+ops.test("EnergyIncr", 1.0e-6, 100)
+ops.algorithm("Linear")                      # single-solve per step for elastic
+ops.analysis("Static")
+for _ in range(n_steps):
+    ops.analyze(1)
+    odb.fetch_response_step()
+ops.loadConst("-time", 0.0)
+```
+
+**When is this exception needed?** When all of these are true:
+- The model uses `LoadControl` integrator for gravity (not displacement control)
+- The model uses `algorithm("Linear")` or other algorithm requiring direct control
+- SmartAnalyze Static with DisplacementControl fails to converge or applies
+  incorrect load factors (target displacement doesn't match full-gravity displacement)
+
+**If your model CAN use displacement-controlled gravity**, prefer this SmartAnalyze pattern:
+
 ```python
 ops.constraints("Transformation")
 ops.numberer("RCM")
 ops.system("BandGeneral")
-ops.integrator("LoadControl", 1.0 / n_steps)
+# Do NOT set integrator — SmartAnalyze.StaticAnalyze uses DisplacementControl internally
 analysis = opst.anlys.SmartAnalyze(
     analysis_type="Static",
     tryAlterAlgoTypes=True,
     algoTypes=[40, 10, 20, 30],
 )
-protocol = [1.0]
+protocol = [1.0]            # target pseudo-time (λ = 1.0 for full load)
 segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
 for seg in segs:
     analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
-    odb.fetch_response_step()          # ← collect responses at this step
+    odb.fetch_response_step()
 analysis.close()
-ops.loadConst("-time", 0.0)   # freeze gravity, reset pseudo-time
+ops.loadConst("-time", 0.0)
 ```
+
+> **How displacement-controlled gravity works:** Load factor λ equals pseudo-time.
+> DisplacementControl increments the control node's displacement; pseudo-time
+> advances proportionally. For a linear-elastic model, λ ∝ displacement, so
+> full gravity is applied when the control node reaches the displacement it
+> would have under full gravity. **The protocol target (1.0 above) must be
+> calibrated so the control-node displacement under full gravity equals the target.**
+> If they don't match, gravity will be under- or over-applied.
 
 ### Pushover (displacement-controlled static)
 ```python
 ops.constraints("Transformation")
 ops.numberer("RCM")
 ops.system("BandGeneral")
-ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, max_step)
+# Do NOT set integrator — SmartAnalyze sets DisplacementControl internally
 analysis = opst.anlys.SmartAnalyze(
     analysis_type="Static",
     tryAlterAlgoTypes=True,
@@ -538,18 +583,27 @@ analysis = opst.anlys.SmartAnalyze(
     minStep=1.0e-6,
 )
 segs = analysis.transient_split(npts)
-for _ in segs:
-    analysis.TransientAnalyze(dt)
-    odb.fetch_response_step()          # ← collect responses at this step
+for i, _ in enumerate(segs):
+    ok = analysis.TransientAnalyze(dt)
+    if ok < 0:
+        break                    # analysis failed — inspect and handle
+    if i % odb_every_n == 0:    # throttle ODB for large models (see §3d)
+        odb.fetch_response_step()
 analysis.close()
 ```
 
 > **Key rules:**
 > - `test()` and `algorithm()` are managed internally by SmartAnalyze — do not call them manually.
-> - For transient analysis the `integrator()` (e.g. Newmark) MUST be set **before** instantiating `SmartAnalyze`.
+> - For **Static** analysis, SmartAnalyze always uses `DisplacementControl` — do not
+>   set an integrator beforehand (it will be overridden).
+> - For **Transient** analysis, the `integrator()` (e.g. Newmark) MUST be set
+>   **before** instantiating `SmartAnalyze`.
 > - Always call `analysis.close()` after the loop.
 > - Always call `ops.loadConst("-time", 0.0)` after gravity to freeze gravity loads.
-> - Call `odb.fetch_response_step()` inside **every** analysis loop, once per converged step.
+> - For transient analyses with **> 500 steps**, throttle `odb.fetch_response_step()`
+>   (every Nth step, see §3d) to avoid extreme I/O overhead.
+> - For transient analyses, check `ok < 0` and break on failure to avoid
+>   SmartAnalyze retrying indefinitely on an unconverged step.
 
 ---
 
@@ -588,7 +642,44 @@ for seg in segs:
 odb.save_response()   # write accumulated data to output/<odb_tag>.nc (or .h5)
 ```
 
-### Selective saving (large models — reduce file size)
+### Performance: selective saving (large models — reduce I/O overhead)
+
+`fetch_response_step()` calls OpenSees API (nodeDisp, eleResponse) for every
+tracked node and element. For models with 300+ nodes and 2500+ time steps, this
+can take minutes per step and appear as a hang. Mitigations:
+
+**1. Limit which nodes/elements are tracked** (most effective):
+```python
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=True,
+    save_truss_resp=True,
+    save_link_resp=True,
+    node_tags=key_node_list,           # only nodes of interest
+    frame_tags=key_frame_list,         # only elements of interest
+    truss_tags=[6011, 6051],           # specific trusses
+    link_tags=[...],                   # specific links
+)
+```
+
+**2. Throttle ODB collection in transient analyses** (for > 500 steps):
+```python
+ODB_EVERY_N = 10  # collect every 10th step
+for i, _ in enumerate(segs):
+    ok = analysis.TransientAnalyze(dt)
+    if ok < 0:
+        break
+    if i % ODB_EVERY_N == 0:
+        odb.fetch_response_step()
+```
+
+> **Guideline:** aim for ≤ 500 total `fetch_response_step()` calls per analysis
+> phase. For a 2500-step transient analysis, `ODB_EVERY_N = 5` or `10` keeps
+> this in check while still capturing the response envelope for deformed-shape
+> visualisation.
+
+### Selective saving reference
 ```python
 odb = opst.post.CreateODB(
     odb_tag=1,
@@ -617,9 +708,10 @@ odb_push.save_response()
 > **Key rules:**
 > - Call `set_odb_path(str(output_dir))` once before creating any ODB so files land in `output/`.
 > - `save_model_data()` MUST be called immediately after `CreateODB()` and before the first `fetch_response_step()`.
-> - `fetch_response_step()` goes inside the step loop — one call per converged step.
+> - `fetch_response_step()` goes inside the step loop — one call per converged step (or throttled for large transient analyses).
 > - `save_response()` is called exactly once per ODB, after the analysis loop closes.
 > - Never use `ops.recorder()` — all output goes through CreateODB.
+> - Use `node_tags` / `frame_tags` / etc. to limit data collection on large models.
 
 ---
 
@@ -673,7 +765,7 @@ When asked to **audit** a script, check every item and report PASS / FAIL / WARN
 [ ] 19. README.md exists in model folder
 [ ] 20. Ground motion files are in `ground_motions/` subfolder
 [ ] 21. No absolute file paths in script
-[ ] 22. All solver loops use `opst.anlys.SmartAnalyze` — no bare `ops.analyze()` calls
+[ ] 22. All solver loops use `opst.anlys.SmartAnalyze` — no bare `ops.analyze()` calls (exception: LoadControl gravity with documented approval — see §3c and §10)
 [ ] 23. `analysis.close()` called after every SmartAnalyze loop
 [ ] 24. vis_nodes() called after define_boundary_conditions()
 [ ] 25. vis_model() called after define_elements()
@@ -1076,7 +1168,33 @@ def run_analysis(output_dir):
     define_elements()
     # vis_model() missing — FAIL [VIS_MODEL]
     define_gravity_loads()
+
+# ❌ ODB with ALL nodes/elements on large transient models — may hang
+#    For models with 200+ nodes and 1000+ time steps, always use
+#    targeted node_tags / frame_tags / truss_tags (see §3d).
 ```
+
+### Permitted exceptions to SmartAnalyze mandate
+
+**Load-controlled gravity analysis** — `SmartAnalyze.StaticAnalyze()` forcibly
+overrides any integrator to `DisplacementControl`, making load-controlled gravity
+impossible with SmartAnalyze. When LoadControl is required (e.g. elastic models
+using `algorithm("Linear")`), a manual `ops.analyze()` loop with `odb.fetch_response_step()`
+is permitted. See §3c "Gravity (load-controlled static)" for the approved pattern.
+
+```python
+# ✅ PERMITTED — LoadControl gravity with manual loop
+ops.integrator("LoadControl", 1.0 / n_steps)
+ops.test("EnergyIncr", 1.0e-6, 100)
+ops.algorithm("Linear")
+ops.analysis("Static")
+for _ in range(n_steps):
+    ops.analyze(1)
+    odb.fetch_response_step()
+ops.loadConst("-time", 0.0)
+```
+
+This is the **only** exception to the "no raw `ops.analyze()`" rule.
 
 ---
 
@@ -1093,6 +1211,7 @@ def run_analysis(output_dir):
 | 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
 | 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
 | 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
+| 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — `SmartAnalyze.StaticAnalyze()` forcibly overrides the integrator to `DisplacementControl` regardless of what is set beforehand, making true load-controlled gravity impossible with SmartAnalyze; a permitted exception for LoadControl gravity with manual `ops.analyze()` loop is documented in §3c and §10; (2) §3c pushover pattern updated — removed redundant `ops.integrator("DisplacementControl", ...)` call since SmartAnalyze sets it internally; (3) §3d expanded with ODB performance guidance — `fetch_response_step()` can cause hangs on large models (300+ nodes × 2500+ steps); mitigations include targeted `node_tags`/`frame_tags` kwargs on `CreateODB` and throttled collection (every Nth step) for transient analyses; (4) §10 added permitted exceptions subsection with approved LoadControl gravity pattern; (5) ODB anti-pattern added: collecting all nodes/elements on large transient models |
 
 ---
 
