@@ -103,5 +103,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Homorzabad, S. (2021). CRSBF-NDAP.py — optimization framework for concentrically-braced frames with rocking.",
     "Notes": "Converted from original CRSBF-NDAP.py script by S. Homorzabad. All units converted to N-mm-MPa. Ground motion file stored in ground_motions/ subfolder. LESSONS LEARNED: (1) SmartAnalyze Static forces DisplacementControl — LoadControl gravity must use manual ops.analyze() loop (exception documented in AGENT.md v1.6.0 §3c/§10). (2) ODB fetch_response_step() throttled to every 10th step with selective element tags to avoid hang on 2500-step transient analysis (guidance in AGENT.md §3d)."
+  },
+  {
+    "UniqueID": "nafeh2022",
+    "URL": "https://github.com/gerardjoreilly/Infilled-RC-Building-Database",
+    "num_models": "1",
+    "purpose": "Nonlinear gravity + eigen analysis of a 5-storey infilled RC frame (Archetype 1, GLD) with masonry infill struts for seismic assessment of existing Italian construction.",
+    "Description of Building Structural System": "5-storey, 8x4-bay 3D RC moment-resisting frame designed for gravity loads only (GLD), typical of Italian pre-1970s construction. Masonry infill walls provide additional stiffness via equivalent diagonal struts. Smooth bars with end-hooks, non-ductile detailing. Columns: 300x300mm (stories 1-2) and 200x200mm (stories 3-5). Beams: 500x300mm throughout.",
+    "Description of Model": "3D finite element model with lumped-plasticity forceBeamColumn elements (Pinching4 hinges), zero-length joint rotational springs (Hysteretic material), and masonry infill struts (single diagonal, Pinching4 material). Grid: 8 columns x 4 rows, bay widths 3.5-20.0m X, 3.0-9.0m Y. Four infill failure modes: compression centre, compression corner, shear sliding, diagonal tension. Drift limits from Sassun et al. (2015). Gravity: manual LoadControl loop (SmartAnalyze Static incompatible). Eigen: ops.eigen(). Response collection via opst.post.CreateODB (Zarr/ODB-based for opstool >= 1.0).",
+    "Year of design and construction": "Typical of Italian construction 1950s-1970s",
+    "2D/3D": "3D",
+    "Material": "RC with masonry infill",
+    "Lateral system": "Moment-Resisting Frame with Masonry Infill",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Gravity + eigen only (dynamic hook for future Master script)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "Nafeh, A. M. B. (2020). Infilled-RC-Building-Database. IUSS Pavia. Hak et al. (2012). Sassun et al. (2015).",
+    "Links to Papers / Design Reports": "Nafeh, A. M. B. (2020). Seismic Assessment of Infilled RC Frame Buildings. PhD Thesis, IUSS Pavia. O'Reilly, G. J., Sullivan, T. J. (2019) J. Earthquake Eng., 23(8), 1262-1296.",
+    "Notes": "Port of arch_1_5st.tcl from Infilled-RC-Building-Database. All Tcl reference files preserved in tcl_reference/. Units: N-mm-MPa-tonne. Uses opstool >= 1.0 post.CreateODB API (Zarr/ODB backend). Helper modules (joint_model.py, rc_bc_non_duct.py, infill.py) are model-local ports from Tcl procedures. Gravity per AGENT.md §3c exception (manual LoadControl loop). Run with: conda activate opensy && python model.py."
   }
 ]

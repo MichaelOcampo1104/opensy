@@ -15,6 +15,7 @@ import numpy as np
 import math
 # Compatibility: opstool v0.8.7 uses deprecated np.NAN (patch BEFORE opstool import)
 np.NAN = np.nan
+np.NaN = np.nan
 
 import openseespy.opensees as ops
 import opstool as opst

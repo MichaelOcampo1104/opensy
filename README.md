@@ -329,10 +329,13 @@ This repository is an actively evolving engineering framework. As of 2026-05-31.
 | [OReilly2019](models/OReilly2019/) | 3D frame | RC | Cyclic pushover | Static (DispControl) | Full | ✅ Working |
 | [elkady2019](models/elkady2019/) | 2D frame | Steel | Dynamic + pushover | Transient + Static | Full | ✅ Working |
 | [Homorzabad2021_K291](models/Homorzabad2021_K291/) | 3D braced frame | Steel | Dynamic earthquake | Transient only¹ | Selective + throttled² | ✅ Working |
+| [nafeh2022](models/nafeh2022/) | 3D frame | RC + masonry infill | Gravity + eigen | Manual LoadControl³ | Full | ✅ Working |
 
 > ¹ **SmartAnalyze Static exception:** Gravity uses manual LoadControl loop — SmartAnalyze forces DisplacementControl which is incompatible with load-controlled gravity for this model ([AGENT.md §3c](AGENT.md)).
 >
 > ² **ODB throttling:** Dynamic fetch_response_step every 10th step; frame/truss/link tags limited to key elements ([AGENT.md §3d](AGENT.md)).
+>
+> ³ **Manual LoadControl gravity:** SmartAnalyze Static incompatible with load-controlled gravity ([AGENT.md §3c](AGENT.md)).
 
 ## Lessons Learned (by model)
 
@@ -342,11 +345,17 @@ This repository is an actively evolving engineering framework. As of 2026-05-31.
 
 2. **ODB fetch_response_step() scales with tracked element count.** On a 300-node, 500-element 3D model at 2500 time steps, calling `fetch_response_step()` for every node/element at every step means ~2M+ OpenSees API calls — enough to appear as a hang. Mitigation: (a) pass `node_tags`/`frame_tags`/`truss_tags`/`link_tags` kwargs to `CreateODB` to only track what's needed for post-processing; (b) throttle collection to every Nth step for transient analyses (`if i % 10 == 0: odb.fetch_response_step()`). Aim for ≤500 total fetch calls per analysis phase.
 
+### nafeh2022 (2026-06-01)
+
+5. **opstool has a breaking API change at 1.0.** Models written for 0.8.7 (`GetFEMdata`/`OpsVisPlotly`/HDF5) will fail with `AttributeError` on 1.0. The `opensy` conda environment (Python 3.11, opstool 1.0.26) is the target runtime. See [AGENT.md §11](AGENT.md) for the full API migration table.
+
+6. **vis_utils.py and model.py must match the opstool version.** When switching between opstool versions, both files need coordinated updates — the function signatures and import patterns differ completely. The numpy `np.NAN`/`np.NaN` compatibility hack is only needed for opstool 0.8.7 on NumPy >= 2.0.
+
 ### OReilly2019 (2025-05)
 
-3. **Fiber-section ODB collection is expensive but manageable for pushover.** For a 3D RC frame with fiber sections under cyclic pushover (~200 steps), full ODB collection is acceptable. No throttling needed below 500 steps.
+7. **Fiber-section ODB collection is expensive but manageable for pushover.** For a 3D RC frame with fiber sections under cyclic pushover (~200 steps), full ODB collection is acceptable. No throttling needed below 500 steps.
 
-4. **Joint2D elements need explicit link_tags in CreateODB.** Zero-length rotational springs (Pinching4) won't appear in `frame_tags` — they must be listed separately in `link_tags` for force-deformation data in the ODB.
+8. **Joint2D elements need explicit link_tags in CreateODB.** Zero-length rotational springs (Pinching4) won't appear in `frame_tags` — they must be listed separately in `link_tags` for force-deformation data in the ODB.
 
 ---
 

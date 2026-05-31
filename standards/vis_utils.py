@@ -3,7 +3,7 @@ Thin wrappers around opstool for standardised in-model visualisation.
 All functions write self-contained HTML files to output_dir so results
 are portable and do not require a display server.
 
-Compatible with opstool >= 1.0 (``opst.vis.plotly.plot_model`` API).
+Compatible with opstool >= 1.0 (post.CreateODB / vis.plotly API).
 
 Set OPENSEES_HEADLESS=1 to suppress all output (e.g. in CI pipelines).
 """
@@ -25,7 +25,7 @@ def vis_nodes(output_dir: Path, filename: str = "vis_01_nodes.html") -> None:
 
     fig = opst.vis.plotly.plot_model(
         show_node_numbering=True, show_ele_numbering=False,
-        show_bc=True, show_nodal_loads=False, show_ele_loads=False,
+        show_bc=True, show_nodal_loads=False,
     )
     fig.write_html(str(output_dir / filename))
 
@@ -33,17 +33,17 @@ def vis_nodes(output_dir: Path, filename: str = "vis_01_nodes.html") -> None:
 def vis_model(
     output_dir: Path,
     filename: str = "vis_02_model.html",
-    show_node_numbering: bool = True,
-    show_ele_numbering: bool = True,
+    show_node_label: bool = True,
+    show_ele_label: bool = True,
 ) -> None:
     """V2 — Render full undeformed model geometry (nodes + members)."""
     if _headless():
         return
 
     fig = opst.vis.plotly.plot_model(
-        show_node_numbering=show_node_numbering,
-        show_ele_numbering=show_ele_numbering,
-        show_bc=True, show_nodal_loads=False, show_ele_loads=False,
+        show_node_numbering=show_node_label,
+        show_ele_numbering=show_ele_label,
+        show_bc=True, show_nodal_loads=False,
     )
     fig.write_html(str(output_dir / filename))
 
@@ -55,7 +55,7 @@ def vis_loads(output_dir: Path, filename: str = "vis_03_loads.html") -> None:
 
     fig = opst.vis.plotly.plot_model(
         show_node_numbering=False, show_ele_numbering=False,
-        show_bc=True, show_nodal_loads=True, show_ele_loads=True,
+        show_bc=True, show_nodal_loads=True,
     )
     fig.write_html(str(output_dir / filename))
 
@@ -69,9 +69,8 @@ def vis_pre_analysis(
         return
 
     fig = opst.vis.plotly.plot_model(
-        show_node_numbering=True,
-        show_ele_numbering=True,
-        show_bc=True, show_nodal_loads=True, show_ele_loads=True,
+        show_node_numbering=True, show_ele_numbering=True,
+        show_bc=True, show_nodal_loads=True,
     )
     fig.write_html(str(output_dir / filename))
 
@@ -79,8 +78,7 @@ def vis_pre_analysis(
 def vis_defo(
     output_dir: Path,
     filename: str = "vis_05_deformed.html",
-    odb_tag: int = 1,
-    resp_dof: str = "UX",
+    resp_dof: str = "disp",
     scale: float = 10.0,
 ) -> None:
     """V5/V6 — Deformed shape coloured by total displacement magnitude."""
@@ -88,9 +86,10 @@ def vis_defo(
         return
 
     fig = opst.vis.plotly.plot_nodal_responses(
-        odb_tag=odb_tag,
+        odb_tag=1,
         resp_type="disp",
-        resp_dof=resp_dof,
         defo_scale=scale,
+        show_defo=True,
+        show_undeformed=False,
     )
     fig.write_html(str(output_dir / filename))

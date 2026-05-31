@@ -177,8 +177,8 @@ def define_elements() -> None:
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
 def create_odb(odb_tag: int = 1, output_dir: Path) -> "opst.post.CreateODB":
     opst.post.set_odb_path(str(output_dir))
-    opst.post.save_model_data(odb_tag=odb_tag)
     odb = opst.post.CreateODB(odb_tag=odb_tag)
+    odb.save_model_data()
     return odb
 
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
@@ -621,7 +621,7 @@ create_odb()               → after model is fully built
 
 ### ODB initialisation (call after elements are defined, before first analysis)
 ```python
-opst.post.set_odb_path(str(output_dir))   # direct all .nc/.h5 files to output/
+opst.post.set_odb_path(str(output_dir))   # direct all .zarr/.odb files to output/
 
 odb = opst.post.CreateODB(
     odb_tag=1,           # integer or string tag — identifies this load case
@@ -1198,7 +1198,45 @@ This is the **only** exception to the "no raw `ops.analyze()`" rule.
 
 ---
 
-## 11. Versioning & Change Log
+## 11. Environment & opstool Version Compatibility
+
+### Conda environment
+
+The project uses a dedicated conda environment that pins a compatible Python + opstool combination:
+
+```bash
+conda activate opensy     # Python 3.11, opstool >= 1.0
+```
+
+The `opensy` environment is the **target runtime** for all models in this repository.
+Prefer `conda activate opensy` before running any model.
+
+### opstool API versions (BREAKING change at 1.0)
+
+opstool 1.0 removed the legacy `GetFEMdata` / `OpsVisPlotly` HDF5-based API and
+replaced it with `post.CreateODB` / `vis.plotly.plot_model` (Zarr/ODB backend).
+Models written for 0.8.7 will NOT run on 1.0 without changes.
+
+| Feature | opstool 0.8.7 (legacy) | opstool >= 1.0 (target) |
+|---------|----------------------|-------------------------|
+| Model snapshot | `opst.GetFEMdata(path).get_model_data()` | `opst.post.CreateODB(odb_tag=1).save_model_data()` |
+| Per-step collection | `.get_resp_step()` | `odb.fetch_response_step()` |
+| Finalise responses | `.save_resp_all()` | `odb.save_response()` |
+| Eigen output | `.get_eigen_data(mode_tag, solver)` | `odb.save_eigen_data(mode_tag, solver)` |
+| Plot model (vis_utils) | `OpsVisPlotly(results_dir).model_vis(save_html=...)` | `opst.vis.plotly.plot_model(...).write_html(...)` |
+| Deformed shape (vis_utils) | `OpsVisPlotly(results_dir).deform_vis(...)` | `opst.vis.plotly.plot_nodal_responses(...).write_html(...)` |
+| Output format | `.hdf5` files | `.zarr` / `.odb` files |
+| NumPy compat patch | `np.NAN = np.nan; np.NaN = np.nan` REQUIRED | NOT needed |
+
+**Key rules:**
+- Use `conda activate opensy` — it has Python 3.11 + opstool 1.0.26 (the target stack)
+- `standards/vis_utils.py` MUST be compatible with the target opstool version (currently 1.0 API)
+- When running models outside `opensy` env, check `opstool.__version__` first — if < 1.0, the model and vis_utils will fail with `AttributeError: module 'opstool' has no attribute 'GetFEMdata'` (or similar)
+- The numpy `np.NAN`/`np.NaN` workaround is ONLY needed for opstool 0.8.7 on NumPy >= 2.0 — do NOT include it in new models
+
+---
+
+## 12. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
@@ -1211,9 +1249,8 @@ This is the **only** exception to the "no raw `ops.analyze()`" rule.
 | 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
 | 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
 | 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
-| 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — `SmartAnalyze.StaticAnalyze()` forcibly overrides the integrator to `DisplacementControl` regardless of what is set beforehand, making true load-controlled gravity impossible with SmartAnalyze; a permitted exception for LoadControl gravity with manual `ops.analyze()` loop is documented in §3c and §10; (2) §3c pushover pattern updated — removed redundant `ops.integrator("DisplacementControl", ...)` call since SmartAnalyze sets it internally; (3) §3d expanded with ODB performance guidance — `fetch_response_step()` can cause hangs on large models (300+ nodes × 2500+ steps); mitigations include targeted `node_tags`/`frame_tags` kwargs on `CreateODB` and throttled collection (every Nth step) for transient analyses; (4) §10 added permitted exceptions subsection with approved LoadControl gravity pattern; (5) ODB anti-pattern added: collecting all nodes/elements on large transient models |
+| 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — SmartAnalyze.StaticAnalyze forcibly overrides the integrator to DisplacementControl; LoadControl gravity with manual ops.analyze() loop permitted exception documented in §3c and §10; (2) §3d expanded with ODB performance guidance (targeted tags, throttled fetch for transient); (3) §10 added permitted exceptions subsection |
+| 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
 
 ---
-
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
-Update Section 11 whenever this file changes.*
