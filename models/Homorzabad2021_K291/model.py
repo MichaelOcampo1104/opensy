@@ -18,15 +18,15 @@ np.NAN = np.nan
 np.NaN = np.nan
 
 import openseespy.opensees as ops
-import opstool as opst
+
 import sys
 from pathlib import Path
 import time
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, _headless
+from units import *
 
-from transientsolver import _transient_smart_analyze
+
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 
@@ -434,22 +434,6 @@ def define_elements() -> None:
     _define_fuses()
 
 
-# ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
-def create_odb(odb_tag: int = 1, output_dir: Path = Path("output")) -> "opst.post.CreateODB":
-    """Initialise the opstool ODB after model geometry is fully built.
-
-    Args:
-        odb_tag: Integer tag for this ODB instance.
-        output_dir: Folder where .nc / .h5 files are written.
-
-    Returns:
-        Populated CreateODB object (call odb.save_response() in post_process).
-    """
-    opst.post.set_odb_path(str(output_dir))
-    odb = opst.post.CreateODB(odb_tag=odb_tag, model_update=False)
-    odb.save_model_data()
-    return odb
-
 # ── 11. LOADING ──────────────────────────────────────────────────────────────
 # All gravity-loaded nodes per floor
 _GRAV_NODES = {
@@ -504,34 +488,27 @@ def _define_rayleigh_damping(w1: float, w3: float) -> None:
     ops.rayleigh(aM, 0.0, 0.0, bK)
 
 
-def run_gravity(odb: "opst.post.CreateODB", n_steps: int = 10,
+def run_gravity(n_steps: int = 10,
                 ctrl_node: int = 604, ctrl_dof: int = 3) -> None:
     ops.constraints("Plain")
     ops.numberer("RCM")
     ops.system("BandGeneral")
     ops.integrator("LoadControl", 1.0 / n_steps)
-    analysis = opst.anlys.SmartAnalyze(
-        analysis_type="Static",
-        tryAlterAlgoTypes=True,
-        algoTypes=[40, 10, 20, 30],
-    )
-    protocol = [1.0]
-    segs = analysis.static_split(protocol, maxStep=1.0 / n_steps)
-    for seg in segs:
-        analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
-        odb.fetch_response_step()
-    analysis.close()
+    ops.test('EnergyIncr', 1.0e-6, 100)
+    ops.algorithm('Linear')
+    ops.analysis("Static")
+    for _ in range(n_steps):
+        ops.analyze(1)
     ops.loadConst("-time", 0.0)
     print("Gravity Analysis Done.")
 
 
 def run_dynamic(
-    odb: "opst.post.CreateODB",
     periods: list[float],
     gm_file: Path,
     max_run_time: float = 1800.0,
 ) -> None:
-    """Run transient earthquake analysis using opstool SmartAnalyze."""
+    """Run transient earthquake analysis using manual loop instead of SmartAnalyze."""
     w1 = 2.0 * np.pi / periods[0]
     w3 = 2.0 * np.pi / periods[2]
     _define_rayleigh_damping(w1, w3)
@@ -543,63 +520,47 @@ def run_dynamic(
     ops.wipeAnalysis()
     ops.constraints("Plain")
     ops.numberer("RCM")
-    ops.system("UmfPack")             # more robust than BandGeneral for nonlinear
+    ops.system("BandGeneral")
+    ops.test('EnergyIncr', 1.0e-6, 100)
+    ops.algorithm('Linear')
     ops.integrator("Newmark", 0.5, 0.25)
-    # NOTE: do NOT call ops.test() or ops.algorithm() here —
-    # SmartAnalyze manages those internally.
+    ops.analysis('Transient')
 
     dt_anal = 0.5 * GM_DT            # half-step: 0.01 s, matches original
-    gm_time = GM_DT * GM_POINTS      # 0.02 * 2500 = 50.0 s
 
-    _transient_smart_analyze(odb, dt_anal, gm_time, max_run_time=max_run_time)
+    for iAnal in range(GM_POINTS):
+        ErrorState = ops.analyze(1, dt_anal)
+        if ErrorState != 0:
+            print('Error: The dynamic analysis failed!!')
+            break
+
     print("Dynamic Analysis Done.")
 
 
-def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
+def run_analysis(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     init_model()
     define_materials()
     define_nodes()
     define_boundary_conditions()
-    vis_nodes(output_dir)
 
     define_elements()
-    vis_model(output_dir)
-
-    data = create_odb(output_dir)
 
     define_nodal_masses()
     define_gravity_loads()
-    vis_loads(output_dir)
-    vis_pre_analysis(output_dir)
 
     periods = _run_eigen(n_modes=3)
     with open(output_dir / "EigenPeriod.out", "w") as f:
         for t in periods:
             f.write(f"{t}\n")
 
-    run_gravity(data, n_steps=10)
+    run_gravity(n_steps=10)
 
     gm_file = Path(__file__).parent / "kobe.txt"
-    run_dynamic(data, periods=periods, gm_file=gm_file)
-
-    return data
-
-
-# ── 13. POST-PROCESSING ──────────────────────────────────────────────────────
-def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
-    odb.save_response()
-    if not _headless():
-        try:
-            vis = opst.vis.OpsVisPlotly()
-            vis.deform_vis(save_html=str(output_dir / "vis_05_defo_dynamic.html"))
-        except Exception:
-            pass
-
+    run_dynamic(periods=periods, gm_file=gm_file)
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
-    data = run_analysis(output_dir)
-    post_process(data, output_dir)
+    run_analysis(output_dir)

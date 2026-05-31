@@ -16,11 +16,11 @@ def _transient_smart_analyze(
     analysis = opst.anlys.SmartAnalyze(
         analysis_type="Transient",
         tryAlterAlgoTypes=True,
-        algoTypes=[40, 10, 20, 30, 50],   # KrylovNewton, Newton, ModNewton, NewtonLS, Broyden
+        algoTypes=[20, 40, 10, 30, 50],   # NewtonLS, KrylovNewton, Newton, ModNewton, Broyden
         tryAddTestTimes=True,
         testIterTimesMore=[50, 100],
         relaxation=0.5,
-        minStep=1.0e-6,
+        minStep=1.0e-5,  # Increased from 1.0e-6 to avoid massive subdivision freezing
     )
     npts = int(round(gm_time / dt_anal))
     segs = analysis.transient_split(npts)
