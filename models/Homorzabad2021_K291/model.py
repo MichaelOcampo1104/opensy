@@ -24,7 +24,7 @@ from pathlib import Path
 import time
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
-from units import *
+from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis
 
 
 
@@ -625,11 +625,15 @@ def run_analysis(output_dir: Path) -> None:
     define_materials()
     define_nodes()
     define_boundary_conditions()
+    vis_nodes(output_dir)
 
     define_elements()
+    vis_model(output_dir)
 
     define_nodal_masses()
     define_gravity_loads()
+    vis_loads(output_dir)
+    vis_pre_analysis(output_dir)
 
     periods = _run_eigen(n_modes=3)
     with open(output_dir / "EigenPeriod.out", "w") as f:
