@@ -26,7 +26,7 @@ import opstool as opst
 sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *
 g = g_accel   # shorthand for gravity acceleration (mm/s²)
-from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, vis_defo
+from vis_utils import vis_nodes, vis_model, vis_loads, vis_pre_analysis, vis_defo, vis_defo_anim, vis_eigen_anim
 
 # Local helper modules (ported from OReilly2019 + new infill)
 from joint_model import create_joint
@@ -612,6 +612,12 @@ def run_analysis(output_dir: Path):
 
     # ── Deformed shape (V5) ─────────────────────────────────────────────
     vis_defo(output_dir)
+
+    # ── Deformation animation (V6) ──────────────────────────────────────
+    vis_defo_anim(output_dir)
+
+    # ── Eigenmode animation (V7) ────────────────────────────────────────
+    vis_eigen_anim(output_dir, mode_tag=1)
 
     return odb, periods, eigenvalues
 
