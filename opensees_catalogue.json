@@ -166,5 +166,26 @@
     "Suggested Model citation": "Guan, X., Burton, H., Shokrabadi, M. (2020). A Database of Seismic Designs, Nonlinear Models, and Seismic Responses for Steel Moment Resisting Frame Buildings. DesignSafe-CI, DOI: 10.17603/ds2-8yc7-1285.",
     "Links to Papers / Design Reports": "Guan, X., Burton, H., Shokrabadi, M. (2020). DOI: 10.17603/ds2-8yc7-1285. DesignSafe-CI Project PRJ-2048.",
     "Notes": "Converted from original Tcl snippet files (Building 10, DynamicAnalysis). Original unit system: kips, inches, seconds — all values converted to N, mm, MPa. Reference Tcl files preserved in ref/ directory. Missing shared library procedures (SectionProperty, rotLeaningCol) reconstructed from AISC section database and standard OpenSees practice. Section properties for W14x370, W14x455, W36x160 from AISC nominal values. Gravity uses manual LoadControl loop per AGENT.md §3c exception. Run with: conda activate opensy && python model.py."
+  },
+  {
+    "UniqueID": "Guan2020_Building_1002",
+    "URL": "https://www.designsafe-ci.org/data/browser/public/designsafe.storage.published/PRJ-2048",
+    "num_models": "3",
+    "purpose": "Pushover, dynamic time-history, and eigenvalue analysis of a 9-story 3-bay 2D steel SMF with plastic hinges, rigid panel zone joints, and leaning column. Building 1002 from the Guan et al. (2020) database.",
+    "Description of Building Structural System": "9-story, 3-bay steel special moment-resisting frame with W14 columns (W14x145–W14x730) and W21–W36 beams (W21x93–W36x262). Column splices at multiple levels with varying section sizes. A leaning column at each floor carries gravity loads and captures P-Delta effects.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 210 nodes using elasticBeamColumn elements for all frame members and leaning column. Rigid joints via equalDOF master-slave constraints replace the original 8-element panel zone rectangles. Steel01 bilinear hinges at all beam and column ends calibrated from IMK Lignos-Krawinkler (2011) regression equations with n=10 stiffness modification. Three variants: model_pushover.py (SmartAnalyze Static, 156 steps to 156 in target), model_dynamic.py (SmartAnalyze Transient with Newmark, 2000-step ground motion, Rayleigh damping 2%), model_eigen.py (gravity + eigenvalue with ODB-based eigen visualisation).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel",
+    "Lateral system": "Special Moment-Resisting Frame (SMF)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover + Dynamic time-history",
+    "Earthquake records": "Synthetic Ricker wavelet (model_dynamic.py); real records may be substituted via ground_motions/",
+    "Opensees Version": "NA",
+    "model generator": "Guan et al. (2020) database generation framework",
+    "file format": ".py",
+    "Suggested Model citation": "Guan, X., Burton, H., Shokrabadi, M. (2020). A Database of Seismic Designs, Nonlinear Models, and Seismic Responses for Steel Moment Resisting Frame Buildings. DesignSafe-CI, DOI: 10.17603/ds2-8yc7-1285.",
+    "Links to Papers / Design Reports": "Guan, X., Burton, H., Shokrabadi, M. (2020). DOI: 10.17603/ds2-8yc7-1285. Lignos, D.G. and Krawinkler, H. (2011). Deterioration Modeling of Steel Components, ASCE Journal of Structural Engineering 137(11).",
+    "Notes": "Converted from original Tcl files (Building 1002, all three analysis types). IMKBilin replaced with Steel01 due to 2D zeroLength element compatibility issue (IMKBilin causes singular matrix in 2D). Panel zone simplified to equalDOF rigid joints for numerical robustness (original 8-element PZ had floating duplicate nodes). Eigenvalue analysis produces spurious stiff constraint modes when run after gravity — run before gravity with Plain constraints for accurate structural periods. Reference Tcl files and Database.csv in ref/ organized by analysis type. Run with: conda activate opensy && python model_pushover.py (or model_dynamic.py / model_eigen.py)."
   }
 ]

@@ -1,0 +1,60 @@
+# This file will be used to define springs in panel zone 
+
+# Procedure command:
+# rotPanelZone2D	eleID	nodeR	nodeC	E	Fy	dc	bf_c	tf_c	tp	db	Ry	as
+
+# Level2
+rotPanelZone2D	912100	1203	1204	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	922100	2203	2204	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	932100	3203	3204	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	942100	4203	4204	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+
+# Level3
+rotPanelZone2D	913100	1303	1304	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	923100	2303	2304	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	933100	3303	3304	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+rotPanelZone2D	943100	4303	4304	$Es	$Fy	22.40	17.90	4.91	3.07	36.90	1.1	0.03; 
+
+# Level4
+rotPanelZone2D	914100	1403	1404	$Es	$Fy	19.00	16.80	3.21	2.02	36.50	1.1	0.03; 
+rotPanelZone2D	924100	2403	2404	$Es	$Fy	20.20	17.20	3.82	2.38	36.50	1.1	0.03; 
+rotPanelZone2D	934100	3403	3404	$Es	$Fy	20.20	17.20	3.82	2.38	36.50	1.1	0.03; 
+rotPanelZone2D	944100	4403	4404	$Es	$Fy	19.00	16.80	3.21	2.02	36.50	1.1	0.03; 
+
+# Level5
+rotPanelZone2D	915100	1503	1504	$Es	$Fy	19.00	16.80	3.21	2.02	36.50	1.1	0.03; 
+rotPanelZone2D	925100	2503	2504	$Es	$Fy	20.20	17.20	3.82	2.38	36.50	1.1	0.03; 
+rotPanelZone2D	935100	3503	3504	$Es	$Fy	20.20	17.20	3.82	2.38	36.50	1.1	0.03; 
+rotPanelZone2D	945100	4503	4504	$Es	$Fy	19.00	16.80	3.21	2.02	36.50	1.1	0.03; 
+
+# Level6
+rotPanelZone2D	916100	1603	1604	$Es	$Fy	18.30	16.60	2.85	1.77	28.40	1.1	0.03; 
+rotPanelZone2D	926100	2603	2604	$Es	$Fy	19.60	17.00	3.50	2.19	28.40	1.1	0.03; 
+rotPanelZone2D	936100	3603	3604	$Es	$Fy	19.60	17.00	3.50	2.19	28.40	1.1	0.03; 
+rotPanelZone2D	946100	4603	4604	$Es	$Fy	18.30	16.60	2.85	1.77	28.40	1.1	0.03; 
+
+# Level7
+rotPanelZone2D	917100	1703	1704	$Es	$Fy	18.30	16.60	2.85	1.77	28.40	1.1	0.03; 
+rotPanelZone2D	927100	2703	2704	$Es	$Fy	19.60	17.00	3.50	2.19	28.40	1.1	0.03; 
+rotPanelZone2D	937100	3703	3704	$Es	$Fy	19.60	17.00	3.50	2.19	28.40	1.1	0.03; 
+rotPanelZone2D	947100	4703	4704	$Es	$Fy	18.30	16.60	2.85	1.77	28.40	1.1	0.03; 
+
+# Level8
+rotPanelZone2D	918100	1803	1804	$Es	$Fy	17.50	16.40	2.47	1.54	27.80	1.1	0.03; 
+rotPanelZone2D	928100	2803	2804	$Es	$Fy	18.70	16.70	3.04	1.88	27.80	1.1	0.03; 
+rotPanelZone2D	938100	3803	3804	$Es	$Fy	18.70	16.70	3.04	1.88	27.80	1.1	0.03; 
+rotPanelZone2D	948100	4803	4804	$Es	$Fy	17.50	16.40	2.47	1.54	27.80	1.1	0.03; 
+
+# Level9
+rotPanelZone2D	919100	1903	1904	$Es	$Fy	17.50	16.40	2.47	1.54	27.80	1.1	0.03; 
+rotPanelZone2D	929100	2903	2904	$Es	$Fy	18.70	16.70	3.04	4.13	27.80	1.1	0.03; 
+rotPanelZone2D	939100	3903	3904	$Es	$Fy	18.70	16.70	3.04	4.13	27.80	1.1	0.03; 
+rotPanelZone2D	949100	4903	4904	$Es	$Fy	17.50	16.40	2.47	1.54	27.80	1.1	0.03; 
+
+# Level10
+rotPanelZone2D	9110100	11003	11004	$Es	$Fy	14.70	14.70	1.03	0.65	21.60	1.1	0.03; 
+rotPanelZone2D	9210100	21003	21004	$Es	$Fy	15.20	15.70	1.31	2.08	21.60	1.1	0.03; 
+rotPanelZone2D	9310100	31003	31004	$Es	$Fy	15.20	15.70	1.31	2.08	21.60	1.1	0.03; 
+rotPanelZone2D	9410100	41003	41004	$Es	$Fy	14.70	14.70	1.03	0.65	21.60	1.1	0.03; 
+
+puts "Panel zone springs defined"
