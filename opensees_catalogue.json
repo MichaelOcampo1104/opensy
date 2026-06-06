@@ -145,5 +145,26 @@
     "Suggested Model citation": "Xiong, X., and Burton, H. (2017). WoodFrameBuildingTool — A parametric OpenSees modelling framework for wood and steel moment-resisting frames. Tongji University / Stanford University.",
     "Links to Papers / Design Reports": "Ibarra, L. F., and Krawinkler, H. (2005). Global collapse of frame structures under seismic excitations. Technical Report 152, Stanford. Lignos, D. G., and Krawinkler, H. (2011). Deterioration Modeling of Steel Components in Support of Collapse Prediction of Steel Moment Frames under Earthquake Loading. ASCE Journal of Structural Engineering, 137(11), pp. 1291-1302.",
     "Notes": "Converted from original Tcl scripts in Xiaolei MomentFrame/ directory. Single-bay single-story simplified test case (NStory=0, NBase=1, XBay=1, ZBay=1). Original unit system: kips, inches, seconds — all values converted to N, mm, MPa. Reference Tcl files, Database.csv, and supporting files preserved in ref/ directory. Gravity uses manual LoadControl loop per AGENT.md §3c exception. Run with: conda activate opensy && python model.py."
+  },
+  {
+    "UniqueID": "Guan2020",
+    "URL": "https://www.designsafe-ci.org/data/browser/public/designsafe.storage.published/PRJ-2048",
+    "num_models": "1",
+    "purpose": "Eigenvalue analysis and static pushover of a 2D single-story single-bay steel special moment frame with leaning column for P-Delta effects. Part of the Guan et al. (2020) database of 621 steel SMF buildings.",
+    "Description of Building Structural System": "Single-story, single-bay steel special moment-resisting frame (SMF) with W14x370 columns and W36x160 beam. A leaning column with gravity loads captures P-Delta effects. Designed in accordance with modern codes and standards (ASCE 7).",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) using elasticBeamColumn elements for frame members and leaning column. Zero-length spring at leaning column top (stiff UX/UY, soft RZ) creates pin connection. Rigid truss transfers lateral displacements from frame to leaning column. Floor diaphragm via equalDOF. Four load patterns: dead (101), live (102), earthquake lateral (103), and combined gravity+EQ (104). Gravity: manual LoadControl loop with Newton algorithm. Pushover: SmartAnalyze Static with DisplacementControl to 5% drift. Eigenvalue analysis for modal periods. Response collection via opst.post.CreateODB (Zarr/ODB backend).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel",
+    "Lateral system": "Special Moment-Resisting Frame (SMF)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static pushover (EQ load pattern)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "Guan et al. (2020) database generation framework",
+    "file format": ".py",
+    "Suggested Model citation": "Guan, X., Burton, H., Shokrabadi, M. (2020). A Database of Seismic Designs, Nonlinear Models, and Seismic Responses for Steel Moment Resisting Frame Buildings. DesignSafe-CI, DOI: 10.17603/ds2-8yc7-1285.",
+    "Links to Papers / Design Reports": "Guan, X., Burton, H., Shokrabadi, M. (2020). DOI: 10.17603/ds2-8yc7-1285. DesignSafe-CI Project PRJ-2048.",
+    "Notes": "Converted from original Tcl snippet files (Building 10, DynamicAnalysis). Original unit system: kips, inches, seconds — all values converted to N, mm, MPa. Reference Tcl files preserved in ref/ directory. Missing shared library procedures (SectionProperty, rotLeaningCol) reconstructed from AISC section database and standard OpenSees practice. Section properties for W14x370, W14x455, W36x160 from AISC nominal values. Gravity uses manual LoadControl loop per AGENT.md §3c exception. Run with: conda activate opensy && python model.py."
   }
 ]
