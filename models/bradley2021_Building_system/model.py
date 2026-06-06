@@ -232,20 +232,25 @@ def _define_elements_batch(elem_type, e_tags, i_nodes, j_nodes, *args):
 
     The ``*args`` can contain lists (one value per element) or scalars.
     ``zeroLength-IMK`` and ``zeroLength-SBL/SBR`` add automatic equalDOFs.
+    ``dispBeamColumn`` is translated from Tcl order (nIP, secTag, geomTag)
+    to OpenSeesPy order (geomTag, beamIntegration).
     """
     is_imk = (elem_type == "zeroLength-IMK")
     is_sbl = (elem_type == "zeroLength-SBL")
     is_sbr = (elem_type == "zeroLength-SBR")
+    is_disp_bm = (elem_type == "dispBeamColumn")
 
     if is_imk or is_sbl or is_sbr:
         elem_type = "zeroLength"
+    elif is_disp_bm:
+        # Tcl: (nIP, secTag, geomTag) → OpenSeesPy: (geomTag, beamIntegration)
+        return _define_disp_beam_batch(e_tags, i_nodes, j_nodes, *args)
 
     n_ele = len(e_tags)
     for idx in range(n_ele):
         etag = e_tags[idx]
         inode = i_nodes[idx]
         jnode = j_nodes[idx]
-        # Resolve args: if an arg is a list, take element-specific value
         resolved = []
         for a in args:
             if isinstance(a, (list, tuple)):
@@ -260,6 +265,42 @@ def _define_elements_batch(elem_type, e_tags, i_nodes, j_nodes, *args):
             ops.equalDOF(inode, jnode - 1, 2, 3)
         if is_sbr:
             ops.equalDOF(inode + 1, jnode, 2, 3)
+
+
+def _define_disp_beam_batch(e_tags, i_nodes, j_nodes, n_ip, sec_tags, geom_tag):
+    """Create dispBeamColumn elements with OpenSeesPy beamIntegration convention.
+
+    Tcl convention:  element dispBeamColumn tag iNd jNd nIP secTag transfTag
+    OpenSeesPy:      element('dispBeamColumn', tag, iNd, jNd, transfTag, integTag)
+    """
+    n_ele = len(e_tags)
+    for idx in range(n_ele):
+        etag = e_tags[idx]
+        inode = i_nodes[idx]
+        jnode = j_nodes[idx]
+        # Resolve per-element args
+        _nip = n_ip[idx] if isinstance(n_ip, (list, tuple)) else n_ip
+        _sec = sec_tags[idx] if isinstance(sec_tags, (list, tuple)) else sec_tags
+        _gtag = geom_tag[idx] if isinstance(geom_tag, (list, tuple)) else geom_tag
+        integ_tag = _beam_integ(_sec, _nip)
+        ops.element("dispBeamColumn", etag, inode, jnode, _gtag, integ_tag)
+
+
+# ── Beam-integration cache (section → integ tag) for dispBeamColumn ──
+_INTEG_CACHE = {}
+_INTEG_NEXT = 1000  # start high to avoid collisions with other tags
+
+
+def _beam_integ(sec_tag, n_ip=5):
+    """Return a beamIntegration tag for (sec_tag, n_ip), creating one if needed."""
+    key = (sec_tag, n_ip)
+    if key not in _INTEG_CACHE:
+        global _INTEG_NEXT
+        tid = _INTEG_NEXT
+        _INTEG_NEXT += 1
+        ops.beamIntegration("Lobatto", tid, sec_tag, n_ip)
+        _INTEG_CACHE[key] = tid
+    return _INTEG_CACHE[key]
 
 
 # ── 5. MODEL INITIALISATION ──────────────────────────────────────────────────
@@ -559,7 +600,7 @@ def define_materials():
         K0 = bt[1] * _kipin_Nmm
         MyP = bt[4] * _kipin_Nmm
         MyN = bt[5] * _kipin_Nmm
-        ops.uniaxialMaterial("Bilin", tag,
+        ops.uniaxialMaterial("IMKBilin", tag,
                              K0, bt[2], bt[3], MyP, MyN,
                              bt[6], bt[7], bt[8], bt[9],
                              bt[10], bt[11], bt[12], bt[13],
@@ -746,19 +787,34 @@ def define_nodes():
                 171.8, 180.0, 188.2, 215.4667, 242.7333, 270.0,
                 297.2667, 324.5333, 351.8, 360.0, 368.2, 395.525,
                 422.85, 450.175, 477.5, 504.825, 532.15, 540.0]
-    cols = [(4260.0, 85), (4320.0, 109), (4740.0, 133), (5160.0, 157),
-            (5580.0, 171), (6000.0, 185), (6420.0, 209)]
-    for cx, base_tag in cols:
+    # Braced-frame columns: 24 nodes each
+    _e_brace_cols = [(4260.0, 85), (4320.0, 109), (4740.0, 133),
+                     (6000.0, 185), (6420.0, 209)]
+    for cx, base_tag in _e_brace_cols:
         for i, y in enumerate(_e_col_y):
+            nodes.append((base_tag + i, cx, y))
+    # Interior columns at x=5160 (nodes 157-170) and x=5580 (nodes 171-184): 14 nodes
+    _e_int_y = [0.0, 171.8, 171.8, 180.0, 188.2, 188.2,
+                351.8, 351.8, 360.0, 368.2, 368.2, 532.15, 532.15, 540.0]
+    for cx, base_tag in [(5160.0, 157), (5580.0, 171)]:
+        for i, y in enumerate(_e_int_y):
             nodes.append((base_tag + i, cx, y))
 
     # Grid F — pinned leaner (nodes 233-346)
-    f_cols = [(0.0, 233), (420.0, 247), (840.0, 261), (1260.0, 285),
-              (1680.0, 309), (2100.0, 323)]
-    _f_y = [0.0, 170.9, 170.9, 180.0, 189.1, 189.1,
-            350.9, 350.9, 360.0, 369.1, 369.1, 531.15, 531.15, 540.0]
-    for cx, base_tag in f_cols:
-        for i, y in enumerate(_f_y):
+    # Columns at x=840, x=1260, x=2100 use 24-node braced pattern
+    _f_col_y_brace = [0.0, 28.48333, 56.96667, 85.45, 113.9333, 142.4167,
+                      170.9, 180.0, 189.1, 216.0667, 243.0333, 270.0,
+                      296.9667, 323.9333, 350.9, 360.0, 369.1, 396.1083,
+                      423.1167, 450.125, 477.1333, 504.1417, 531.15, 540.0]
+    _f_brace_cols = [(840.0, 261), (1260.0, 285), (2100.0, 323)]
+    for cx, base_tag in _f_brace_cols:
+        for i, y in enumerate(_f_col_y_brace):
+            nodes.append((base_tag + i, cx, y))
+    # Columns at x=0, x=420, x=1680 use 14-node leaner pattern
+    _f_col_y_leaner = [0.0, 170.9, 170.9, 180.0, 189.1, 189.1,
+                       350.9, 350.9, 360.0, 369.1, 369.1, 531.15, 531.15, 540.0]
+    for cx, base_tag in [(0.0, 233), (420.0, 247), (1680.0, 309)]:
+        for i, y in enumerate(_f_col_y_leaner):
             nodes.append((base_tag + i, cx, y))
 
     # Braced-frame left-side connection slave nodes (nodes 347-376)
@@ -1588,12 +1644,20 @@ def define_elements():
 
 
 # ── 11. ODB ────────────────────────────────────────────────────────────────────
-def create_odb():
-    """Initialise opstool ODB for all model output."""
-    out_dir = Path(__file__).parent / "output"
-    out_dir.mkdir(exist_ok=True)
-    odb_path = out_dir / "RespStepData-1.odb"
-    opst.post.CreateODB(odb_path=str(odb_path))
+def create_odb(output_dir: Path, odb_tag: int = 1) -> "opst.post.CreateODB":
+    """Initialise opstool ODB for all model output.
+
+    Args:
+        output_dir: Directory where ODB files are written.
+        odb_tag: ODB identifier tag.
+
+    Returns:
+        The active CreateODB instance.
+    """
+    opst.post.set_odb_path(str(output_dir))
+    odb = opst.post.CreateODB(odb_tag=odb_tag)
+    odb.save_model_data()
+    return odb
 
 
 # ── 12. LOADS ──────────────────────────────────────────────────────────────────
@@ -1755,34 +1819,37 @@ def run_pushover(dU_max_mm=457.2, dU_incr_mm=2.0):
 
 
 # ── 14. ORCHESTRATOR ──────────────────────────────────────────────────────────
-def run_analysis():
+def run_analysis(output_dir: Path):
     """Build model and run gravity + pushover analyses with vis checkpoints."""
+    output_dir.mkdir(parents=True, exist_ok=True)
     init_model()
     define_materials()
     define_sections()
-    vis_model()
     define_nodes()
     define_boundary_conditions()
-    vis_nodes()
+    vis_nodes(output_dir)
     define_elements()
+    vis_model(output_dir)
+    odb = create_odb(output_dir)
     define_damping()
-    vis_pre_analysis()
-    create_odb()
     define_gravity_loads()
-    vis_loads()
+    vis_loads(output_dir)
     run_gravity()
     define_lateral_loads()
+    vis_pre_analysis(output_dir)
     run_pushover()
+    return odb
 
 
 # ── 15. POST-PROCESS ──────────────────────────────────────────────────────────
-def post_process():
+def post_process(odb, output_dir: Path):
     """Save ODB and generate deformed shape visualization."""
-    opst.post.SaveODB()
-    vis_defo()
+    odb.save_response()
+    vis_defo(output_dir)
 
 
 # ── 16. MAIN ──────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    run_analysis()
-    post_process()
+    output_dir = Path(__file__).parent / "output"
+    odb = run_analysis(output_dir)
+    post_process(odb, output_dir)
