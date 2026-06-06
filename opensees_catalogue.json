@@ -124,5 +124,26 @@
     "Suggested Model citation": "Nafeh, A. M. B. (2020). Infilled-RC-Building-Database. IUSS Pavia. Hak et al. (2012). Sassun et al. (2015).",
     "Links to Papers / Design Reports": "Nafeh, A. M. B. (2020). Seismic Assessment of Infilled RC Frame Buildings. PhD Thesis, IUSS Pavia. O'Reilly, G. J., Sullivan, T. J. (2019) J. Earthquake Eng., 23(8), 1262-1296.",
     "Notes": "Port of arch_1_5st.tcl from Infilled-RC-Building-Database. All Tcl reference files preserved in tcl_reference/. Units: N-mm-MPa-tonne. Uses opstool >= 1.0 post.CreateODB API (Zarr/ODB backend). Helper modules (joint_model.py, rc_bc_non_duct.py, infill.py) are model-local ports from Tcl procedures. Gravity per AGENT.md §3c exception (manual LoadControl loop). Run with: conda activate opensy && python model.py."
+  },
+  {
+    "UniqueID": "Yi2021",
+    "URL": "https://github.com/roveryi/WoodFrameBuildingTool/tree/master/Xiaolei%20MomentFrame",
+    "num_models": "1",
+    "purpose": "Static pushover analysis of a single-bay single-story 3D steel moment-resisting frame with Modified Ibarra-Krawinkler (Bilin) concentrated plastic hinges for collapse assessment.",
+    "Description of Building Structural System": "Single-bay, single-story steel moment-resisting frame with W10X33 beams and box-section columns (b=8.02 in, t=0.35 in). The frame is a simplified test case from the WoodFrameBuildingTool suite developed by Xiaolei Xiong (Tongji University) based on the original modelling framework by Henry Burton (Stanford University).",
+    "Description of Model": "3D finite element model (ndm=3, ndf=6) using elasticBeamColumn elements for beams and columns with zero-length concentrated rotational springs at all member ends. Plastic hinges use the Bilin uniaxial material (Modified Ibarra-Krawinkler deterioration model) with parameters calibrated from Lignos & Krawinkler (2011) empirical regression equations for steel W-sections. Rigid diaphragm constraint at roof level via equalDOF. Gravity: manual LoadControl loop (SmartAnalyze Static incompatible — see AGENT.md §3c exception). Pushover: SmartAnalyze Static with DisplacementControl to 10% drift. Response collection via opst.post.CreateODB (Zarr/ODB backend). Original Tcl reference files preserved in ref/ subdirectory.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel",
+    "Lateral system": "Moment-Resisting Frame",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static pushover (X-direction)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "WoodFrameBuildingTool (Xiaolei Xiong, Tongji Univ.)",
+    "file format": ".py",
+    "Suggested Model citation": "Xiong, X., and Burton, H. (2017). WoodFrameBuildingTool — A parametric OpenSees modelling framework for wood and steel moment-resisting frames. Tongji University / Stanford University.",
+    "Links to Papers / Design Reports": "Ibarra, L. F., and Krawinkler, H. (2005). Global collapse of frame structures under seismic excitations. Technical Report 152, Stanford. Lignos, D. G., and Krawinkler, H. (2011). Deterioration Modeling of Steel Components in Support of Collapse Prediction of Steel Moment Frames under Earthquake Loading. ASCE Journal of Structural Engineering, 137(11), pp. 1291-1302.",
+    "Notes": "Converted from original Tcl scripts in Xiaolei MomentFrame/ directory. Single-bay single-story simplified test case (NStory=0, NBase=1, XBay=1, ZBay=1). Original unit system: kips, inches, seconds — all values converted to N, mm, MPa. Reference Tcl files, Database.csv, and supporting files preserved in ref/ directory. Gravity uses manual LoadControl loop per AGENT.md §3c exception. Run with: conda activate opensy && python model.py."
   }
 ]

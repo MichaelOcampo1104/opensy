@@ -93,3 +93,48 @@ def vis_defo(
         show_undeformed=False,
     )
     fig.write_html(str(output_dir / filename))
+
+
+def vis_anim(
+    output_dir: Path,
+    filename: str = "vis_07_animation.html",
+    odb_tag: int = 1,
+    framerate: int | None = None,
+    defo_scale: float = 10.0,
+    resp_type: str = "disp",
+    resp_dof: tuple = ("UX", "UY", "UZ"),
+    show_undeformed: bool = True,
+    lazy_load: bool = False,
+) -> None:
+    """V7 — Animated deformed shape over all analysis steps.
+
+    Uses opstool's built-in plot_nodal_responses_animation which returns a
+    plotly Figure with frame-by-frame animation.  Output is a self-contained
+    HTML file.
+
+    Args:
+        output_dir: Directory where the HTML file is written.
+        filename: Output HTML filename.
+        odb_tag: ODB tag to read responses from.
+        framerate: Frames-per-second for the animation.
+                   If None, defaults to ``n_steps / 10`` (10-second animation).
+        defo_scale: Deformation scale factor.
+        resp_type: Response type — ``"disp"``, ``"vel"``, ``"accel"``, etc.
+        resp_dof: DOF components to colour by (e.g. ``("UX", "UY", "UZ")``).
+        show_undeformed: Overlay undeformed wireframe for reference.
+        lazy_load: If True, defer loading ODB data until playback starts
+                   (better for large models with many steps).
+    """
+    if _headless():
+        return
+
+    fig = opst.vis.plotly.plot_nodal_responses_animation(
+        odb_tag=odb_tag,
+        framerate=framerate,
+        defo_scale=defo_scale,
+        resp_type=resp_type,
+        resp_dof=resp_dof,
+        show_undeformed=show_undeformed,
+        lazy_load=lazy_load,
+    )
+    fig.write_html(str(output_dir / filename))
