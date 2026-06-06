@@ -187,5 +187,26 @@
     "Suggested Model citation": "Guan, X., Burton, H., Shokrabadi, M. (2020). A Database of Seismic Designs, Nonlinear Models, and Seismic Responses for Steel Moment Resisting Frame Buildings. DesignSafe-CI, DOI: 10.17603/ds2-8yc7-1285.",
     "Links to Papers / Design Reports": "Guan, X., Burton, H., Shokrabadi, M. (2020). DOI: 10.17603/ds2-8yc7-1285. Lignos, D.G. and Krawinkler, H. (2011). Deterioration Modeling of Steel Components, ASCE Journal of Structural Engineering 137(11).",
     "Notes": "Converted from original Tcl files (Building 1002, all three analysis types). IMKBilin replaced with Steel01 due to 2D zeroLength element compatibility issue (IMKBilin causes singular matrix in 2D). Panel zone simplified to equalDOF rigid joints for numerical robustness (original 8-element PZ had floating duplicate nodes). Eigenvalue analysis produces spurious stiff constraint modes when run after gravity — run before gravity with Plain constraints for accurate structural periods. Reference Tcl files and Database.csv in ref/ organized by analysis type. Run with: conda activate opensy && python model_pushover.py (or model_dynamic.py / model_eigen.py)."
+  },
+  {
+    "UniqueID": "bradley2021",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Cyclic tension force-deformation analysis of 19 bolted-bolted steel angles using a zeroLengthSection fiber model with experimentally calibrated SteelMPF materials per Beland et al. (2019).",
+    "Description of Building Structural System": "Single bolted-bolted steel angle connection component. The vertical leg is assumed connected to a rigid member (e.g. a stiff column), and tension is applied to the outstanding leg. 19 angle sizes tested: L4x4x5/16 through L8x6x3/4.",
+    "Description of Model": "2D zeroLengthSection model (ndm=2, ndf=3) with two coincident nodes (fixed + loaded). A single fiber at the origin captures the axial force-deformation behavior using a Parallel composite of soft Elastic (numerical stability), ENT (bolt bearing), and a MinMax->Fatigue->SteelMPF chain. Each test case has its own calibrated SteelMPF parameters from Beland et al. (2019). Cyclic loading follows FEMA 350 protocol (half cycles) with displacement-controlled SmartAnalyze. ODB-based response collection via opst.post.CreateODB. Original imperial units (ksi, in, kip) converted to N, mm, MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel",
+    "Lateral system": "NA (component-level test)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Cyclic displacement-controlled (FEMA 350 half cycles)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "Beland, T., Bradley, C., Tremblay, R., Rogers, C.A. (2019). Experimental calibration of bolted angle connection behavior for seismic applications.",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "Converted from original Tcl model (A-MainScript.tcl + Procedures/). 19 test cases run sequentially; use --tc N to run a single case. Reference Tcl files preserved in ref/ directory. Run with: conda activate opensy && python model.py"
   }
 ]

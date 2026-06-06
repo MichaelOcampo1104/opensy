@@ -1,0 +1,18 @@
+{
+  "numNodes": 2,
+  "minBoundSize": 0.0,
+  "maxBoundSize": 0.0,
+  "ndofs": [
+    3,
+    3
+  ],
+  "ndims": [
+    2,
+    2
+  ],
+  "unusedNodeTags": [],
+  "_ARRAY_DIMENSIONS": [
+    "nodeTags",
+    "coords"
+  ]
+}

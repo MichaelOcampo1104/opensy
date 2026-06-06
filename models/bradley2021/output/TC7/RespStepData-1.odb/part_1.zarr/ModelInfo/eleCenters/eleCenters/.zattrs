@@ -1,0 +1,8 @@
+{
+  "coordinates": "eleClassTags",
+  "_ARRAY_DIMENSIONS": [
+    "time",
+    "eleTags",
+    "centers"
+  ]
+}
