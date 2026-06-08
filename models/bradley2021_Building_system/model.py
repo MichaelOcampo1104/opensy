@@ -221,10 +221,10 @@ def _section_HSS(sec_tag, mat_tag, d, t, n_fw_d, n_fw_t, n_ff_w, n_ff_t):
     z1 = -d / 2.0;  z2 = -dw / 2.0;  z3 = dw / 2.0;  z4 = d / 2.0
 
     ops.section("Fiber", sec_tag)
-    ops.patch("quad", mat_tag, n_ff_w, n_fw_d, y2, z4, y2, z3, y3, z3, y3, z4)   # top flange
-    ops.patch("quad", mat_tag, n_ff_w, n_fw_d, y2, z2, y2, z1, y3, z1, y3, z2)   # bottom flange
-    ops.patch("quad", mat_tag, n_ff_t, n_fw_t, y1, z4, y1, z1, y2, z1, y2, z4)   # left web
-    ops.patch("quad", mat_tag, n_ff_t, n_fw_t, y3, z4, y3, z1, y4, z1, y4, z4)   # right web
+    ops.patch("quad", mat_tag, n_ff_t, n_fw_d, y2, z4, y2, z3, y3, z3, y3, z4)   # top flange (nftf × nfdw)
+    ops.patch("quad", mat_tag, n_ff_t, n_fw_d, y2, z2, y2, z1, y3, z1, y3, z2)   # bottom flange (nftf × nfdw)
+    ops.patch("quad", mat_tag, n_ff_w, n_fw_t, y1, z4, y1, z1, y2, z1, y2, z4)   # left web (nfbf × nftw)
+    ops.patch("quad", mat_tag, n_ff_w, n_fw_t, y3, z4, y3, z1, y4, z1, y4, z4)   # right web (nfbf × nftw)
 
 
 def _define_elements_batch(elem_type, e_tags, i_nodes, j_nodes, *args):
@@ -327,13 +327,14 @@ def define_materials():
     ops.uniaxialMaterial("Elastic", MAT_ELASTIC_Ep3, 1e3 * _E)
 
     # ── ENT (bolt bearing elastic, 29000 ksi = 199948 MPa) ──
-    ops.uniaxialMaterial("ENT", MAT_ENT, 199948.0)
+    ops.uniaxialMaterial("ENT", MAT_ENT, 1e3 * 199948.0)
 
     # ── ElasticPPGap: brace-to-column / gusset-to-column contact ──
-    ops.uniaxialMaterial("ElasticPPGap", MAT_B2C_GAP, 1999.48, -55.0 * ksi, -0.5)
-    ops.uniaxialMaterial("ElasticPPGap", MAT_G2C_GAP, 1999.48, -46.8 * ksi, -0.5)
-    ops.uniaxialMaterial("Parallel", MAT_B2C_CONTACT, MAT_B2C_GAP, MAT_ELASTIC_E3)
-    ops.uniaxialMaterial("Parallel", MAT_G2C_CONTACT, MAT_G2C_GAP, MAT_ELASTIC_E3)
+    # Note: TCL stiffness is 290 kip/inch, yield is -55 kip. ksi is incorrect since it's a stress.
+    ops.uniaxialMaterial("ElasticPPGap", MAT_B2C_GAP, 290.0 * (kip / inch), -55.0 * kip, -0.5 * inch)
+    ops.uniaxialMaterial("ElasticPPGap", MAT_G2C_GAP, 290.0 * (kip / inch), -46.8 * kip, -0.5 * inch)
+    ops.uniaxialMaterial("Parallel", MAT_B2C_CONTACT, MAT_B2C_GAP, MAT_ELASTIC_E6)
+    ops.uniaxialMaterial("Parallel", MAT_G2C_CONTACT, MAT_G2C_GAP, MAT_ELASTIC_E6)
 
     # ── Tension-coupon SteelMPF composites (19 angle sizes from Beland et al. 2019) ──
     _tc = [  # (tag_steelmpf, tag_fatigue, tag_minmax, tag_parallel, fyp, fyn, E0, bp, bn, R1, R2, R3, eps_fatigue, eps_max)
@@ -402,7 +403,7 @@ def define_materials():
                              bp, bn, r1, r2, r3)
         ops.uniaxialMaterial("Fatigue",  m_f,  m_sf, "-E0", efat)
         ops.uniaxialMaterial("MinMax",   m_m,  m_f,  "-min", -1e9, "-max", emax)
-        ops.uniaxialMaterial("Parallel", m_p,  MAT_ELASTIC_E3, MAT_ENT, m_m)
+        ops.uniaxialMaterial("Parallel", m_p,  MAT_ELASTIC_E6, MAT_ENT, m_m)
 
     # ── Gusset plate Steel02 ──
     _gusset = [
@@ -599,13 +600,20 @@ def define_materials():
         tag = bt[0]
         K0 = bt[1] * _kipin_Nmm
         MyP = bt[4] * _kipin_Nmm
-        MyN = bt[5] * _kipin_Nmm
+        MyN = -bt[5] * _kipin_Nmm  # abs: IMKBilin requires positive for both dirs
+
+        # Bilin variables
+        as_P = bt[2]; as_N = bt[3]
+        theta_p_P = bt[14]; theta_p_N = bt[15]
+
+        # Calculate IMKBilin derived variables (MyP, MyN both positive)
+        FmaxFy_P = 1.0 + (as_P * K0 * theta_p_P) / MyP
+        FmaxFy_N = 1.0 + (as_N * K0 * theta_p_N) / MyN
+        
         ops.uniaxialMaterial("IMKBilin", tag,
-                             K0, bt[2], bt[3], MyP, MyN,
-                             bt[6], bt[7], bt[8], bt[9],
-                             bt[10], bt[11], bt[12], bt[13],
-                             bt[14], bt[15], bt[16], bt[17],
-                             bt[18], bt[19], bt[20], bt[21],
+                             K0, theta_p_P, bt[16], bt[20], MyP, FmaxFy_P, bt[18],
+                             theta_p_N, bt[17], bt[21], MyN, FmaxFy_N, bt[19],
+                             bt[6], bt[7], bt[9], bt[10], bt[11], bt[13],
                              bt[22], bt[23])
 
     # ── Brace Steel02 composites (BR1-BR6) ──
@@ -638,7 +646,7 @@ def define_sections():
               -3.0 * inch, 0.0, 3.0 * inch, 0.0)  # B2C-TC19
     ops.fiber(-8.2 * inch, 0.0, 0.89 * _in2_mm2, MAT_B2C_CONTACT)   # B2C-BFC
     ops.fiber(8.2 * inch, 0.0, 0.89 * _in2_mm2, MAT_B2C_CONTACT)    # B2C-TFC
-    ops.section("Aggregator", SEC_AGG_B1L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B1L_W16X57)
+    ops.section("Aggregator", SEC_AGG_B1L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B1L_W16X57)
 
     # Section 3: W16X26 GRAV B3L
     ops.section("Fiber", SEC_FIBER_B3L_W16X26)
@@ -646,7 +654,7 @@ def define_sections():
               -3.0 * inch, 0.0, 3.0 * inch, 0.0)
     ops.fiber(-7.85 * inch, 0.0, 0.6875 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(7.85 * inch, 0.0, 0.6875 * _in2_mm2, MAT_B2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B3L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B3L_W16X26)
+    ops.section("Aggregator", SEC_AGG_B3L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B3L_W16X26)
 
     # Section 5: W16X40 BR1 B19L
     ops.section("Fiber", SEC_FIBER_B19L_W16X40_BR1)
@@ -656,7 +664,7 @@ def define_sections():
               -1.0 * inch, 0.0, 5.0 * inch, 0.0)       # B2C-TC3
     ops.fiber(-8.0 * inch, 0.0, 0.875 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(23.5 * inch, 0.0, 0.09375 * _in2_mm2, MAT_G2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B19L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B19L_W16X40_BR1)
+    ops.section("Aggregator", SEC_AGG_B19L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B19L_W16X40_BR1)
 
     # Section 7: W16X40 BR1 B20L
     ops.section("Fiber", SEC_FIBER_B20L_W16X40_BR1)
@@ -666,7 +674,7 @@ def define_sections():
               -1.0 * inch, 0.0, 5.0 * inch, 0.0)       # B2C-TC3
     ops.fiber(-8.0 * inch, 0.0, 0.875 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(22.5 * inch, 0.0, 0.09375 * _in2_mm2, MAT_G2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B20L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B20L_W16X40_BR1)
+    ops.section("Aggregator", SEC_AGG_B20L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B20L_W16X40_BR1)
 
     # Section 9: W12X26 BR1 B21L
     ops.section("Fiber", SEC_FIBER_B21L_W12X26)
@@ -674,7 +682,7 @@ def define_sections():
               -3.0 * inch, 0.0, 3.0 * inch, 0.0)  # B2C-TC3
     ops.fiber(-6.1 * inch, 0.0, 0.81125 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(6.1 * inch, 0.0, 0.81125 * _in2_mm2, MAT_B2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B21L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B21L_W12X26)
+    ops.section("Aggregator", SEC_AGG_B21L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B21L_W12X26)
 
     # Section 11: W18X60 GRAV B31L
     ops.section("Fiber", SEC_FIBER_B31L_W18X60)
@@ -682,7 +690,7 @@ def define_sections():
               -3.0 * inch, 0.0, 3.0 * inch, 0.0)  # B2C-TC19
     ops.fiber(-9.1 * inch, 0.0, 0.82 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(9.1 * inch, 0.0, 0.82 * _in2_mm2, MAT_B2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B31L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B31L_W18X60)
+    ops.section("Aggregator", SEC_AGG_B31L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B31L_W18X60)
 
     # Section 13: W18X35 GRAV B33L
     ops.section("Fiber", SEC_FIBER_B33L_W18X35)
@@ -690,7 +698,7 @@ def define_sections():
               -3.0 * inch, 0.0, 3.0 * inch, 0.0)  # B2C-TC19
     ops.fiber(-8.85 * inch, 0.0, 0.75 * _in2_mm2, MAT_B2C_CONTACT)
     ops.fiber(8.85 * inch, 0.0, 0.75 * _in2_mm2, MAT_B2C_CONTACT)
-    ops.section("Aggregator", SEC_AGG_B33L, MAT_ELASTIC_E3, "Vy", "-section", SEC_FIBER_B33L_W18X35)
+    ops.section("Aggregator", SEC_AGG_B33L, MAT_ELASTIC_Ep3, "Vy", "-section", SEC_FIBER_B33L_W18X35)
 
     # ── W-shape fiber sections (weak-axis columns) ──
     # W12X40 (d=11.9, bf=8.01, tf=0.515, tw=0.295 in)
@@ -1655,7 +1663,7 @@ def create_odb(output_dir: Path, odb_tag: int = 1) -> "opst.post.CreateODB":
         The active CreateODB instance.
     """
     opst.post.set_odb_path(str(output_dir))
-    odb = opst.post.CreateODB(odb_tag=odb_tag)
+    odb = opst.post.CreateODB(odb_tag=odb_tag, save_every=1)
     odb.save_model_data()
     return odb
 
@@ -1786,36 +1794,113 @@ def define_damping():
 
 def run_gravity():
     """Gravity analysis with LoadControl, 20 steps."""
-    ops.constraints("Transformation")
+    ops.constraints("Plain")
     ops.numberer("RCM")
-    ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-6, 20)
+    ops.system("UmfPack")
+    ops.test("EnergyIncr", 1.0e-8, 200)
     ops.algorithm("Newton")
     ops.integrator("LoadControl", 0.05)
     ops.analysis("Static")
+    steps_ok = 0
     for _ in range(20):
         ok = ops.analyze(1)
         if ok != 0:
             break
+        steps_ok += 1
     ops.loadConst("-time", 0.0)
     ops.wipeAnalysis()
+    return steps_ok
 
 
-def run_pushover(dU_max_mm=457.2, dU_incr_mm=2.0):
-    """Pushover analysis using DisplacementControl at roof node."""
-    ops.constraints("Transformation")
+def run_pushover(dU_max_mm=457.2, dU_incr_mm=0.508):
+    """Pushover analysis using DisplacementControl with adaptive algorithm
+    fallback matching the TCL NextAlgorithm / AdvanceAnalysis scheme.
+    """
+    ops.constraints("Plain")
     ops.numberer("RCM")
-    ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-4, 20)
-    ops.algorithm("Newton")
-    ops.integrator("DisplacementControl", NODE_ROOF_CTRL, 1, dU_incr_mm)
+    ops.system("UmfPack")
     ops.analysis("Static")
-    n_steps = int(dU_max_mm / dU_incr_mm)
-    for _ in range(n_steps):
+
+    # Step adjustment factors matching NextAlgorithm.tcl
+    _SADJ = {"small": 20, "tiny": 50, "miniscule": 100, "itsybitsy": 200}
+
+    tol0 = 1.0e-8
+    iter0 = 200
+    itr = 200
+
+    # Algorithm list matching TCL AdvanceAnalysis: (name, option)
+    # Options starting with "-" are algorithm switches (no step adjustment).
+    # Other options ("small", "tiny", "miniscule") trigger step reduction.
+    algs = [
+        ("Newton",          "-initialThenCurrent"),
+        ("Newton",          "small"),
+        ("NewtonLineSearch", ""),
+        ("KrylovNewton",    ""),
+        ("Newton",          "tiny"),
+        ("Newton",          "miniscule"),
+        ("KrylovNewton",    "small"),
+        ("ModifiedNewton",  ""),
+    ]
+
+    tols = [1e-8, 1e-6, 1e-4]
+    szFs = [1, 10, 100]
+
+    dxi = dU_incr_mm
+    steps_ok = 0
+    current_disp = 0.0
+
+    while current_disp < dU_max_mm:
+        # Initial attempt — Newton with full step, default tol/iter
+        ops.test("EnergyIncr", tol0, iter0)
+        ops.algorithm("Newton")
+        ops.integrator("DisplacementControl", NODE_ROOF_CTRL, 1, dxi)
         ok = ops.analyze(1)
+
+        if ok == 0:
+            current_disp += dxi
+            steps_ok += 1
+            continue
+
+        # Adaptive fallback — nested loops matching TCL AdvanceAnalysis
+        iter0 = itr
+        for tol in tols:
+            if ok == 0:
+                break
+            for szF in szFs:
+                if ok == 0:
+                    break
+                dx = dxi / szF
+                ops.integrator("DisplacementControl", NODE_ROOF_CTRL, 1, dx)
+
+                for alg_name, opt in algs:
+                    if ok == 0:
+                        break
+
+                    # Step adjustment from algorithm option
+                    sAdj = _SADJ.get(opt, 1)
+                    step = dx / sAdj
+
+                    ops.test("EnergyIncr", tol, iter0)
+
+                    if alg_name == "NewtonLineSearch":
+                        ops.algorithm("NewtonLineSearch", "-type", "Bisection",
+                                      "-tol", 0.5, "-maxIter", 200)
+                    elif opt.startswith("-"):
+                        ops.algorithm(alg_name, opt)
+                    else:
+                        ops.algorithm(alg_name)
+
+                    ok = ops.analyze(1, step)
+                    if ok == 0:
+                        current_disp += step
+                        steps_ok += 1
+
         if ok != 0:
+            print(f"Pushover failed to converge at displacement {current_disp:.2f} mm")
             break
+
     ops.wipeAnalysis()
+    return steps_ok
 
 
 # ── 14. ORCHESTRATOR ──────────────────────────────────────────────────────────
@@ -1831,25 +1916,29 @@ def run_analysis(output_dir: Path):
     define_elements()
     vis_model(output_dir)
     odb = create_odb(output_dir)
-    define_damping()
     define_gravity_loads()
     vis_loads(output_dir)
-    run_gravity()
+    grav_ok = run_gravity()
+    define_damping()  # after gravity, matching Tcl (B-AdvanceAnalysis.tcl)
     define_lateral_loads()
     vis_pre_analysis(output_dir)
-    run_pushover()
-    return odb
+    push_ok = run_pushover()
+    return odb, grav_ok + push_ok
 
 
 # ── 15. POST-PROCESS ──────────────────────────────────────────────────────────
-def post_process(odb, output_dir: Path):
+def post_process(odb, output_dir: Path, steps_completed: int):
     """Save ODB and generate deformed shape visualization."""
+    ops.wipe()
     odb.save_response()
-    vis_defo(output_dir)
+    if steps_completed > 0:
+        vis_defo(output_dir)
+    else:
+        print("No analysis steps completed — skipping deformed shape visualization.")
 
 
 # ── 16. MAIN ──────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
-    odb = run_analysis(output_dir)
-    post_process(odb, output_dir)
+    odb, steps_completed = run_analysis(output_dir)
+    post_process(odb, output_dir, steps_completed)
