@@ -330,9 +330,10 @@ def define_materials():
     ops.uniaxialMaterial("ENT", MAT_ENT, 1e3 * 199948.0)
 
     # ── ElasticPPGap: brace-to-column / gusset-to-column contact ──
-    # Note: TCL stiffness is 290 kip/inch, yield is -55 kip. ksi is incorrect since it's a stress.
-    ops.uniaxialMaterial("ElasticPPGap", MAT_B2C_GAP, 290.0 * (kip / inch), -55.0 * kip, -0.5 * inch)
-    ops.uniaxialMaterial("ElasticPPGap", MAT_G2C_GAP, 290.0 * (kip / inch), -46.8 * kip, -0.5 * inch)
+    # TCL: ElasticPPGap 12 290 -55.0 -0.5
+    # Zero-length fibers: strain = displacement, so E is stress/length, gap is length
+    ops.uniaxialMaterial("ElasticPPGap", MAT_B2C_GAP, 290.0 * (ksi / inch), -55.0 * ksi, -0.5 * inch)
+    ops.uniaxialMaterial("ElasticPPGap", MAT_G2C_GAP, 290.0 * (ksi / inch), -46.8 * ksi, -0.5 * inch)
     ops.uniaxialMaterial("Parallel", MAT_B2C_CONTACT, MAT_B2C_GAP, MAT_ELASTIC_E6)
     ops.uniaxialMaterial("Parallel", MAT_G2C_CONTACT, MAT_G2C_GAP, MAT_ELASTIC_E6)
 
