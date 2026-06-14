@@ -481,15 +481,9 @@ def define_elements() -> None:
 
 
 # ── 10. CREATE ODB ============================================================
-def create_odb(output_dir: Path, node_tags: list | None = None) -> "opst.post.CreateODB":
+def create_odb(output_dir: Path) -> "opst.post.CreateODB":
     opst.post.set_odb_path(str(output_dir))
-    if node_tags:
-        odb = opst.post.CreateODB(
-            odb_tag=ODB_TAG,
-            node_tags=node_tags,
-        )
-    else:
-        odb = opst.post.CreateODB(odb_tag=ODB_TAG)
+    odb = opst.post.CreateODB(odb_tag=ODB_TAG)
     odb.save_model_data()
     return odb
 
@@ -603,14 +597,7 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     vis_nodes(output_dir)           # V1
     define_elements()
     vis_model(output_dir)           # V2
-
-    # Track only key nodes in ODB (master + reaction) to avoid I/O bottleneck
-    tracked_nodes = (
-        define_nodes._master_left
-        + define_nodes._master_right
-        + [200001, 200002, 100001, 100002]
-    )
-    odb = create_odb(output_dir, node_tags=tracked_nodes)
+    odb = create_odb(output_dir)
     define_nodal_masses()
     define_gravity_loads()
     vis_loads(output_dir)           # V3

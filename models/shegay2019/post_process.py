@@ -11,6 +11,7 @@ ODB_EVERY_N = 10
 N_STEPS_GM = 8000
 
 output_dir = Path(__file__).parent / "output"
+opst.post.set_odb_path(str(output_dir))
 
 n_frames = N_STEPS_GM // ODB_EVERY_N
 
