@@ -1,4 +1,4 @@
-"""Standalone post-processing — reads existing ODB data, generates animation."""
+"""Standalone post-processing — reads existing ODB data, generates visualizations."""
 import sys
 from pathlib import Path
 
@@ -7,26 +7,25 @@ from units import *
 import opstool as opst
 
 ODB_TAG = 1
-ODB_EVERY_N = 10
-N_STEPS_GM = 8000
-
 output_dir = Path(__file__).parent / "output"
 opst.post.set_odb_path(str(output_dir))
 
-n_frames = N_STEPS_GM // ODB_EVERY_N
-
-print("Generating deformed shape...")
+print("Step-by-step slider view...")
 opst.vis.plotly.plot_nodal_responses(
-    odb_tag=ODB_TAG, resp_type="disp", resp_dof="UX",
-).write_html(str(output_dir / "vis_05_deformed.html"))
-
-print("Generating animation...")
-opst.vis.plotly.plot_nodal_responses_animation(
     odb_tag=ODB_TAG,
-    framerate=n_frames // 20,
+    slides=True,
     defo_scale=True,
     resp_type="disp",
     resp_dof="UX",
-).write_html(str(output_dir / "vis_06_animation.html"))
+).write_html(str(output_dir / "vis_05_slider.html"))
+
+print("Peak deformation view...")
+opst.vis.plotly.plot_nodal_responses(
+    odb_tag=ODB_TAG,
+    step="absMax",
+    defo_scale=True,
+    resp_type="disp",
+    resp_dof="UX",
+).write_html(str(output_dir / "vis_06_peak.html"))
 
 print(f"Done. Files saved to {output_dir}")
