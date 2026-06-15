@@ -1496,6 +1496,58 @@ Flag any model where `define_ground_motion()` (or equivalent UniformExcitation s
 
 **Why:** This bug was discovered during the NEES2014 conversion and cost several hours of debugging. The model appeared to run successfully (no errors, SmartAnalyze reported success) but produced physically meaningless EDPs. The fix is a one-line reorder, but the symptom is silent — no warnings, no convergence failures, just near-zero results.
 
+### 12j. SI → N-mm Conversion (Meters to Millimeters)
+
+Source: XMU Chapter4.1 (SI: N, m, kg, Pa) → N-mm-MPa conversion.
+
+#### Critical: `Pa` in units.py Is NOT the SI Pascal
+
+`units.py` defines `Pa = N / mm**2 = 1.0`. Since N=1 and mm=1, this evaluates to 1.0, which is numerically **1 MPa** (= 1 N/mm²), NOT 1 SI-Pascal (1 Pa = 1 N/m² = 1e-6 N/mm²).
+
+**Symptom of misuse:** `E = 3.0e10 * Pa` (intended 30 GPa) gives 3e10 in N-mm units (= 30,000,000 GPa). The structure becomes 1,000,000× too stiff — T1 drops from ~0.4s to ~0.0004s.
+
+**Fix:** Convert SI stress values manually — divide by 1e6:
+```python
+# BROKEN — Pa = 1.0 (N/mm²), NOT 1e-6 (SI-Pa)
+E = 3.0e10 * Pa    # → 3e10 MPa (absurd)
+
+# CORRECT — manual conversion from SI-Pa to N/mm²
+E = 30000.0 * MPa  # 3e10 Pa ÷ 1e6 → 30000 N/mm² = 30 GPa
+```
+
+#### SI → N-mm conversion table
+
+| Quantity | SI value | SI unit | → N-mm expression | Numerical | Notes |
+|----------|----------|---------|-------------------|-----------|-------|
+| Length | `val` | m | `val * m` | val × 1000 | uses `m` constant ✓ |
+| Area | `val` | m² | `val * m**2` or `val * m2` | val × 10⁶ | uses `m2` helper ✓ |
+| Inertia | `val` | m⁴ | `val * m**4` or `val * m4` | val × 10¹² | uses `m4` helper ✓ |
+| Force | `val` | N | `val * N` | val × 1 | N = 1.0, unchanged ✓ |
+| Stress | `val` | Pa | `val / 1e6` or `(val/1e6) * MPa` | val ÷ 10⁶ | **NEVER use `Pa`** |
+| Mass | `val` | kg | `val / 1000.0` | val ÷ 10³ | **NEVER use `kg`** (=1.0); 1 N·s²/mm = 1000 kg |
+| Acceleration | — | m/s² | `g_accel` | 9806.65 | g in mm/s² ✓ |
+
+#### Mass conversion detail
+
+In the N-mm-s system, the consistent mass unit is N·s²/mm (= 1000 kg = 1 tonne). `units.py` defines `kg = N * sec**2 / mm = 1.0`, which does NOT represent 1 kilogram — it represents 1 N·s²/mm (= 1000 kg). Using `10000 * kg` would give mass=10000 N·s²/mm (= 10,000 tonnes) instead of the correct 10 N·s²/mm (= 10 tonnes = 10000 kg).
+
+```python
+# BROKEN — kg = 1.0 (N·s²/mm), NOT 1 kg
+mass = 10000.0 * kg   # → 10000 N·s²/mm = 10,000 tonnes (10× too heavy)
+
+# CORRECT
+mass = 10.0            # 10000 kg ÷ 1000 = 10 N·s²/mm (10 tonnes)
+```
+
+#### Detection in Existing Models
+
+Flag any SI-sourced model where:
+- `* Pa` appears in stress/modulus definitions → likely 1e6× too stiff
+- `* kg` appears in mass definitions → likely 1000× too heavy
+- T1 is implausibly small (< 0.001s for building-scale structures) → check E value
+
+**Why:** Most conversions in this project are imperial→N-mm (where kip, inch, ksi constants work correctly). SI→N-mm is rarer but the `Pa` and `kg` constants in units.py are misleading — they don't represent their SI namesakes.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1514,7 +1566,8 @@ Flag any model where `define_ground_motion()` (or equivalent UniformExcitation s
 | 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
 | 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
 | 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
-| 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). | Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
+| 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). |
+| 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). | Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
