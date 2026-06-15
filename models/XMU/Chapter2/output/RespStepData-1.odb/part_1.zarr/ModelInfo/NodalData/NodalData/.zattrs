@@ -1,0 +1,23 @@
+{
+  "numNodes": 4,
+  "minBoundSize": 0.0,
+  "maxBoundSize": 4267.2001953125,
+  "ndofs": [
+    2,
+    2,
+    2,
+    2
+  ],
+  "ndims": [
+    2,
+    2,
+    2,
+    2
+  ],
+  "unusedNodeTags": [],
+  "_ARRAY_DIMENSIONS": [
+    "time",
+    "nodeTags",
+    "coords"
+  ]
+}
