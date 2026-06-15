@@ -313,5 +313,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 4.1.",
     "Notes": "Converted from model.tcl (XMU Chapter 4.1 example). Original units: N, m, kg, Pa (SI) — converted to N, mm, MPa. Key lesson: units.py Pa = N/mm² = 1.0 (actually 1 MPa, NOT 1 Pascal). SI Pa→N-mm requires ÷1e6, but using units.py Pa gives wrong result. Use MPa directly for stress, m2/m4 helpers for area/inertia, and ÷1000 for mass (kg→tonne). Ground motion defined AFTER gravity per AGENT.md §12i. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter4_2",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Textbook-example dynamic time-history analysis of a single-story single-bay portal frame with Steel01 bilinear columns and elastic beam under Tabas earthquake (Rayleigh damping 2% on mode 1).",
+    "Description of Building Structural System": "Single-story single-bay portal frame (12.80m wide x 10.97m tall). Columns use an Aggregator section: Steel01 (Fy=14.7 MPa, E=5.74 GPa, b=0.01) for flexure and Elastic (E=46.2 GPa) for axial response. Beam uses an elastic section (E=24.9 GPa, A=3.72 m², I=1.8413 m⁴).",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 4 nodes and 3 nonlinearBeamColumn elements (5 integration points each). Fixed column bases with lumped masses at top nodes (80 tonnes each, X-direction only). Uniform downward load on beam (-122.5 N/mm) applied via static analysis then frozen with loadConst. Tabas earthquake (dt=0.02s, 20s) via UniformExcitation in X. Rayleigh damping 2% on mode 1 (stiffness-proportional only). Dynamic analysis with SmartAnalyze Transient + Newmark integration. ODB response collection via opst.post.CreateODB.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel (bilinear columns) + Elastic beam",
+    "Lateral system": "Portal frame (moment-resisting)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake (time-history)",
+    "Earthquake records": "Tabas 1978 Iran (dt=0.02s, 2501 pts, first 1000 pts used, factor=g)",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 4.2.",
+    "Notes": "Converted from model.tcl (XMU Chapter 4.2 example). Original units: kN, m, kPa — converted to N, mm, MPa. Key lesson: Aggregator section materials act as force-deformation (not stress-strain). P stiffness x1000 (kN->N), Mz stiffness x1e9 (kN·m->N·mm with curvature 1/m->1/mm conversion). Regular elastic section: E/1000, A*m^2, I*m^4. Ground motion defined AFTER gravity per AGENT.md §12i. Run with: conda activate opensy && python model.py"
   }
 ]

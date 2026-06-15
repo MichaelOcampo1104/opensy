@@ -1548,6 +1548,56 @@ Flag any SI-sourced model where:
 
 **Why:** Most conversions in this project are imperial→N-mm (where kip, inch, ksi constants work correctly). SI→N-mm is rarer but the `Pa` and `kg` constants in units.py are misleading — they don't represent their SI namesakes.
 
+### 12k. Aggregator Section — kN-m→N-mm Conversion
+
+Source: XMU Chapter4.2 (portal frame with Aggregator column sections, kN-m-kPa→N-mm-MPa conversion).
+
+#### Critical: Aggregator Materials Are Force-Deformation, NOT Stress-Strain
+
+An `ops.section("Aggregator", tag, mat_P, "P", mat_Mz, "Mz")` defines section-level force-deformation response. The material assigned to the `"P"` dof has units of **force per unit strain** (N for axial), and the material assigned to `"Mz"` has units of **moment per unit curvature** (N·mm for flexure). They are NOT stress-strain materials.
+
+This means the standard stress conversion (kPa → MPa: ÷1000) gives values that are too small by factors of 1e6 (P) and 1e9 (Mz), because it doesn't account for the missing area and section-modulus factors that a fiber section would implicitly provide.
+
+#### Conversion Factors
+
+| Aggregator DOF | Original unit | → N-mm factor | Why |
+|----------------|--------------|---------------|-----|
+| `P` (axial force) | kN | × 1000 | Force: kN → N |
+| `Mz` (moment) | kN·m | × 1e9 | Moment: kN→N (×1000) + curvature 1/m→1/mm (×1e6) = ×1e9 |
+
+#### Worked Example (XMU Chapter4.2)
+
+```python
+# Original Tcl values (kN, m, kPa):
+#   E_ax = 4.62e7 kPa   (axial stiffness for Aggregator P)
+#   E_fx = 5.74e6 kPa   (flexural stiffness for Aggregator Mz)
+#   Fy   = 1.47e4 kPa   (yield stress for Steel01 in Aggregator Mz)
+
+# CORRECT — Aggregator force-deformation conversion
+E_col_ax = 4.62e7 * 1000.0     # P: kN→N → 4.62e10 N per unit strain
+E_col_fx = 5.74e6 * 1.0e9      # Mz: kN·m→N·mm + curvature → 5.74e15 N·mm per unit curvature
+Fy_col   = 1.47e4 * 1.0e9      # My: kN·m→N·mm → 1.47e13 N·mm yield moment
+
+# CONTRAST — Regular elastic beam section (stress-strain based)
+E_beam = 2.49e7 / 1000.0        # kPa→MPa → 24900 MPa
+A_beam = 3.72 * m**2            # m²→mm² → 3.72e6 mm²
+I_beam = 1.8413 * m**4          # m⁴→mm⁴ → 1.8413e12 mm⁴
+```
+
+#### Symptom of Wrong Conversion
+
+- **T1 too large** (e.g., 247,188s instead of ~0.26s) — model is impossibly soft because Aggregator stiffness values are 1e6–1e9× too small
+- The fix is counterintuitive: **multiply** Aggregator stiffnesses (not divide like regular stress conversion)
+
+#### Detection in Existing Models
+
+Flag any kN-m-sourced model where:
+- `section("Aggregator", ...)` is used with materials that were converted via standard stress conversion (÷1000)
+- T1 is implausibly large (> 100s for a building-scale structure)
+- Aggregator material values look "small" (e.g., 4.62e4 for what should be ~4.62e10)
+
+**Why:** This is the first model in the project using Aggregator sections with a non-N-mm source. The standard kN→N-mm stress conversion (÷1000) silently produces values 1e6–1e9× too small because Aggregator materials bypass the cross-section geometry that would normally convert stress to force/moment.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1567,7 +1617,8 @@ Flag any SI-sourced model where:
 | 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
 | 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
 | 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). |
-| 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). | Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
+| 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). |
+| 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
