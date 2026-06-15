@@ -1598,6 +1598,48 @@ Flag any kN-m-sourced model where:
 
 **Why:** This is the first model in the project using Aggregator sections with a non-N-mm source. The standard kN→N-mm stress conversion (÷1000) silently produces values 1e6–1e9× too small because Aggregator materials bypass the cross-section geometry that would normally convert stress to force/moment.
 
+### 12l. dispBeamColumn Requires beamIntegration in OpenSeesPy
+
+Source: XMU Chapter4.3 (RC portal frame with fiber-section columns, dispBeamColumn elements).
+
+#### Critical: Different Argument Signature from nonlinearBeamColumn
+
+`ops.element("dispBeamColumn", ...)` in OpenSeesPy requires a separate `beamIntegration` object. The element signature is:
+
+```python
+# dispBeamColumn (OpenSeesPy)
+ops.element("dispBeamColumn", eleTag, iNode, jNode, transfTag, integTag)
+```
+
+This differs from `nonlinearBeamColumn` which takes section tag + nIP directly:
+
+```python
+# nonlinearBeamColumn (reference)
+ops.element("nonlinearBeamColumn", eleTag, iNode, jNode, nIP, secTag, transfTag)
+```
+
+#### Correct Usage
+
+```python
+ops.beamIntegration("Legendre", INTEG_COL, SEC_COL, n_ip)  # or "Lobatto"
+ops.element("dispBeamColumn", ELE_COL, NODE_I, NODE_J, TRANS_COL, INTEG_COL)
+```
+
+#### Symptom of Wrong Argument Order
+
+- Passing `(eleTag, iNode, jNode, nIP, secTag, transfTag)` — the nonlinearBeamColumn order — causes:
+  - `CrdTransf *getCrdTransf(int tag) - none found with tag: 5` when nIP=5 ends up in the transfTag position
+  - `BeamIntegrationRule - none found with tag: 1` when secTag ends up in the integTag position
+
+#### Detection in Existing Models
+
+Flag any model where:
+- `dispBeamColumn` is called with 6+ positional args after the element name (instead of 5)
+- The 4th arg is a small integer (likely nIP being misinterpreted as transfTag)
+- CrdTransf-not-found errors reference suspicious tag numbers matching nIP values
+
+**Why:** This was discovered during the XMU Chapter4.3 conversion where the Tcl uses `element dispBeamColumn 1 1 3 5 1 1` (eleTag, iNode, jNode, nIP, secTag, transfTag). The natural Python translation using the same arg order fails because OpenSeesPy wraps dispBeamColumn to always use beamIntegration.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1619,6 +1661,7 @@ Flag any kN-m-sourced model where:
 | 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). |
 | 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). |
 | 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
+| 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
