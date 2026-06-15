@@ -1,0 +1,18 @@
+{
+  "description": "El Centro 1940 NS component, 3219 acceleration values at dt=0.01 s.",
+  "source": "tcl_ref/elcentro.txt",
+  "units": {
+    "acceleration": "g",
+    "time_step": "s"
+  },
+  "records": [
+    {
+      "id": "elcentro",
+      "dt": 0.01,
+      "npts": 3219,
+      "duration_s": 32.18,
+      "scale_factor": 3.0,
+      "notes": "NS component, Imperial Valley 1940-05-19 El Centro Array #9. First 2000 pts (20 s) used by default."
+    }
+  ]
+}

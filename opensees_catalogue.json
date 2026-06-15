@@ -271,5 +271,26 @@
     "Suggested Model citation": "Khajehhesameddin, P. (2014). 3-Story 4-Bay Steel Moment-Resisting Frame Model for Seismic Collapse Assessment. NEES Project Model-93, Purdue University.",
     "Links to Papers / Design Reports": "FEMA-355-C (2000). State of the Art Report on Systems Performance of Steel Moment Frames Subject to Earthquake Ground Shaking. SAC Joint Venture. FEMA-440 (2005). Improvement of Nonlinear Static Seismic Analysis Procedures, Appendix F.",
     "Notes": "Converted from NEES Model-93 Tcl reference files (ModelComponent-6/Model.tcl, Analysis_Dynamic.tcl, Wsection_S.tcl). All imperial units (kips, inches, ksi) converted to N, mm, MPa. Original Tcl files preserved in Model-93_Tcl/. Ground motion records from FEMA/SAC Phase II (44 LA pairs). Ground motion MUST be defined after gravity because ops.loadConst() freezes UniformExcitation to t=0 — see AGENT.md §12i. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter2",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Textbook-example dynamic time-history analysis of a 2D elastic three-bar truss under static preload followed by El Centro (NS, factor 3.0) ground motion.",
+    "Description of Building Structural System": "2D three-bar elastic truss with pinned base supports. Left diagonal (A=10 in²), middle vertical (A=5 in²), and right diagonal (A=5 in²) truss elements connect to a common apex node. Elastic material with E=3000 ksi.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=2) with 4 nodes and 3 Truss elements. Single elastic material. Static point load (100 kip X, -50 kip Y) at apex frozen with loadConst. El Centro NS ground motion (factor 3.0, dt=0.01s, 20 s) via UniformExcitation in X. Dynamic analysis with SmartAnalyze Transient + Newmark integration. ODB response collection via opst.post.CreateODB. EDPs: peak apex displacements and base reactions.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Elastic (steel-equivalent)",
+    "Lateral system": "Truss (pinned supports)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake (time-history)",
+    "Earthquake records": "El Centro 1940 NS component (dt=0.01s, 3219 pts, factor 3.0, first 2000 pts used)",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 2.",
+    "Notes": "Converted from tcl_ref/model.tcl (XMU Chapter 2 textbook example). All imperial units (kips, inches, ksi) converted to N, mm, MPa. ndf=2 model (no rotational DOFs). Ground motion file (elcentro.txt) in ground_motions/. Ground motion defined AFTER gravity per AGENT.md §12i. Run with: conda activate opensy && python model.py"
   }
 ]
