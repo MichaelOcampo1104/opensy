@@ -1,3 +1,0 @@
-{
-  "DOFs": "The DOFs are aligned with the local coordinate system. Note that these DOFs are not necessarily valid unless all degrees of freedom are assigned to the material (e.g., all six DOFs in 3D). For cases where the material is assigned to only partial DOFs, the actual DOFs are arranged sequentially, with the remaining ones padded with zeros."
-}
