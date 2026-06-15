@@ -1399,6 +1399,54 @@ opst.vis.plotly.plot_nodal_responses(
 | Inertia | in⁴ | `value * inch**4` | |
 | Soft elastic stub | E=0.01 (ksi) | `0.01` (MPa) | Technically 0.01 ksi = 0.069 MPa, but negligible in Parallel materials |
 
+### 12h. MDOF Shear Building — SimCenter EE-UQ Conversion Pattern
+
+Source: Zhong2022 MDOF_BuildingModel Tcl → Python conversion.
+
+#### 12h-1. TwoNodeLink + Steel01 Architecture
+
+For stick/shear-building models, use `twoNodeLink` elements with:
+- **Steel01** bilinear materials for horizontal shear DOFs (X and Y)
+- **Elastic** rigid materials (1e12–1e15) for vertical axial and rotational DOFs
+- **`-orient 1 0 0 0 1 0`** flag to orient local-x = global-X (horizontal), local-y = global-Y (vertical)
+
+The benign warning `"ignoring nodes and using specified local x vector"` confirms the -orient flag is working correctly — it suppresses node-based auto-orientation. This is expected for vertical links.
+
+#### 12h-2. Eigen Solver: Avoid fullGenLapack with Stiffness Contrasts
+
+**Problem:** `fullGenLapack` eigen solver fails when the stiffness matrix has multi-order-of-magnitude contrasts (e.g., rigid springs at ~1e12 vs shear springs at ~1e5). Produces complex eigenvalues (e.g., `T1 = 0.0000-0.3678j s`) and aborts with OpenSeesError.
+
+**Fix:** Use the default subspace iteration solver — `ops.eigen(mode_j)` without specifying `-fullGenLapack`. The default solver handles ill-conditioned matrices robustly.
+
+#### 12h-3. `ops.wipeAnalysis()` Between Analysis Types
+
+**Problem:** SmartAnalyze warns `"can't set transient integrator in static analysis"` when the gravity (static) analysis object is not cleaned up before dynamic (transient).
+
+**Fix:** Call `ops.wipeAnalysis()` after `ops.loadConst("-time", 0.0)` in the gravity function to clear the static analysis object before the transient solver starts.
+
+#### 12h-4. EDP Tracking During Analysis
+
+For EDPs that cannot be derived from ODB alone (e.g., peak values across all time steps), track them in-memory during the dynamic loop:
+- `ops.nodeDisp()` / `ops.nodeAccel()` at each converged step
+- Update running maximums in a dict keyed by `"story-dof"`
+- Assemble into SimCenter-compatible EDP.json format (`1-PID-X-Y`, `1-PFA-X-Y`) during post-processing
+
+#### 12h-5. SimCenter Parameter Mapping
+
+SimCenter EE-UQ JSON parameter keys map directly to model constants:
+- `"W"` → floor weight, `"k"` → story stiffness, `"Fy"` → yield strength, `"HR"` → hardening ratio
+- Units in the JSON are imperial (kip, in, s); convert to N, mm using `standards/units.py` constants
+- PEER .AT2 ground motion files: parse header line for npts/dt, then space-delimited acceleration values in g
+
+#### 12h-6. Output Artifact Hygiene
+
+Add `.gitignore` patterns to exclude generated output:
+```gitignore
+models/*/output/*
+!models/*/output/.gitkeep
+```
+Use `.gitkeep` to preserve the empty output directory in version control so other modelers can run the model without creating the directory manually.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1416,6 +1464,7 @@ opst.vis.plotly.plot_nodal_responses(
 | 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — SmartAnalyze.StaticAnalyze forcibly overrides the integrator to DisplacementControl; LoadControl gravity with manual ops.analyze() loop permitted exception documented in §3c and §10; (2) §3d expanded with ODB performance guidance (targeted tags, throttled fetch for transient); (3) §10 added permitted exceptions subsection |
 | 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
 | 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
+| 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
