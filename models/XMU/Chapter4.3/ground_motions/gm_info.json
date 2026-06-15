@@ -1,0 +1,18 @@
+{
+  "description": "Tabas 1978 Iran earthquake record, 2501 acceleration values at dt=0.02 s.",
+  "source": "tabas.txt (bundled with model.tcl)",
+  "units": {
+    "acceleration": "g",
+    "time_step": "s"
+  },
+  "records": [
+    {
+      "id": "tabas",
+      "dt": 0.02,
+      "npts": 2501,
+      "duration_s": 50.02,
+      "scale_factor": 1.0,
+      "notes": "Tabas, Iran 1978-09-16. First 1000 pts (20 s) used. File values in g; factor=g_accel converts to mm/s²."
+    }
+  ]
+}

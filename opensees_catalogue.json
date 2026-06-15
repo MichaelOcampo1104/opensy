@@ -334,5 +334,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 4.2.",
     "Notes": "Converted from model.tcl (XMU Chapter 4.2 example). Original units: kN, m, kPa — converted to N, mm, MPa. Key lesson: Aggregator section materials act as force-deformation (not stress-strain). P stiffness x1000 (kN->N), Mz stiffness x1e9 (kN·m->N·mm with curvature 1/m->1/mm conversion). Regular elastic section: E/1000, A*m^2, I*m^4. Ground motion defined AFTER gravity per AGENT.md §12i. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter4_3",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Textbook-example dynamic time-history analysis of a single-story single-bay RC portal frame with fiber-section columns (Concrete01 cover + confined core, Steel01 rebar) and elastic beam under Tabas earthquake (Rayleigh damping 2% on mode 1).",
+    "Description of Building Structural System": "Single-story single-bay RC portal frame (6.0m wide x 3.0m tall). Columns are 500x500 mm RC with 440x440 mm confined core, 30 mm cover, and 6xΦ25 longitudinal rebar (3 top + 3 bottom). Beam is elastic (E=30 GPa, A=0.15 m², I=4.5e-3 m⁴).",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 4 nodes and 3 dispBeamColumn elements (5 Legendre integration points each). Fixed column bases with lumped masses at top nodes (20 tonnes each, X-direction only). Column sections: fiber-discretised RC with Concrete01 (unconfined cover + confined core) and Steel01 rebar. Beam: elastic section. Uniform downward load on beam (-65.33 N/mm) applied via static analysis then frozen with loadConst. Tabas earthquake (dt=0.02s, 20s) via UniformExcitation in X. Rayleigh damping 2% on mode 1 (stiffness-proportional only). Dynamic analysis with SmartAnalyze Transient + Newmark integration. ODB response collection via opst.post.CreateODB.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (fiber columns) + Elastic beam",
+    "Lateral system": "Portal frame (moment-resisting)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake (time-history)",
+    "Earthquake records": "Tabas 1978 Iran (dt=0.02s, 2501 pts, first 1000 pts used, factor=g)",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 4.3.",
+    "Notes": "Converted from model.tcl (XMU Chapter 4.3 example). Original units: kN, m, kPa — converted to N, mm, MPa. Fiber-section RC columns (Concrete01 cover + confined core + Steel01 rebar). dispBeamColumn elements require beamIntegration in OpenSeesPy (unlike nonlinearBeamColumn which takes section+nIP directly). Ground motion defined AFTER gravity per AGENT.md §12i. Run with: conda activate opensy && python model.py"
   }
 ]
