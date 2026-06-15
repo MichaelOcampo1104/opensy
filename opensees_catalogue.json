@@ -250,5 +250,26 @@
     "Suggested Model citation": "Zhong, K. (2022). MDOF building model for seismic UQ. Stanford University / SimCenter.",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from SimCenter EE-UQ MDOF_BuildingModel Tcl reference files (tcl_ref/newmark_solver.tcl, MyRecorder.tcl, MyPostprocess.tcl). Original units: kips, inches, seconds — all values converted to N, mm, MPa. Module-level constants in Parameters section expose all random variables (w, kx, ky, Fyx, Fyy, HRx, HRy). Reference Tcl files preserved in tcl_ref/ subdirectory. Ground motion .AT2 files from PEER must be placed in ground_motions/. Synthetic Ricker wavelet used by default for testing. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "NEES2014",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Nonlinear dynamic time-history analysis of a 3-story, 4-bay steel moment-resisting frame (pre-Northridge SAC/FEMA Phase II) with fiber-section beam-column elements for seismic collapse assessment.",
+    "Description of Building Structural System": "3-story, 4-bay steel moment-resisting frame designed per pre-Northridge Los Angeles SAC/FEMA Phase II specifications. W14 columns (W14x257 exterior, W14x311 interior) and W24–W33 beams (W33x118 floor-2, W30x116 floor-3, W24x68 roof). Beam yield strength 36 ksi, column yield strength 54 ksi. Rigid floor diaphragms via equalDOF constraints. PDelta effects included on all elements.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 16 nodes and 21 nonlinearBeamColumn elements (12 columns + 9 beams). Fiber-discretised W-sections using patch quad (28 fibers per section: 6 web-depth, 2 web-thickness, 4 flange-width, 2 flange-thickness). Steel02 material for both beams (Fy=36 ksi) and columns (Fy=54 ksi) with 0.3% strain hardening. PDelta geometric transformation throughout. Rayleigh damping 5% on modes 1 and 3. UniformExcitation in X-direction. SmartAnalyze Transient with Newmark integration and multi-algorithm fallback (KrylovNewton, Newton, Newton-initial, ModifiedNewton, NewtonLineSearch). Collapse detection at 80% inter-story drift ratio. ODB response collection via opst.post.CreateODB. EDPs: PID, PFA, PFB, PRD, collapse status (SimCenter EE-UQ compatible).",
+    "Year of design and construction": "pre-1994 (pre-Northridge)",
+    "2D/3D": "2D",
+    "Material": "Steel",
+    "Lateral system": "Moment-Resisting Frame (pre-Northridge)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake (time-history)",
+    "Earthquake records": "FEMA/SAC LA 10-in-50 (44 record pairs, dt=0.0025-0.02s, 1800-18000 pts); synthetic Ricker wavelet for testing",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "Khajehhesameddin, P. (2014). 3-Story 4-Bay Steel Moment-Resisting Frame Model for Seismic Collapse Assessment. NEES Project Model-93, Purdue University.",
+    "Links to Papers / Design Reports": "FEMA-355-C (2000). State of the Art Report on Systems Performance of Steel Moment Frames Subject to Earthquake Ground Shaking. SAC Joint Venture. FEMA-440 (2005). Improvement of Nonlinear Static Seismic Analysis Procedures, Appendix F.",
+    "Notes": "Converted from NEES Model-93 Tcl reference files (ModelComponent-6/Model.tcl, Analysis_Dynamic.tcl, Wsection_S.tcl). All imperial units (kips, inches, ksi) converted to N, mm, MPa. Original Tcl files preserved in Model-93_Tcl/. Ground motion records from FEMA/SAC Phase II (44 LA pairs). Ground motion MUST be defined after gravity because ops.loadConst() freezes UniformExcitation to t=0 — see AGENT.md §12i. Run with: conda activate opensy && python model.py"
   }
 ]

@@ -1447,6 +1447,55 @@ models/*/output/*
 ```
 Use `.gitkeep` to preserve the empty output directory in version control so other modelers can run the model without creating the directory manually.
 
+### 12i. Ground Motion Ordering: `ops.loadConst()` Freezes All Loads
+
+**Critical rule:** `define_ground_motion()` (UniformExcitation with Path timeSeries) MUST be called AFTER `run_gravity()` completes. Calling it before gravity causes `ops.loadConst("-time", 0.0)` to freeze the UniformExcitation at its t≈0 value, permanently disabling the ground motion.
+
+#### Root Cause
+
+`ops.loadConst("-time", 0.0)` applies to **all** load patterns in the domain — not just gravity. It sets each pattern's load factor to the value at the specified pseudo-time. For a UniformExcitation driven by a Path timeSeries, the load factor at pseudo-time 0 is the first data point (≈0 acceleration). After `loadConst`, the timeSeries no longer advances — the ground motion is held constant at near-zero for the entire dynamic analysis.
+
+#### Symptom
+
+EDPs (drifts, accelerations) are near-zero (~1e-15) despite a valid ground motion input. The structure appears to not respond to the earthquake. Fundamental periods are correct (T1 matches expectation), confirming the model stiffness is correct — the ground motion simply isn't being applied.
+
+#### Fix
+
+Always order the analysis sequence as:
+
+```python
+# CORRECT — GM after gravity
+define_gravity_loads()
+run_gravity(odb)
+# loadConst freezes gravity only (GM not yet defined)
+define_ground_motion()    # ← AFTER gravity
+run_dynamic(odb, dt, npts)
+```
+
+```python
+# BROKEN — GM before gravity
+define_gravity_loads()
+define_ground_motion()    # ← defined too early
+run_gravity(odb)
+# loadConst freezes BOTH gravity AND ground motion to t≈0
+run_dynamic(odb, dt, npts)  # no ground motion applied
+```
+
+#### Debugging Protocol
+
+If EDPs are suspiciously near-zero after what appears to be a successful run:
+
+1. Check max roof displacement during dynamic loop — if constant at ≈gravity deflection, GM is frozen
+2. Create a minimal SDOF test with the same pattern ordering to isolate
+3. Binary test: run with GM-before-gravity vs GM-after-gravity — compare EDPs
+4. If EDP ratio (correct/wrong) > 1e6, `loadConst` freezing is the cause
+
+#### Detection in Existing Models
+
+Flag any model where `define_ground_motion()` (or equivalent UniformExcitation setup) appears before the `ops.loadConst("-time", 0.0)` call in `run_gravity()`. This is a FAIL item in audit.
+
+**Why:** This bug was discovered during the NEES2014 conversion and cost several hours of debugging. The model appeared to run successfully (no errors, SmartAnalyze reported success) but produced physically meaningless EDPs. The fix is a one-line reorder, but the symptom is silent — no warnings, no convergence failures, just near-zero results.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1465,6 +1514,7 @@ Use `.gitkeep` to preserve the empty output directory in version control so othe
 | 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
 | 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
 | 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
+| 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). | Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
