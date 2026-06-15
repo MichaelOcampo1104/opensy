@@ -1236,7 +1236,171 @@ Models written for 0.8.7 will NOT run on 1.0 without changes.
 
 ---
 
-## 12. Versioning & Change Log
+## 12. Tcl-to-Python Conversion Guide (Lessons Learned)
+
+> **Source:** Compiled from the shegay2019 NZ.tcl (37K-line, 800 material groups) → model.py (~650 lines) conversion.
+
+### 12a. Tag Scheme Extraction
+
+Tcl models often use **multi-range tag schemes** where the prefix digit position shifts
+depending on how many digits the group number has, avoiding collisions with reserved ranges.
+
+**Pattern:** Extract as a helper function rather than reverse-engineering flat formulas.
+
+```python
+def _tag3(prefix: int, idx: int, group_offset: int = 0) -> int:
+    """Tcl 3-range tag: prefix + (group_offset+idx)*10000 + 1, with digit shift
+    when the group number crosses 9 or 99 to keep tags non-colliding."""
+    group = group_offset + idx
+    if group < 10:
+        return prefix * 100_000 + group * 10_000 + 1
+    elif group < 100:
+        return prefix * 1_000_000 + group * 10_000 + 1
+    else:
+        return prefix * 10_000_000 + group * 10_000 + 1
+```
+
+**Why:** The tag formula appears simple (e.g., `prefix + group*10000 + 1`) but silently
+collides at group boundaries (9→10, 99→100). A helper function encodes the digit-shift
+logic once and is testable in isolation.
+
+### 12b. Mass Placement — Verify Source
+
+**Always verify which nodes get massed in the source model.** Some Tcl models mass only
+one side (e.g., left master nodes); the other side receives mass implicitly through
+rigid diaphragm constraints.
+
+**Symptom:** Massing both sides **doubles the translational mass**, producing
+`T_python ≈ 1.4 × T_tcl` (since T ∝ √m).
+
+**Fix:** Grep the source for `mass` commands and match the node list exactly. In shegay2019,
+only 8 `mass` commands existed (left master nodes 110001–180001); the right side was
+connected via rigid truss diaphragm elements.
+
+### 12c. Parameter Cross-Verification
+
+Multi-parameter element commands are **prone to value swapping**. Verify every parameter
+against the source line-by-line.
+
+**Real example (shegay2019 elasticBeamColumn):**
+
+| Parameter | Tcl value | Initial Python (WRONG) | Correct Python |
+|-----------|-----------|------------------------|----------------|
+| A | 806400 in² | `806400 * inch**2` ✓ | `806400 * inch**2` ✓ |
+| E | 1732.55 ksi | `E_STEEL` (29000 ksi) ✗ | `1732.55 * ksi` |
+| I | 0.27648 in⁴ | `1732.55 * inch**4` ✗ | `0.27648 * inch**4` |
+
+The E and I values were swapped — E got steel's modulus and I got the E value. This
+made the PDelta column 16.7× stiffer than intended. The fix had negligible effect on
+global periods (the leaning column carries gravity, not lateral stiffness), but
+illustrates the risk.
+
+**Rule:** After conversion, diff every numeric parameter in element/material/section
+definitions against the original source. A one-line grep of the Tcl for each value
+catches most swaps.
+
+### 12d. ODB Performance for Large Transient Analyses
+
+`fetch_response_step()` calls the OpenSees API for **every tracked node and element**
+on every call. For a model with 330+ nodes and 8000 steps, this means ~2.6 million
+API calls — potentially hours of I/O overhead.
+
+**Mitigations (in priority order):**
+
+1. **Throttle collection** (most effective, always safe):
+   ```python
+   ODB_EVERY_N = 10  # for analyses with >500 steps
+   for i, _ in enumerate(segs):
+       ok = analysis.TransientAnalyze(dt)
+       if i % ODB_EVERY_N == 0:
+           odb.fetch_response_step()
+   ```
+   Reduces 8000 collections → 800. Aim for ≤500 total `fetch_response_step()` calls.
+
+2. **Selective node tracking** (use with caution):
+   ```python
+   odb = opst.post.CreateODB(odb_tag=1, node_tags=[...])
+   ```
+   **WARNING:** Filtering `node_tags` prevents opstool from rendering the full model
+   mesh in deformation plots (`plot_nodal_responses`, `plot_nodal_responses_animation`).
+   Only use for data-extraction scripts, NOT for visualization models.
+
+**Symptom of no throttling:** Dynamic analysis progresses at 17+ steps/sec for the first
+~300 steps, then slows to ~2 steps/sec as ODB data accumulates. Appears as a hang.
+
+### 12e. OpenSeesPy beamIntegration Limitation
+
+**Tcl** supports per-IP sections via inline `-sections`:
+```tcl
+element dispBeamColumn $tag $i $j $nIP -sections $s1 $s2 ... $sN $transf -integration Lobatto
+```
+
+**OpenSeesPy** uses `beamIntegration("Lobatto", integ_tag, section_tag, N)` where
+**all IPs share one section**. Per-IP material state tracking is lost.
+
+**Impact:** For fiber-section models, this causes **~10–15% stiffness difference**
+in fundamental period compared to the Tcl reference (800 material groups → 160).
+This is a fundamental OpenSeesPy limitation — not a bug in the conversion.
+
+**Rule:** Document the discrepancy in the model header and catalogue Notes field.
+Accept it as a known approximation; do not chase convergence by distorting material
+properties.
+
+### 12f. Standalone Post-Processing Script
+
+A `post_process.py` that reads existing ODB data is **valuable infrastructure** —
+it allows re-generating visualizations without re-running the (potentially hour-long)
+solver.
+
+```python
+"""Standalone post-processing — reads existing ODB data, generates visualizations."""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
+from units import *
+import opstool as opst
+
+ODB_TAG = 1
+output_dir = Path(__file__).parent / "output"
+opst.post.set_odb_path(str(output_dir))  # MUST be called before any vis function
+
+# Slider view: step-by-step with draggable slider
+opst.vis.plotly.plot_nodal_responses(
+    odb_tag=ODB_TAG, slides=True, defo_scale=True,
+    resp_type="disp", resp_dof="UX",
+).write_html(str(output_dir / "vis_05_slider.html"))
+
+# Peak deformation snapshot
+opst.vis.plotly.plot_nodal_responses(
+    odb_tag=ODB_TAG, step="absMax", defo_scale=True,
+    resp_type="disp", resp_dof="UX",
+).write_html(str(output_dir / "vis_06_peak.html"))
+```
+
+**Key visualizations available from ODB data (no re-run needed):**
+| Function | Key param | Output |
+|----------|-----------|--------|
+| `plot_nodal_responses()` | `slides=True` | Step-by-step slider view |
+| `plot_nodal_responses()` | `step="absMax"` | Peak deformation snapshot |
+| `plot_nodal_responses_animation()` | `framerate=N` | Auto-play animation |
+
+### 12g. Imperial → N-mm Conversion Checklist
+
+| Quantity | Tcl unit | Python expression | Gotcha |
+|----------|----------|-------------------|--------|
+| Length | in | `value * inch` | inch = 25.4 mm |
+| Force | kip | `value * kip` | kip = 4448.22 N |
+| Stress | ksi | `value * ksi` | ksi = 6.89476 MPa |
+| Mass | kip·s²/in | `value * kip / inch` | Numerically correct since sec=1 |
+| Rotational stiffness | kip·in/rad | `value * kip * inch` | NOT `kip/inch` — that's force/length |
+| Ground motion accel | in/s² | `-factor inch` in timeSeries | Converts to mm/s² |
+| Section dimension | in | `value * inch` | Used inside `ops.patch()` / `ops.layer()` |
+| Area | in² | `value * inch**2` | |
+| Inertia | in⁴ | `value * inch**4` | |
+| Soft elastic stub | E=0.01 (ksi) | `0.01` (MPa) | Technically 0.01 ksi = 0.069 MPa, but negligible in Parallel materials |
+
+---
+## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
@@ -1251,6 +1415,7 @@ Models written for 0.8.7 will NOT run on 1.0 without changes.
 | 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
 | 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — SmartAnalyze.StaticAnalyze forcibly overrides the integrator to DisplacementControl; LoadControl gravity with manual ops.analyze() loop permitted exception documented in §3c and §10; (2) §3d expanded with ODB performance guidance (targeted tags, throttled fetch for transient); (3) §10 added permitted exceptions subsection |
 | 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
+| 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.

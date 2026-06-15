@@ -1,0 +1,1440 @@
+{
+    "Applications": {
+        "EDP": {
+            "Application": "UserDefinedEDP",
+            "ApplicationData": {
+            }
+        },
+        "Events": [
+            {
+                "Application": "ExistingPEER_Events",
+                "ApplicationData": {
+                },
+                "EventClassification": "Earthquake"
+            }
+        ],
+        "Modeling": {
+            "Application": "MDOF_BuildingModel",
+            "ApplicationData": {
+            }
+        },
+        "Simulation": {
+            "Application": "OpenSees-Simulation",
+            "ApplicationData": {
+            }
+        },
+        "UQ": {
+            "Application": "Dakota-UQ",
+            "ApplicationData": {
+            }
+        }
+    },
+    "DefaultValues": {
+        "driverFile": "driver",
+        "edpFiles": [
+            "EDP.json"
+        ],
+        "filenameBIM": "BIM.json",
+        "filenameDL": "BIM.json",
+        "filenameEDP": "EDP.json",
+        "filenameEVENT": "EVENT.json",
+        "filenameSAM": "SAM.json",
+        "filenameSIM": "SIM.json",
+        "rvFiles": [
+            "BIM.json",
+            "SAM.json",
+            "EVENT.json",
+            "SIM.json"
+        ],
+        "workflowInput": "scInput.json",
+        "workflowOutput": "EDP.json"
+    },
+    "EDP": {
+        "EDP": [
+            {
+                "name": "1-PFA-1-1"
+            },
+            {
+                "name": "1-PFA-1-2"
+            },
+            {
+                "name": "1-PID-1-1"
+            },
+            {
+                "name": "1-PID-1-2"
+            },
+            {
+                "name": "1-PFA-2-1"
+            },
+            {
+                "name": "1-PFA-2-2"
+            },
+            {
+                "name": "1-PID-2-1"
+            },
+            {
+                "name": "1-PID-2-2"
+            },
+            {
+                "name": "1-PFA-3-1"
+            },
+            {
+                "name": "1-PFA-3-2"
+            },
+            {
+                "name": "1-PID-3-1"
+            },
+            {
+                "name": "1-PID-3-2"
+            },
+            {
+                "name": "1-PFA-4-1"
+            },
+            {
+                "name": "1-PFA-4-2"
+            },
+            {
+                "name": "1-PID-4-1"
+            },
+            {
+                "name": "1-PID-4-2"
+            },
+            {
+                "name": "1-PFA-5-1"
+            },
+            {
+                "name": "1-PFA-5-2"
+            },
+            {
+                "name": "1-PID-5-1"
+            },
+            {
+                "name": "1-PID-5-2"
+            },
+            {
+                "name": "1-PFA-6-1"
+            },
+            {
+                "name": "1-PFA-6-2"
+            },
+            {
+                "name": "1-PID-6-1"
+            },
+            {
+                "name": "1-PID-6-2"
+            },
+            {
+                "name": "1-PFA-7-1"
+            },
+            {
+                "name": "1-PFA-7-2"
+            },
+            {
+                "name": "1-PID-7-1"
+            },
+            {
+                "name": "1-PID-7-2"
+            },
+            {
+                "name": "1-PFA-8-1"
+            },
+            {
+                "name": "1-PFA-8-2"
+            },
+            {
+                "name": "1-PID-8-1"
+            },
+            {
+                "name": "1-PID-8-2"
+            },
+            {
+                "name": "1-PFA-9-1"
+            },
+            {
+                "name": "1-PFA-9-2"
+            },
+            {
+                "name": "1-PID-9-1"
+            },
+            {
+                "name": "1-PID-9-2"
+            },
+            {
+                "name": "1-PFA-10-1"
+            },
+            {
+                "name": "1-PFA-10-2"
+            },
+            {
+                "name": "1-PID-10-1"
+            },
+            {
+                "name": "1-PID-10-2"
+            },
+            {
+                "name": "1-PFA-11-1"
+            },
+            {
+                "name": "1-PFA-11-2"
+            },
+            {
+                "name": "1-PID-11-1"
+            },
+            {
+                "name": "1-PID-11-2"
+            },
+            {
+                "name": "1-PFA-12-1"
+            },
+            {
+                "name": "1-PFA-12-2"
+            },
+            {
+                "name": "1-PID-12-1"
+            },
+            {
+                "name": "1-PID-12-2"
+            }
+        ],
+        "fileNameAI": "MyRecorder.tcl",
+        "fileNamePS": "MyPostprocess.tcl",
+        "filePathAI": "{Current_Dir}/.",
+        "filePathPS": "{Current_Dir}/.",
+        "type": "UserDefinedEDP"
+    },
+    "Events": [
+        {
+            "EventClassification": "Earthquake",
+            "Events": [
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 2.7192,
+                            "fileName": "RSN6_IMPVALL.I_I-ELC180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 2.7192,
+                            "fileName": "RSN6_IMPVALL.I_I-ELC270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN6_IMPVALL.I_I-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 17.5215,
+                            "fileName": "RSN7_NWCALIF.C_C-FRN045.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 17.5215,
+                            "fileName": "RSN7_NWCALIF.C_C-FRN135.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN7_NWCALIF.C_C-FRN",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 12.3037,
+                            "fileName": "RSN9_BORREGO_B-ELC000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 12.3037,
+                            "fileName": "RSN9_BORREGO_B-ELC090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN9_BORREGO_B-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 25.0949,
+                            "fileName": "RSN10_IMPVALL.BG_C-ELC000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 25.0949,
+                            "fileName": "RSN10_IMPVALL.BG_C-ELC090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN10_IMPVALL.BG_C-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 11.0945,
+                            "fileName": "RSN12_KERN.PEL_PEL090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 11.0945,
+                            "fileName": "RSN12_KERN.PEL_PEL180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN12_KERN.PEL_PEL",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 12.6752,
+                            "fileName": "RSN13_KERN_PAS180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 12.6752,
+                            "fileName": "RSN13_KERN_PAS270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN13_KERN_PAS",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 6.4597,
+                            "fileName": "RSN14_KERN_SBA042.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 6.4597,
+                            "fileName": "RSN14_KERN_SBA132.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN14_KERN_SBA",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 4.4703,
+                            "fileName": "RSN15_KERN_TAF021.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 4.4703,
+                            "fileName": "RSN15_KERN_TAF111.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN15_KERN_TAF",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 13.0766,
+                            "fileName": "RSN16_NCALIF.AG_A-FRN044.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 13.0766,
+                            "fileName": "RSN16_NCALIF.AG_A-FRN134.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN16_NCALIF.AG_A-FRN",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 18.924,
+                            "fileName": "RSN17_SCALIF_SLO234.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 18.924,
+                            "fileName": "RSN17_SCALIF_SLO324.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN17_SCALIF_SLO",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 27.4289,
+                            "fileName": "RSN18_IMPVALL.BG_G-ELC000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 27.4289,
+                            "fileName": "RSN18_IMPVALL.BG_G-ELC090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN18_IMPVALL.BG_G-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 3.5812,
+                            "fileName": "RSN20_NCALIF.FH_H-FRN044.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 3.5812,
+                            "fileName": "RSN20_NCALIF.FH_H-FRN314.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN20_NCALIF.FH_H-FRN",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 18.5613,
+                            "fileName": "RSN21_IMPVALL.BG_E-ELC000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 18.5613,
+                            "fileName": "RSN21_IMPVALL.BG_E-ELC090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN21_IMPVALL.BG_E-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 14.3591,
+                            "fileName": "RSN22_ELALAMO_ELC180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 14.3591,
+                            "fileName": "RSN22_ELALAMO_ELC270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN22_ELALAMO_ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 16.5249,
+                            "fileName": "RSN25_NCALIF.AG_B-FRN224.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 16.5249,
+                            "fileName": "RSN25_NCALIF.AG_B-FRN314.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN25_NCALIF.AG_B-FRN",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 7.6297,
+                            "fileName": "RSN26_HOLLISTR_B-HCH181.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 7.6297,
+                            "fileName": "RSN26_HOLLISTR_B-HCH271.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN26_HOLLISTR_B-HCH",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 12.2669,
+                            "fileName": "RSN27_HOLLISTR_C-HCH181.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 12.2669,
+                            "fileName": "RSN27_HOLLISTR_C-HCH271.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN27_HOLLISTR_C-HCH",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 10.9865,
+                            "fileName": "RSN28_PARKF_C12050.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 10.9865,
+                            "fileName": "RSN28_PARKF_C12320.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN28_PARKF_C12",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 2.8045,
+                            "fileName": "RSN30_PARKF_C05085.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 2.8045,
+                            "fileName": "RSN30_PARKF_C05355.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN30_PARKF_C05",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 4.2853,
+                            "fileName": "RSN31_PARKF_C08050.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 4.2853,
+                            "fileName": "RSN31_PARKF_C08320.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN31_PARKF_C08",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 52.5072,
+                            "fileName": "RSN35_NCALIF.AG_E-HCH181.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 52.5072,
+                            "fileName": "RSN35_NCALIF.AG_E-HCH271.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN35_NCALIF.AG_E-HCH",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 6.4394,
+                            "fileName": "RSN36_BORREGO_A-ELC180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 6.4394,
+                            "fileName": "RSN36_BORREGO_A-ELC270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN36_BORREGO_A-ELC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 17.6157,
+                            "fileName": "RSN40_BORREGO_A-SON033.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 17.6157,
+                            "fileName": "RSN40_BORREGO_A-SON303.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN40_BORREGO_A-SON",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 17.7605,
+                            "fileName": "RSN51_SFERN_PVE065.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 17.7605,
+                            "fileName": "RSN51_SFERN_PVE155.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN51_SFERN_PVE",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 72.8805,
+                            "fileName": "RSN54_SFERN_BSF135.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 72.8805,
+                            "fileName": "RSN54_SFERN_BSF225.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN54_SFERN_BSF",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 57.9323,
+                            "fileName": "RSN55_SFERN_BVP090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 57.9323,
+                            "fileName": "RSN55_SFERN_BVP180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN55_SFERN_BVP",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 12.9316,
+                            "fileName": "RSN56_SFERN_CND130.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 12.9316,
+                            "fileName": "RSN56_SFERN_CND220.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN56_SFERN_CND",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 44.6876,
+                            "fileName": "RSN59_SFERN_CSM095.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 44.6876,
+                            "fileName": "RSN59_SFERN_CSM185.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN59_SFERN_CSM",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 11.2048,
+                            "fileName": "RSN63_SFERN_FTR056.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 11.2048,
+                            "fileName": "RSN63_SFERN_FTR326.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN63_SFERN_FTR",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 10.111,
+                            "fileName": "RSN65_SFERN_OPP000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 10.111,
+                            "fileName": "RSN65_SFERN_OPP270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN65_SFERN_OPP",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 79.3381,
+                            "fileName": "RSN67_SFERN_ISD014.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 79.3381,
+                            "fileName": "RSN67_SFERN_ISD284.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN67_SFERN_ISD",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 3.1714,
+                            "fileName": "RSN68_SFERN_PEL090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 3.1714,
+                            "fileName": "RSN68_SFERN_PEL180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN68_SFERN_PEL",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 6.3278,
+                            "fileName": "RSN70_SFERN_L01021.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 6.3278,
+                            "fileName": "RSN70_SFERN_L01111.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN70_SFERN_L01",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 63.5399,
+                            "fileName": "RSN74_SFERN_MA1130.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 63.5399,
+                            "fileName": "RSN74_SFERN_MA1220.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN74_SFERN_MA1",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 55.883,
+                            "fileName": "RSN75_SFERN_MA2130.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 55.883,
+                            "fileName": "RSN75_SFERN_MA2220.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN75_SFERN_MA2",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 67.0538,
+                            "fileName": "RSN76_SFERN_MA3130.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 67.0538,
+                            "fileName": "RSN76_SFERN_MA3220.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN76_SFERN_MA3",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 0.8121,
+                            "fileName": "RSN77_SFERN_PUL164.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 0.8121,
+                            "fileName": "RSN77_SFERN_PUL254.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN77_SFERN_PUL",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 5.7959,
+                            "fileName": "RSN78_SFERN_PDL120.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 5.7959,
+                            "fileName": "RSN78_SFERN_PDL210.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN78_SFERN_PDL",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 6.9942,
+                            "fileName": "RSN79_SFERN_PAS000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 6.9942,
+                            "fileName": "RSN79_SFERN_PAS090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN79_SFERN_PAS",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 14.5627,
+                            "fileName": "RSN83_SFERN_PUD055.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 14.5627,
+                            "fileName": "RSN83_SFERN_PUD325.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN83_SFERN_PUD",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 100.537,
+                            "fileName": "RSN84_SFERN_SDC000.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 100.537,
+                            "fileName": "RSN84_SFERN_SDC090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN84_SFERN_SDC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 18.1499,
+                            "fileName": "RSN85_SFERN_SJC033.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 18.1499,
+                            "fileName": "RSN85_SFERN_SJC303.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN85_SFERN_SJC",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 42.4857,
+                            "fileName": "RSN86_SFERN_SON033.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 42.4857,
+                            "fileName": "RSN86_SFERN_SON303.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN86_SFERN_SON",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 6.0745,
+                            "fileName": "RSN88_SFERN_FSD172.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 6.0745,
+                            "fileName": "RSN88_SFERN_FSD262.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN88_SFERN_FSD",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 29.7411,
+                            "fileName": "RSN92_SFERN_WRP090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 29.7411,
+                            "fileName": "RSN92_SFERN_WRP180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN92_SFERN_WRP",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 7.2853,
+                            "fileName": "RSN93_SFERN_WND143.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 7.2853,
+                            "fileName": "RSN93_SFERN_WND233.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN93_SFERN_WND",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 18.3945,
+                            "fileName": "RSN94_SFERN_WTW025.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 18.3945,
+                            "fileName": "RSN94_SFERN_WTW295.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN94_SFERN_WTW",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 2.2418,
+                            "fileName": "RSN95_MANAGUA_A-ESO090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 2.2418,
+                            "fileName": "RSN95_MANAGUA_A-ESO180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN95_MANAGUA_A-ESO",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 3.6823,
+                            "fileName": "RSN96_MANAGUA_B-ESO090.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 3.6823,
+                            "fileName": "RSN96_MANAGUA_B-ESO180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN96_MANAGUA_B-ESO",
+                    "type": "PeerEvent"
+                },
+                {
+                    "EventClassification": "Earthquake",
+                    "Records": [
+                        {
+                            "dirn": 1,
+                            "factor": 8.7104,
+                            "fileName": "RSN97_PTMUGU_PHN180.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        },
+                        {
+                            "dirn": 2,
+                            "factor": 8.7104,
+                            "fileName": "RSN97_PTMUGU_PHN270.AT2",
+                            "filePath": "{Current_Dir}/gm"
+                        }
+                    ],
+                    "name": "RSN97_PTMUGU_PHN",
+                    "type": "PeerEvent"
+                }
+            ],
+            "type": "ExistingPEER_Events"
+        }
+    ],
+    "GeneralInformation": {
+        "NumberOfStories": 12,
+        "PlanArea": 129600,
+        "depth": 360,
+        "height": 1728,
+        "location": {
+            "latitude": 37.8715,
+            "longitude": -122.273
+        },
+        "name": "",
+        "planArea": 129600,
+        "stories": 12,
+        "units": {
+            "force": "kips",
+            "length": "in",
+            "temperature": "C",
+            "time": "sec"
+        },
+        "width": 360
+    },
+    "Modeling": {
+        "Bx": "RV.HRx",
+        "By": "RV.HRy",
+        "Fyx": "RV.Fyx",
+        "Fyy": "RV.Fyy",
+        "Krz": 10000000000,
+        "Kx": "RV.kx",
+        "Ky": "RV.ky",
+        "ModelData": [
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            },
+            {
+                "Fyx": "RV.Fyx",
+                "Fyy": "RV.Fyy",
+                "Ktheta": 10000000000,
+                "bx": "RV.HRx",
+                "by": "RV.HRy",
+                "height": 144,
+                "kx": "RV.kx",
+                "ky": "RV.ky",
+                "weight": "RV.w"
+            }
+        ],
+        "height": 144,
+        "massX": 0,
+        "massY": 0,
+        "numStories": 12,
+        "randomVar": [
+        ],
+        "responseX": 0,
+        "responseY": 0,
+        "type": "MDOF_BuildingModel",
+        "weight": "RV.w"
+    },
+    "Simulation": {
+        "Application": "OpenSees-Simulation",
+        "algorithm": "Newton",
+        "analysis": "Transient -numSubLevels 2 -numSubSteps 10",
+        "convergenceTest": "NormUnbalance 1.0e-2 10",
+        "dampingModel": "Rayleigh Damping",
+        "dampingRatio": 0.02,
+        "dampingRatioModal": 0.02,
+        "fileName": "newmark_solver.tcl",
+        "filePath": "{Current_Dir}/.",
+        "firstMode": 1,
+        "integration": "Newmark 0.5 0.25",
+        "modalRayleighTangentRatio": 0,
+        "numModesModal": 1,
+        "rayleighTangent": "Initial",
+        "secondMode": 0,
+        "solver": "Umfpack"
+    },
+    "UQ_Method": {
+        "parallelExecution": true,
+        "samplingMethodData": {
+            "method": "LHS",
+            "samples": 500,
+            "seed": 926
+        },
+        "uqEngine": "Dakota",
+        "uqType": "Forward Propagation"
+    },
+    "localAppDir": "C:/Users/kuans/Downloads/EE-UQ_Windows_Download/EE-UQ_Windows_Download",
+    "randomVariables": [
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 20,
+            "name": "w",
+            "refCount": 1,
+            "upperbound": 300,
+            "value": "RV.w",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 100,
+            "name": "kx",
+            "refCount": 1,
+            "upperbound": 1000,
+            "value": "RV.kx",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 100,
+            "name": "ky",
+            "refCount": 1,
+            "upperbound": 1000,
+            "value": "RV.ky",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 50,
+            "name": "Fyx",
+            "refCount": 1,
+            "upperbound": 500,
+            "value": "RV.Fyx",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 50,
+            "name": "Fyy",
+            "refCount": 1,
+            "upperbound": 500,
+            "value": "RV.Fyy",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 0.025,
+            "name": "HRx",
+            "refCount": 1,
+            "upperbound": 0.75,
+            "value": "RV.HRx",
+            "variableClass": "Uncertain"
+        },
+        {
+            "distribution": "Uniform",
+            "inputType": "Parameters",
+            "lowerbound": 0.025,
+            "name": "HRy",
+            "refCount": 1,
+            "upperbound": 0.75,
+            "value": "RV.HRy",
+            "variableClass": "Uncertain"
+        }
+    ],
+    "remoteAppDir": "C:/Users/kuans/Downloads/EE-UQ_Windows_Download/EE-UQ_Windows_Download",
+    "runType": "runningLocal",
+    "workingDir": "C:/Users/kuans/Documents/EE-UQ/LocalWorkDir"
+}
