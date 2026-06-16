@@ -1640,6 +1640,59 @@ Flag any model where:
 
 **Why:** This was discovered during the XMU Chapter4.3 conversion where the Tcl uses `element dispBeamColumn 1 1 3 5 1 1` (eleTag, iNode, jNode, nIP, secTag, transfTag). The natural Python translation using the same arg order fails because OpenSeesPy wraps dispBeamColumn to always use beamIntegration.
 
+### §12m — Soil-Structure Interaction with Sequential Model Building (v1.14.0)
+
+#### All Standard Materials for 2D SSI
+
+`MultiYieldSurfaceClay`, `quadWithSensitivity`, and `Hardening` are all available in standard OpenSeesPy from PyPI. A 2D soil-structure interaction model (RC frame on layered soil deposit) does NOT require a custom build — unlike shear wall models relying on `SmearedConcrete`/`SmearedCompositePlaneStress`.
+
+**MultiYieldSurfaceClay** signature: `(tag, nd, rho, Gr, Br, cohesion, peakShearStrain, frictionAngle, refPress, pressDependCoeff, numberOfYieldSurf)`. Set `rho=0` when the soil provides only stiffness and damping (frame nodes carry all lumped mass for inertial effects).
+
+**quadWithSensitivity** signature: `(tag, iNode, jNode, kNode, lNode, thickness, "PlaneStrain", matTag, pressure, density, bodyForceX, bodyForceY)`. The body force handles soil self-weight; the `density` param provides element-level dynamic mass (often set to 0 when using lumped masses on frame nodes).
+
+**Hardening** for rebar: `(tag, E, sigmaY, H_iso, H_kin)`. For kinematic-only hardening, set `H_iso=0`. The equivalent stiffness ratio is `b = H_kin / (E + H_kin)`. Standard OpenSeesPy — no custom build needed.
+
+#### Sequential Model Building (ndf=3 → ndf=2 → equalDOF)
+
+When a model has a frame superstructure (ndf=3: UX, UY, RZ) sitting on a 2D soil continuum (ndf=2: UX, UY), build in three phases:
+
+1. **Frame** — `ops.model("basic", "-ndm", 2, "-ndf", 3)` → nodes, elements, boundary conditions
+2. **Soil** — `ops.model("basic", "-ndm", 2, "-ndf", 2)` → nodes, quad elements, body forces, base fixity
+3. **Ties** — `ops.equalDOF(soil_node, frame_node, 1, 2)` (UX and UY only; no rotational coupling)
+
+Each `ops.model()` call resets the default ndf for newly created nodes. Soil nodes created after the second call automatically get ndf=2.
+
+#### Soil Body Force Conversion (kN/m³ → N/mm³)
+
+Soil self-weight expressed as ρg in kN/m³ (e.g., γ = 19.6 kN/m³) converts to N/mm³ by dividing by 10⁶:
+
+```
+bodyForceY = -19.6e-6  # kN/m³ → N/mm³
+```
+
+This value (~10⁻⁵) is tiny but correct — the quad element multiplies by element volume internally, so the net force matches the physical soil weight.
+
+#### Ground Motion Conversion (m/s² → mm/s²)
+
+When the ground motion file contains values in m/s² (peak ~1–3 m/s²), convert to mm/s² by multiplying by 1000. Apply this scaling via the timeseries factor:
+
+```python
+gm_scale = factor * 1000.0  # factor=3.0 → 3000 total
+ops.timeSeries("Path", tag, "-dt", dt, "-values", *accel, "-factor", gm_scale)
+```
+
+Do NOT use `g_accel` (9810 mm/s²) — that converts g-units to mm/s², not m/s² to mm/s².
+
+#### Non-Standard Newmark Parameters
+
+If the source Tcl uses non-standard Newmark parameters (e.g., γ=0.55, β=0.275625, equivalent to HHT α=-0.05), preserve them exactly in the Python translation. These introduce slight negative numerical damping and were chosen intentionally.
+
+#### No Rayleigh Damping
+
+If the source Tcl has no Rayleigh damping definitions, do NOT add any. The soil constitutive model and the implicit Newmark integration provide enough dissipation. Adding unrequested damping changes the response.
+
+**Why:** Chapter6 uses all four of these patterns together. The MultiYieldSurfaceClay + quadWithSensitivity combo was confirmed working in standard OpenSeesPy via an isolated agent smoke test before writing the full model. The sequential model building pattern avoids ndf mismatches (frame nodes with ndf=2 missing RZ, or soil nodes with ndf=3 having ghost RZ). The body force and ground motion conversions are both ÷10⁶ / ×10³ issues that would produce wildly wrong results if mishandled.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1662,6 +1715,7 @@ Flag any model where:
 | 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). |
 | 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
 | 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
+| 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
