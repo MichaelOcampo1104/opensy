@@ -44,7 +44,7 @@ SEC_COL_FIBER  = 1   # Fiber section for boundary columns
 SEC_BEAM_ELAST = 2   # Elastic section for top beam (rigid links)
 
 # Frame element tags
-# Left col: 1001-1010,  Right col: 2001-2010,  Top beams: 3000-3006
+# Nodes: 1-11 left col, 12-22 right col, 23-27 top beam, 28 control, 29-105 quad grid
 
 # Wall materials (ndf=2 phase)
 MAT_STEEL_SMEAR_X = 11  # Steel02 -- smeared reinforcement X
@@ -61,6 +61,7 @@ MAT_ND_W3 = 113  # SmearedCompositePlaneStress -- zone 3
 MAT_ND_W4 = 114  # SmearedCompositePlaneStress -- zone 4
 
 # Quad elements: 5001-5060 (nL*nH = 60 quads)
+# Quad nodes: 29-105 (77 nodes in (nH+1)x(nL+1) grid)
 
 # Beam integration (dispBeamColumn requires beamIntegration in OpenSeesPy)
 INTEG_COL  = 1
@@ -285,8 +286,8 @@ def _build_frame_model() -> None:
     Creates:
     - Left column nodes: 1-11 (x=0, y=0..H_wall)
     - Right column nodes: 12-22 (x=L_wall, y=0..H_wall)
-    - Top beam nodes: 23-28 (y=H_wall, interior x positions)
-    - Control node: 29 (x=L_wall/2, y=H_wall+152.5)
+    - Top beam nodes: 23-27 (y=H_wall, interior x positions)
+    - Control node: 28 (x=L_wall/2, y=H_wall+152.5)
     - dispBeamColumn elements for columns and spider-beams
     """
     global _L_side_first, _R_side_first, _Top_beam_first, _ControlNode
@@ -328,7 +329,7 @@ def _build_frame_model() -> None:
         nodeID += 1
         ops.node(nodeID, L_wall, i * deltH)
 
-    # --- Top beam interior nodes (tags 23..28) ---
+    # --- Top beam interior nodes (tags 23-27) ---
     _Top_beam_first = nodeID + 1  # = 23
     for j in range(1, nL):  # j = 1..5
         nodeID += 1
@@ -337,8 +338,8 @@ def _build_frame_model() -> None:
     # --- Base fixity ---
     ops.fixY(0.0, 1, 1, 1)  # all nodes at y=0 fixed in DOFs 1,2,3
 
-    # --- Control node (tag 29) ---
-    _ControlNode = nodeID + 1  # = 29
+    # --- Control node (tag 28) ---
+    _ControlNode = nodeID + 1  # = 28
     nodeID += 1
     ops.node(_ControlNode, control_x, control_y)
 
@@ -380,7 +381,7 @@ def _build_quad_model() -> None:
     """Phase 2: Build quad wall model with ndf=2 (UX, UY).
 
     Creates:
-    - Quad grid nodes: tags 30..106 ((nH+1)*(nL+1) = 77 nodes)
+    - Quad grid nodes: tags 29-105 ((nH+1)*(nL+1) = 77 nodes)
     - Quad elements: tags 5001..5060 (nL*nH = 60 elements)
     - SmearedCompositePlaneStress nDMaterials
     """
@@ -440,7 +441,7 @@ def _build_quad_model() -> None:
             raise
 
     # --- Quad nodes ---
-    _quad_first = 30  # quadNodeID = nodeID + 1 after frame (29+1)
+    _quad_first = 29  # quadNodeID = nodeID + 1 after frame (28+1)
     nodeID = _quad_first - 1
     for i in range(nH + 1):       # 0..10
         for j in range(nL + 1):   # 0..6
