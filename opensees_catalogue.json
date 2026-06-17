@@ -460,5 +460,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 8.2.",
     "Notes": "Converted from model.tcl (XMU Chapter 8.2 example). Uses standard PDMY directly (16-param minimum set) — no material substitution needed unlike Ch8.1. Much stiffer soil: Gr=60000 kPa (vs 506.6), φ=31° (vs 47°), peak shear strain=0.1 (vs 0.05), ref pressure=80 kPa (vs 101.3 kPa). Retains source units (kN, m, sec, kPa) like Ch8.1. LESSON LEARNED: CreateODB MUST be initialized with save_nodal_resp=True and node_tags BEFORE analysis, and odb.fetch_response_step() MUST be called after each converged step (manual step loop, not ops.analyze(N, dt)). Without this, save_response() creates an empty RespStepData directory and all deformed-shape visualizations silently fail — see AGENT.md §3d. Model verified: 8 consolidation + 4000 dynamic steps complete, all ODB visualizations (pre-analysis, peak deformed, slider) generated. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter9",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Textbook-example Steel01 material parameter optimization — 6 design variables (E1, fy1, b1, E2, fy2, b2) calibrated via scipy to match experimental node-4 displacement of a 3-element truss under Tabas earthquake.",
+    "Description of Building Structural System": "2D three-element truss (10m + 10m + 10m = 30m total length) with fixed left support and three roller supports. Lumped masses at nodes 2-4 (3174, 4174, 5174 kg). Two Steel01 bilinear materials assigned to elements 1+3 (Mat 1) and element 2 (Mat 2).",
+    "Description of Model": "2D finite element model (ndm=2, ndf=2) with 4 nodes and 3 Truss elements (areas: 0.01, 0.02, 0.02 m²). Two Steel01 uniaxial materials with parameters controlled by 6 design variables. Tabas earthquake (dt=0.02s, factor=g, 2000 pts used) via UniformExcitation in X. Newmark integration (γ=0.55, β=0.275625) with dt=0.01s for 20s duration. Node-4 UX displacement recorder for objective function. scipy.optimize.minimize (L-BFGS-B, max 50 iterations) replaces the original SNOPT solver. Objective: sum of squared errors between experimental node4_exp.txt and FEM node4.out.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Steel (Steel01 bilinear)",
+    "Lateral system": "Truss",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic earthquake (time-history)",
+    "Earthquake records": "Tabas 1978 Iran (dt=0.02s, 2501 pts, first 2000 pts used, factor=g, 9800 mm/s² in N-mm units)",
+    "Opensees Version": "Standard OpenSeesPy + scipy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 9.",
+    "Notes": "Converted from main.tcl + tclFileToRun.tcl + F.tcl (XMU Chapter 9 optimization example). SNOPT replaced with scipy.optimize.minimize (L-BFGS-B). SI units (N, m, kg, Pa) converted to N, mm, MPa. Key conversions: E÷1e6 (Pa→MPa), fy÷1e6 (Pa→MPa), mass÷1000 (kg→N·s²/mm), area×1e6 (m²→mm²), coords×1000 (m→mm), GM factor×1000 (m/s²→mm/s²). ops.analyze(2000, 0.01) used in optimization loop instead of SmartAnalyze for speed (50 iter × 2000 steps). Run with: conda activate opensy && python model.py"
   }
 ]
