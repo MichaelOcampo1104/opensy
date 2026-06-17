@@ -1693,6 +1693,88 @@ If the source Tcl has no Rayleigh damping definitions, do NOT add any. The soil 
 
 **Why:** Chapter6 uses all four of these patterns together. The MultiYieldSurfaceClay + quadWithSensitivity combo was confirmed working in standard OpenSeesPy via an isolated agent smoke test before writing the full model. The sequential model building pattern avoids ndf mismatches (frame nodes with ndf=2 missing RZ, or soil nodes with ndf=3 having ghost RZ). The body force and ground motion conversions are both ÷10⁶ / ×10³ issues that would produce wildly wrong results if mishandled.
 
+### §12n — ODB Response Collection: `fetch_response_step()` Is NOT Optional (v1.15.0)
+
+Source: XMU Chapter8.2 model debugging — deformed-shape plots missing after successful analysis.
+
+#### Critical: Three Requirements for ODB Deformed-Shape Visualizations
+
+`opst.post.CreateODB` with `save_nodal_resp=True` and `odb.fetch_response_step()` calls are BOTH required. Either alone produces an empty `RespStepData-1.odb` and all deformed plots fail with `FileNotFoundError: No parts found`.
+
+The full lifecycle:
+
+```
+create_odb()                              → after model is fully built
+  odb.save_model_data()                   → snapshot geometry
+  odb.fetch_response_step()               → inside EVERY converged step loop
+  odb.save_response()                     → once, at end (in post_process)
+```
+
+#### Missing Ingredient #1 — `save_nodal_resp=True` + `node_tags`
+
+```python
+# BROKEN — creates empty RespStepData directory
+odb = opst.post.CreateODB(odb_tag=1)      # no save_nodal_resp, no node_tags
+odb.save_model_data()
+
+# CORRECT
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    model_update=False,
+    save_nodal_resp=True,                 # MANDATORY for deformation plots
+    node_tags=[1, 2, 3, 4],              # MANDATORY — which nodes to track
+)
+odb.save_model_data()
+```
+
+**Rule:** For any model that needs deformed-shape visualizations, `save_nodal_resp=True` and `node_tags` are non-negotiable. Omitting them creates the ODB directory structure but silently records nothing.
+
+#### Missing Ingredient #2 — `fetch_response_step()` in the Analysis Loop
+
+```python
+# BROKEN — no response data collected (produces empty RespStepData)
+ops.analyze(4000, 0.01)
+odb.save_response()
+
+# CORRECT — manual step loop with fetch
+for i in range(4000):
+    ok = ops.analyze(1, 0.01)
+    if ok != 0:
+        break
+    odb.fetch_response_step()            # collect at EVERY converged step
+odb.save_response()
+```
+
+**Rule:** `ops.analyze(N, dt)` runs N steps internally and provides no hook for `fetch_response_step()`. For models that must use raw `ops.analyze()` (e.g., `VariableTransient` consolidation, or `LoadControl` gravity exception per §3c/§10), you MUST use a manual step loop — `ops.analyze(1, dt)` repeated N times — and call `odb.fetch_response_step()` after each step.
+
+#### Symptom
+
+- Analysis completes without errors (model converges, stress/strain recorders work)
+- `RespStepData-1.odb` directory is created but empty (0 bytes, no part files)
+- `odb.save_response()` completes without error (reports "All responses data saved")
+- `opst.vis.plotly.plot_nodal_responses()` raises `FileNotFoundError: No parts found in RespStepData-1.odb`
+- If the plot call is wrapped in try/except, the error is swallowed and deformed plots silently never appear
+
+#### Debugging Protocol
+
+If deformed plots are missing after what appears to be a successful run:
+
+1. Check `output/RespStepData-1.odb/` — if empty (no `.zarr`/`.nc` files), response collection didn't happen
+2. Verify `CreateODB` was called with `save_nodal_resp=True` AND `node_tags`
+3. Verify `fetch_response_step()` is called inside the step loop (not just once before/after)
+4. Verify the manual step loop exists — `ops.analyze(N, dt)` without a manual loop is the most common cause
+5. Remove try/except wrappers from post_process plot calls to expose the real error
+
+#### Detection in Existing Models
+
+Flag any model where:
+- `CreateODB(odb_tag=...)` is called without `save_nodal_resp=True` — FAIL [ODB_NODAL_RESP]
+- `ops.analyze(N, dt)` is used with N > 1 AND no manual step loop with `fetch_response_step()` — WARN [ODB_FETCH_MISSING]
+- `save_response()` is called but `fetch_response_step()` never appears in the file — FAIL [ODB_NO_FETCH]
+- `plot_nodal_responses()` calls are wrapped in bare `except Exception` — WARN [ODB_SILENT_FAIL]
+
+**Why:** This was discovered during XMU Chapter8.2 verification. Both XMU Chapter8.1 and 8.2 inherited a pattern where `CreateODB` was initialized without `save_nodal_resp=True` and the dynamic analysis used `ops.analyze(4000, 0.01)` without a manual step loop. The analysis converged and file recorders worked fine, but the ODB directory was empty and all deformed-shape HTML files were silently missing. The fix touched two locations (create_odb + run_dynamic) in both models.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -1716,6 +1798,7 @@ If the source Tcl has no Rayleigh damping definitions, do NOT add any. The soil 
 | 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
 | 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
 | 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
+| 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
