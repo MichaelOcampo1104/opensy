@@ -1,8 +1,8 @@
 **/.SmartAnalyze-OpenSees.log
 
 # Output directories — generated artifacts only; keep .gitkeep
-models/*/output/**
-!models/*/output/.gitkeep
+models/**/output/**
+!models/**/output/.gitkeep
 
 # Python cache
 __pycache__/
