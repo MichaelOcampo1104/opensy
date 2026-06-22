@@ -544,5 +544,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 12.3.",
     "Notes": "Converted from model.tcl + elements.tcl (XMU Chapter 12.3 example). Original units: N, m, Pa — converted to N, mm, MPa. Key differences: (1) 3D grid: ndivx=10, ndivy=20, ndivz=10 -> 2541 nodes; node_id(i,j,k) = 1 + i*231 + j*11 + k. (2) Each truss bond gets its own Concrete02 material (tag = bond number) — ~60K materials for ~60K bonds. (3) Transition-zone bonds have scaled Concrete02 strength (fpc, fpcu, ft, Ets) × fac; epsc0, epsU, lambda unscaled. (4) Manual ops.analyze(1) loop with 400 steps + fetch_response_step. (5) ODB save_truss_resp=False to limit file size. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter13_1",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "2D train-bridge interaction model with WheelRail contact elements, suspension system, rail irregularities, and transient Newmark integration.",
+    "Description of Building Structural System": "Rail-bridge-deck system: 80 rail beam elements (1-81) connected to 50 bridge beam elements (101-181) via spring-damper truss pairs. Bridge piers fixed at ends, rail free to translate vertically. Train model with 4 wheelsets, 2 bogies, and 1 car body connected by primary/secondary suspension springs and dampers.",
+    "Description of Model": "2D model (ndm=2, ndf=3). Bridge: dispBeamColumn with 5 IPs, Ec=2.943 GPa. Rail: elasticBeamColumn, E=206 GPa. Bridge-rail connection: elastic spring + viscous damper trusses. Train: 13 nodes (4 wheels 2001-2004, 6 bogie 2005-2010, 3 body 2011-2013) with elasticBeamColumn frames + truss suspension. WheelRail custom elements (3001-3004) handle wheel-rail contact with rail_Irreg.txt irregularity file. Two-phase analysis: static gravity (LoadControl, 10 steps) then loadConst + transient (Newmark 0.5/0.25, 3000 steps, dt=0.001 s). ODB used for nodal response fetch every 100 transient steps. Units: SI (m, kg, N, Pa).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Elastic (concrete Ec=2.943 GPa, steel E=206 GPa), viscous dampers",
+    "Lateral system": "Rail-bridge-deck + train suspension (truss + beam elements)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Gravity (train self-weight) + transient (WheelRail moving contact)",
+    "Earthquake records": "NA (rail irregularity file: rail_Irreg.txt)",
+    "Opensees Version": "NA (requires WheelRail element -- custom OpenSees build)",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 13.1.",
+    "Notes": "Converted from main.tcl + bridge.tcl + train.tcl (XMU Chapter 13.1 example). Original units: m, kg, N, Pa -- KEPT in SI (WheelRail element expects SI, not converted to N-mm-MPa). Key points: (1) Uses custom WheelRail element -- may not be available in standard OpenSeesPy; requires custom build with WheelRail compiled in. (2) Two-phase analysis: static gravity (10 steps, LoadControl) then loadConst + wipeAnalysis + transient (3000 steps, Newmark). (3) ODB fetch_response_step every step (3000 steps x 194 nodes feasible). (4) Recorder-specific outputs (bridge/rail/train displacements, velocities, accelerations, element forces) not ported to ODB -- use file recorders added via add_recorders() if needed. (5) SI units throughout -- do NOT use standards/units.py (N-mm-MPa). Run with: conda activate opensy && python model.py"
   }
 ]
