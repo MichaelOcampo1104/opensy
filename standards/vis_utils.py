@@ -78,16 +78,29 @@ def vis_pre_analysis(
 def vis_defo(
     output_dir: Path,
     filename: str = "vis_05_deformed.html",
-    resp_dof: str = "disp",
+    odb_tag: int = 1,
+    resp_dof: str | None = None,
+    resp_type: str = "disp",
     scale: float = 10.0,
 ) -> None:
-    """V5/V6 — Deformed shape coloured by total displacement magnitude."""
+    """V5/V6 — Deformed shape coloured by displacement ($resp_dof or magnitude).
+
+    Args:
+        output_dir: Directory where the HTML file is written.
+        filename: Output HTML filename.
+        odb_tag: ODB tag to read responses from.
+        resp_dof: DOF component for colour scale (e.g. ``"UX"``, ``"UY"``).
+                  If None, colours by total displacement magnitude.
+        resp_type: Response type — ``"disp"``, ``"vel"``, ``"accel"``, etc.
+        scale: Deformation scale factor.
+    """
     if _headless():
         return
 
     fig = opst.vis.plotly.plot_nodal_responses(
-        odb_tag=1,
-        resp_type="disp",
+        odb_tag=odb_tag,
+        resp_type=resp_type,
+        resp_dof=resp_dof,
         defo_scale=scale,
         show_defo=True,
         show_undeformed=False,

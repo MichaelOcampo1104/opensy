@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[3] / "standards"))
 from units import *
-from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis
+from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis, vis_defo
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 MAT_ELASTIC = 1
@@ -121,7 +121,7 @@ def define_ground_motion() -> None:
         ops.imposedMotion(i, 1, 11)
 
 # ── 12. ANALYSIS ─────────────────────────────────────────────────────────────
-def run_analysis(output_dir: Path) -> None:
+def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     """Build model, eigen, Rayleigh damping, explicit CentralDifference
     with bond-breaking damage model.
 
@@ -183,14 +183,20 @@ def run_analysis(output_dir: Path) -> None:
                     ops.remove("element", ele)
                     active[ele] = False
 
-    odb.save_response()
+    odb.fetch_response_step()
+    return odb
 
 # ── 13. POST-PROCESSING ─────────────────────────────────────────────────────
-def post_process(output_dir: Path) -> None:
-    pass
+def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
+    """Flush ODB to disk and render deformed-shape HTML (V6 per AGENT.md §3b)."""
+    if nodenum == 0:
+        return
+    odb.save_response()
+    if not _headless():
+        vis_defo(output_dir, filename="vis_05_defo_lateral.html")
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
-    run_analysis(output_dir)
-    post_process(output_dir)
+    odb = run_analysis(output_dir)
+    post_process(odb, output_dir)

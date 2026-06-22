@@ -523,5 +523,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 12.2.",
     "Notes": "Converted from main.tcl + nodebuild.tcl + elementbuild.tcl + remove.tcl (XMU Chapter 12.2 example). Original units: N, m, kg, Pa — converted to N, mm, MPa. Key exceptions from canonical layout: (1) CentralDifference explicit dynamics incompatible with SmartAnalyze — manual ops.analyze() loop required (AGENT.md §10). (2) ODB fetch_response_step() not called in analysis loop — 4000 steps x 1600 nodes makes ODB collection impractical; recorders used instead (AGENT.md §3d exception). (3) Bond-breaking element removal during analysis via ops.remove('element', tag). (4) timeSeries.tcl was missing from source — replaced with synthetic Ricker wavelet placeholder (gm_disp.txt). Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter12_3",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "3D peridynamic bond-based concrete damage simulation under static DisplacementControl pushdown with per-bond Concrete02 materials.",
+    "Description of Building Structural System": "150x300x150 mm concrete block discretised as 11x21x11 peridynamic particles (2541 nodes) connected by ~60K truss bonds with per-bond Concrete02 material. Top surface loaded vertically with -2.0e6 N per node. Base fully fixed.",
+    "Description of Model": "3D peridynamic model (ndm=3, ndf=3) with grid-based node generation. Bonds connect nodes within a 30.225 mm horizon (3-cell search radius). Two distance zones: inner (dist <= horizon - radij) uses full Concrete02 strength; transition (horizon - radij < dist < horizon + radij) uses linearly scaled strength via fac = (horizon + radij - dist) / (2*radij). Static analysis with DisplacementControl integrator (400 steps, -0.005 mm/step at centre top node). ODB used for nodal response collection via fetch_response_step after each step. Truss response saving disabled in ODB to keep file size manageable (~60K truss elements). Recorders used for targeted base reaction and control-node displacement output.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Concrete02 (per-bond unique materials, scaled in transition zone)",
+    "Lateral system": "Peridynamic bonds (truss elements)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static (DisplacementControl pushdown)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 12.3.",
+    "Notes": "Converted from model.tcl + elements.tcl (XMU Chapter 12.3 example). Original units: N, m, Pa — converted to N, mm, MPa. Key differences: (1) 3D grid: ndivx=10, ndivy=20, ndivz=10 -> 2541 nodes; node_id(i,j,k) = 1 + i*231 + j*11 + k. (2) Each truss bond gets its own Concrete02 material (tag = bond number) — ~60K materials for ~60K bonds. (3) Transition-zone bonds have scaled Concrete02 strength (fpc, fpcu, ft, Ets) × fac; epsc0, epsU, lambda unscaled. (4) Manual ops.analyze(1) loop with 400 steps + fetch_response_step. (5) ODB save_truss_resp=False to limit file size. Run with: conda activate opensy && python model.py"
   }
 ]

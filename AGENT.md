@@ -1751,6 +1751,232 @@ The canonical `from vis_utils import _headless` is insufficient when the model c
 from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis
 ```
 
+### §12p — Explicit Dynamics & Element Removal: Peridynamics Model (v1.16.0)
+
+Source: XMU Chapter12.2 conversion (40x40 PD grid, CentralDifference, bond-breaking).
+
+#### 1. SmartAnalyze Incompatible with Explicit Dynamics
+
+`opst.anlys.SmartAnalyze` wraps implicit solver loops (Newton-Raphson, KrylovNewton, etc.) with adaptive convergence management. It does NOT support:
+- `CentralDifference` / `NewmarkExplicit` explicit integrators
+- `ops.remove("element", tag)` during the analysis loop (element removal)
+
+For explicit dynamics, use a manual `ops.analyze(1, dt)` loop:
+```python
+ops.integrator("CentralDifference")
+ops.analysis("Transient")
+for step in range(n_steps):
+    ops.analyze(1, timestep)
+    # optional per-step logic (e.g. element removal)
+```
+
+#### 2. ODB Impractical for Large Explicit Analyses
+
+For models with 1600+ nodes and 4000+ time steps, calling `odb.fetch_response_step()` after every step produces **6.4 million API calls** — causing hours of I/O overhead and potentially appearing as a hang (see §3d, §12d).
+
+**Mitigation:** Use `ops.recorder()` for complete output and CreateODB for model snapshot only:
+```python
+# Model snapshot only (no fetch_response_step in loop)
+odb = opst.post.CreateODB(odb_tag=1, ...)
+odb.save_model_data()          # geometry snapshot
+# ... analysis loop without fetch_response_step ...
+odb.save_response()            # finalise (may have no step data)
+
+# Separate recorders for full output
+ops.recorder("Node", "-file", "dispx.out", "-nodeRange", 1, nNodes, "-dof", 1, "disp")
+```
+
+The recorders produce text files that can be parsed with numpy later. This is a documented exception to the "no recorders" rule (§10) when ODB is not feasible.
+
+#### 3. `nodeCoord` Returns Model-Unit Coordinates
+
+`ops.nodeCoord(tag)` returns coordinates in the model's unit system. After N-mm conversion, a 40m × 40m grid produces coordinates in the range 0–39000 mm. The `fixX` command checks against the model-unit value:
+```python
+ops.fixX(0.0, 1, 1)  # fixes nodes where x == 0.0 mm
+```
+
+#### 4. Element Removal During Analysis
+
+OpenSeesPy supports `ops.remove("element", tag)` during a transient analysis to model progressive damage/fracture. This works with `CentralDifference` but may cause instability if too many elements are removed at once. Check bond stretch in the per-step loop:
+```python
+# Deformed bond length check
+cAx = ops.nodeCoord(n1)[0] + ops.nodeDisp(n1)[0]
+cAy = ops.nodeCoord(n1)[1] + ops.nodeDisp(n1)[1]
+cBx = ops.nodeCoord(n2)[0] + ops.nodeDisp(n2)[0]
+cBy = ops.nodeCoord(n2)[1] + ops.nodeDisp(n2)[1]
+length = math.sqrt((cBx - cAx)**2 + (cBy - cAy)**2)
+if length > stretch_limit:
+    ops.remove("element", ele)
+```
+
+#### 5. `numberer Plain` vs `numberer RCM`
+
+For explicit dynamics with `CentralDifference`, the equation system is never factorised (the method uses lumped mass + damping). `numberer Plain` is acceptable and matches the original Tcl. The default `numberer RCM` also works but is unnecessary overhead.
+
+#### 6. `ops.groundMotion()` for MultipleSupport Patterns
+
+The `MultipleSupport` pattern uses `ops.groundMotion()` + `ops.imposedMotion()`:
+```python
+ops.pattern("MultipleSupport", 1)
+ops.groundMotion(gmTag, "Plain", "-disp", seriesTag)
+ops.imposedMotion(nodeTag, dof, gmTag)
+```
+
+This applies prescribed displacement to specific nodes (e.g. base nodes for earthquake excitation). The `-disp` flag specifies displacement time series (vs `-accel` for acceleration).
+
+#### 7. `vis_defo()` in `vis_utils.py` Lags the AGENT.md Contract
+
+The `vis_defo()` wrapper in `standards/vis_utils.py:78` is **missing `odb_tag` and `resp_dof` parameters** documented in the §3b table. Its signature:
+
+```python
+def vis_defo(output_dir, filename="vis_05_deformed.html", resp_dof="disp", scale=10.0)
+```
+
+But §3b documents calls like `vis_defo(output_dir, odb_tag=1, resp_dof="UX")` — these raise `TypeError: unexpected keyword argument`.
+
+**Internally**, `vis_defo` ignores `resp_dof` entirely and hard-codes `odb_tag=1` and `resp_type="disp"` in the `plot_nodal_responses()` call. The `resp_dof` parameter name itself is misleading — it currently defaults to `"disp"` which is actually the response type, not a DOF selector.
+
+**Fix:** The `vis_utils.py` signature should be updated to:
+```python
+def vis_defo(output_dir, filename="vis_05_deformed.html", odb_tag=1, resp_dof="disp", scale=10.0)
+```
+And forward `odb_tag` + `resp_dof` to `plot_nodal_responses()`. The `resp_dof` values `"UX"`, `"UY"` from §3b map to opstool's `plot_nodal_responses` `resp_dof` parameter (controls the scalar colour field).
+
+**Rule of thumb:** When the AGENT.md §3b table shows a function signature, the implementation in `vis_utils.py` must match. Cross-check before deploying any model that depends on deformed-shape visualization.
+
+### §12q — 3D Peridynamic Grid-Based Models: Node Indexing, Bond Generation, and Per-Material Concrete02 (v1.16.0)
+
+Source: XMU Chapter12.3 conversion (3D PD concrete block, 2541 nodes, ~60K truss bonds, static DisplacementControl).
+
+#### 1. Grid-Based Node Indexing Requires a `node_id()` Helper
+
+For 3D peridynamic grids where the Tcl uses `nodeid($i,$j,$k)` as a computed tag, reproduce the indexing with a helper function:
+
+```python
+# Tcl: set nodeid($i,$j,$k) [expr 1 + $i*( $ndivy+1)*( $ndivz+1) + $j*( $ndivz+1) + $k]
+NODE_STRIDE_Y = ndivz + 1
+NODE_STRIDE_X = (ndivy + 1) * (ndivz + 1)
+
+def node_id(i, j, k):
+    return 1 + i * NODE_STRIDE_X + j * NODE_STRIDE_Y + k
+```
+
+This is critical because `fix`, `equalDOF`, and `recorder` commands all use these computed node IDs. An off-by-one error in the stride values produces wrong node locations or bond connectivity.
+
+#### 2. Tcl `contact()` Matrix → Python `set` of Tuples
+
+The Tcl uses a 2D array `contact($Cid,$Tid)` to prevent duplicate bonds. In Python, use a `set` of `(min_id, max_id)` tuples — simpler and avoids a large 2D list:
+
+```python
+visited: set = set()
+# ...
+key = (min(n1, n2), max(n1, n2))
+if key in visited:
+    continue
+# ... create bond ...
+visited.add(key)
+```
+
+#### 3. Transition-Zone Strength Scaling Affects Only Stress Properties
+
+In peridynamic models with a transition zone (`horizon - radij < dist < horizon + radij`), only the material's **stress** (or stiffness) properties are scaled by `fac`. The strain-like properties remain unchanged:
+
+| Parameter | Scaled by `fac`? | Reason |
+|---|---|---|
+| `fpc` (compressive strength) | Yes | Stress property |
+| `fpcu` (crushing strength) | Yes | Stress property |
+| `ft` (tensile strength) | Yes | Stress property |
+| `Ets` (tension softening stiffness) | Yes | Stress/stiffness property |
+| `epsc0` (strain at peak) | No | Strain property |
+| `epsU` (ultimate strain) | No | Strain property |
+| `lambda` (unloading ratio) | No | Shape parameter |
+
+```python
+# Inner zone — full strength
+ops.uniaxialMaterial("Concrete02", tag, cfpc, epsc0, fpcu, epsU, lambda, ft, Ets)
+
+# Transition zone — scaled strength
+ops.uniaxialMaterial("Concrete02", tag,
+    cfpc * fac, epsc0,   # stress scaled, strain unscaled
+    fpcu * fac, epsU,
+    lambda,
+    ft * fac, Ets * fac,
+)
+```
+
+#### 4. Each Bond Gets Its Own Material Tag
+
+Unlike continuum models where one material serves many elements, peridynamic models often assign unique Concrete02 materials (tag = bond number) to each truss bond. This creates thousands of materials — XMU Chapter12.3 has ~60K unique Concrete02 instances. This is slow to create but is a faithful reproduction of the original Tcl per-bond material model.
+
+#### 5. ODB Truss Response Saving Should Be Disabled for Large Bond Counts
+
+With ~60K truss elements and 400 analysis steps, `save_truss_resp=True` would produce ~24M truss-force data points (~200 MB ODB file). For static models where truss forces can be recovered from recorder files, disable truss response saving:
+
+```python
+odb = opst.post.CreateODB(
+    ...,
+    save_nodal_resp=True,    # keep — needed for deformed-shape vis
+    save_truss_resp=False,   # disable — too many bonds
+)
+```
+
+Nodal responses (2541 nodes × 400 steps ≈ 1M values) are manageable and sufficient for deformed shape visualization.
+
+#### 6. Static DisplacementControl with 400 Steps + `fetch_response_step` Is Practical
+
+Unlike explicit dynamics (Ch12.2) where 4000 steps × 1600 nodes was impractical, a static model with 400 steps and 2541 nodes is manageable:
+
+```python
+for step in range(1, 401):
+    ok = ops.analyze(1)
+    if ok != 0:
+        break
+    odb.fetch_response_step()   # ~1M data points total — fast
+```
+
+This is the recommended pattern for static peridynamic models. Each `fetch_response_step` captures the current node coordinates/displacements into the ODB for later visualization.
+
+### §12r — `ops.pattern("Plain", tag, tsTag)` Requires a Numeric Time Series Tag (v1.16.0)
+
+Source: XMU Chapter12.3 conversion — `ops.pattern("Plain", 1, "Linear")` raised `OpenSeesError`.
+
+#### Tcl Shorthand vs OpenSeesPy API
+
+In Tcl, the time series type can be inlined as the third argument:
+
+```tcl
+# Tcl — type string "Linear" is accepted
+pattern Plain 1 Linear {
+    load 1 0.0 -100.0 0.0
+}
+```
+
+In OpenSeesPy, the third argument is the **time series tag** (integer), not the type string. Passing `"Linear"` as the third argument causes `OpenSeesError: See stderr output`:
+
+```python
+# BROKEN — "Linear" is not a valid integer tag
+ops.pattern("Plain", 1, "Linear")
+```
+
+You must create an explicit time series first and pass its tag:
+
+```python
+# CORRECT
+ops.timeSeries("Linear", 1)    # create time series with tag 1
+ops.pattern("Plain", 2, 1)    # pattern tag 2, references time series tag 1
+ops.load(node, 0.0, -100.0, 0.0)
+```
+
+#### Why This Happens
+
+The Tcl parser interprets `pattern Plain 1 Linear` as `pattern Plain 1 -timeSeries Linear` with a type-string shorthand. OpenSeesPy's Python bindings skip the Tcl parsing layer and directly call the C++ API where the third parameter is the integer time series tag. There is no implicit creation of a default linear time series.
+
+#### Prevention
+
+- Always create an explicit `ops.timeSeries("Linear", tsTag)` before calling `ops.pattern("Plain", patternTag, tsTag)`.
+- Use separate tags for the time series and pattern to avoid ambiguity (e.g., `TS_LOAD = 1`, `PAT_LOAD = 2`).
+- Never pass a string literal like `"Linear"` or `"Constant"` as the third argument to `ops.pattern()`.
+
 ### §12n — ODB Response Collection: `fetch_response_step()` Is NOT Optional (v1.15.0)
 
 Source: XMU Chapter8.2 model debugging — deformed-shape plots missing after successful analysis.
@@ -1857,7 +2083,7 @@ Flag any model where:
 | 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
 | 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
 | 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
-| 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o):** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords (no Tcl dashes), sensitivity recorder data type as single string `"sensitivity N"`, SmartAnalyze incompatibility with DDM, CreateODB element-type flag matching (`save_truss_resp` for trusses, not `save_frame_resp`), `parents[n]` depth dependency on subfolder nesting, and explicit vis_* function imports. |
+| 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
