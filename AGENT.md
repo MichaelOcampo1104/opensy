@@ -1693,6 +1693,64 @@ If the source Tcl has no Rayleigh damping definitions, do NOT add any. The soil 
 
 **Why:** Chapter6 uses all four of these patterns together. The MultiYieldSurfaceClay + quadWithSensitivity combo was confirmed working in standard OpenSeesPy via an isolated agent smoke test before writing the full model. The sequential model building pattern avoids ndf mismatches (frame nodes with ndf=2 missing RZ, or soil nodes with ndf=3 having ghost RZ). The body force and ground motion conversions are both ÷10⁶ / ×10³ issues that would produce wildly wrong results if mishandled.
 
+### §12o — Sensitivity Analysis with DDM: OpenSeesPy API Pitfalls (v1.16.0)
+
+Source: XMU Chapter11 conversion (2D truss with Steel01, parameter sensitivity, El Centro GM).
+
+#### 1. `addToParameter` Uses Bare Keywords (No Tcl Dashes)
+
+```python
+# BROKEN — Tcl-style dash prefixes
+ops.addToParameter(tag, "-element", eleTag, "-material", "E")
+
+# CORRECT — bare keywords
+ops.addToParameter(tag, "element", eleTag, "material", "E")
+```
+
+The warning `"unable to assign parameter to object of type -element"` confirms the dash prefix is being parsed as the object type string, not a flag.
+
+#### 2. Sensitivity Recorder Data Type Must Be a Single String
+
+```python
+# BROKEN — two separate args
+ops.recorder("Node", "-file", "ddm.out", ..., "sensitivity", 1)
+
+# CORRECT — single string
+ops.recorder("Node", "-file", "ddm.out", ..., f"sensitivity {tag}")
+```
+
+Error symptom: `"NodeRecorder::NodeRecorder - dataToStore Invalid String Input! not recognized (disp, vel, accel, incrDisp, incrDeltaDisp)"`.
+
+#### 3. SmartAnalyze Does NOT Support Sensitivity
+
+DDM sensitivity computation requires `ops.sensitivityAlgorithm("-computeAtEachStep")` before each manual `ops.analyze(1)` step. SmartAnalyze provides no hook for this and wraps the solver loop internally, making it incompatible. Use manual analysis loops (documented exception per §3c/§10).
+
+#### 4. CreateODB Element-Type Flags Must Match Element Type
+
+| Element type | Flag | Tag param |
+|---|---|---|
+| Frame/beam | `save_frame_resp=True` | `frame_tags=[...]` |
+| Truss | `save_truss_resp=True` | `truss_tags=[...]` |
+| Link | `save_link_resp=True` | `link_tags=[...]` |
+
+Using the wrong flag (e.g. `save_frame_resp=True` for truss elements) causes opstool to attempt beam-specific force extraction, producing `IndexError: list index out of range` in `_get_beam_local_force()`.
+
+#### 5. `parents[n]` Depth Depends on Model Subfolder Nesting
+
+When model.py is at `models/XMU/Chapter11/` (3 levels deep from repo root), `parents[2]` resolves to `models/`, not the repo root. Use `parents[3]` to reach the repo root for `sys.path.insert(0, str(Path(__file__).parents[3] / "standards"))`.
+
+| Model path | `parents` needed |
+|---|---|
+| `models/<UniqueID>/model.py` | `parents[2]` |
+| `models/XMU/Chapter11/model.py` | `parents[3]` |
+
+#### 6. Import All Required vis_* Functions
+
+The canonical `from vis_utils import _headless` is insufficient when the model calls `vis_nodes()`, `vis_model()`, etc. Import explicitly:
+```python
+from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis
+```
+
 ### §12n — ODB Response Collection: `fetch_response_step()` Is NOT Optional (v1.15.0)
 
 Source: XMU Chapter8.2 model debugging — deformed-shape plots missing after successful analysis.
@@ -1799,6 +1857,7 @@ Flag any model where:
 | 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
 | 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
 | 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
+| 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o):** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords (no Tcl dashes), sensitivity recorder data type as single string `"sensitivity N"`, SmartAnalyze incompatibility with DDM, CreateODB element-type flag matching (`save_truss_resp` for trusses, not `save_frame_resp`), `parents[n]` depth dependency on subfolder nesting, and explicit vis_* function imports. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
