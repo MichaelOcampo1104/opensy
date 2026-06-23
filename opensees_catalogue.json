@@ -586,5 +586,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 13.2.",
     "Notes": "Converted from main.tcl + rail.tcl + wheelset.tcl (XMU Chapter 13.2 example). Original units: m, kg, N, Pa -- KEPT in SI (WheelRail element expects SI, not converted to N-mm-MPa). Conformed to AGENT.md standards: SmartAnalyze Transient, named constants, parameter section, opstool vis stages V1-V4, ODB output, deformation slider. WheelRail is a custom element NOT available in standard OpenSeesPy -- requires custom build. Rail profile and irregularity files in ground_motions/. Reference Tcl files preserved in model root. Folder renamed to match UniqueID. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "Citiner",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Monotonic or cyclic displacement-controlled pushover of a single RC cantilever column with fiber-section beamWithHinges element. Column geometry, reinforcement, and plastic-hinge length are parameterised for ML-based calibration (AdaBoost companion notebook in ref/).",
+    "Description of Building Structural System": "Single RC cantilever column with fixed base and free top. Fiber-section beamWithHinges element with confined core (Concrete01/02) and unconfined cover concrete patches, Steel02 longitudinal rebar. Column geometry: 150x140 mm section, 1500 mm height, 6x10 mm rebar. Plastic hinge length (99.82 mm) determined from AdaBoost ML model.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 2 nodes and 1 beamWithHinges element. Fiber section: 20x20 confined core patch, 4 cover patches, 6-8 rebar fibers. Two loading modes: (1) monotonic — Linear geomTransf, Concrete01, single DisplacementControl push to 72 mm; (2) cyclic — PDelta geomTransf, Concrete02, 23-segment alternating protocol (peak amplitudes 2.5-216 mm). Gravity via manual LoadControl loop (AGENT.md §3c exception). Horizontal via SmartAnalyze StaticAnalyze with per-segment DisplacementControl. ODB response collection via opst.post.CreateODB.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (fiber-section beamWithHinges, Concrete01/02 + Steel02)",
+    "Lateral system": "Cantilever column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static pushover (monotonic or cyclic displacement-controlled)",
+    "Earthquake records": "NA",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "Converted from ref/monotonicTemplate.tcl and ref/cyclicTemplate.tcl (Citiner group). Original units: kN, m, kPa — converted to N, mm, MPa. CYCLIC=True (default) selects 23-segment alternating protocol; set CYCLIC=False for monotonic. Plastic hinge length PHL=99.82 mm from AdaBoost model (companion notebook in ref/). Tcl reference files preserved in ref/. Run with: conda activate opensy && python model.py"
   }
 ]

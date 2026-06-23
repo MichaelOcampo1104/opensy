@@ -2317,6 +2317,63 @@ odb = opst.post.CreateODB(odb_tag=1,
 
 **Rule:** Always review the default ODB flags. `save_nodal_resp=True` alone is not sufficient — the other `save_*_resp` flags default to True and silently accumulate element data that may never be plotted.
 
+### §12v — `beamWithHinges` Internal Section Tags Break CreateODB; SmartAnalyze Convergence Tuning (v1.20.0)
+
+Source: Citiner conversion (RC cantilever column, fiber-section beamWithHinges, cyclic pushover, 23 segments).
+
+#### 1. `beamWithHinges` + `save_frame_resp=True` Causes `sectionForceDeformation(tag=0)` Error
+
+`beamWithHinges` creates internal section objects that are accessed by a 1-based index within the element, **not** by the user-assigned fiber-section tag. When `CreateODB` attempts to read section responses via `ops.sectionForceDeformation(tag)`, it looks for tag `0` (the first auto-indexed section) instead of the user's section tag (e.g. `SEC_COL = 1`), producing:
+
+```
+SectionForceDeformation *getSectionForceDeformation(int tag) - none found with tag: 0
+ERROR classType - section with tag 0 not found
+```
+
+**Fix:** Set `save_frame_resp=False` in `CreateODB`:
+
+```python
+odb = opst.post.CreateODB(odb_tag=1,
+    save_frame_resp=False,   # beamWithHinges internal sections lack user-visible tags
+)
+```
+
+Nodal response tracking for deformed-shape visualisation still works. If element section forces are needed, consider `nonlinearBeamColumn` or `dispBeamColumn` instead of `beamWithHinges`.
+
+#### 2. Manual `ops.test()`/`ops.algorithm()` Before SmartAnalyze Causes Issues
+
+Calling `ops.test("EnergyIncr", 1.0e-2, 200)` and `ops.algorithm("Newton")` **before** instantiating `SmartAnalyze` interferes with SmartAnalyze's internal test/algorithm management. Per AGENT.md §3c:
+
+> `test()` and `algorithm()` are managed internally by SmartAnalyze — do not call them manually.
+
+**Fix:** Remove manual `ops.test()` and `ops.algorithm()` calls before SmartAnalyze. SmartAnalyze selects the appropriate test and algorithm automatically based on its `algoTypes` list.
+
+#### 3. Default SmartAnalyze Settings Are Insufficient for RC Pushover
+
+SmartAnalyze with `algoTypes=[40, 10, 20, 30]` (no `relaxation`, no `tryAddTestTimes`) converges for small elastic pushes but fails at moderate drifts (~1.7% for RC columns under cyclic PDelta). The AGENT.md §3c pushover pattern provides the correct settings:
+
+```python
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30, 50, 60],    # KrylovNewton → Newton → Newton-initial → ModifiedNewton → NewtonLineSearch → BFGS
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+    relaxation=0.5,
+    minStep=1.0e-4,
+)
+```
+
+**Rule:** Always use the full algorithm fallback list + `relaxation=0.5` + `tryAddTestTimes=True` for displacement-controlled RC pushover.
+
+#### 4. `constraints("Transformation")` for SmartAnalyze Pushover
+
+The Tcl templates use `constraints("Plain")` throughout. SmartAnalyze pushover with PDelta and cyclic reversals converges better with `constraints("Transformation")`. Use `"Plain"` only for the manual LoadControl gravity phase.
+
+#### 5. Negative Segments in Cyclic Pushover: Loop vs static_split
+
+`analysis.static_split(protocol, maxStep)` is designed for monotonic protocols with positive targets. For cyclic segments with negative `remaining`, use a manual loop calling `StaticAnalyze(node, dof, seg=dU)` repeatedly with constant `dU = remaining / n_steps` (positive or negative). This matches the OReilly2019 cyclic pattern.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -2345,6 +2402,7 @@ odb = opst.post.CreateODB(odb_tag=1,
 | 2026-06-23 | 1.19.0 | **opstool CreateODB node_tags & frame response memory (§12u):** Documented that `node_tags` in CreateODB breaks `plot_nodal_responses` deformation plots — shape mismatch when tracked nodes differ from model mesh nodes; omit `node_tags` for full mesh tracking (~58 MB for 406 nodes × 6001 steps). `save_frame_resp` defaults to True and can exhaust memory (~55 MB for 402 beam elements); set `save_frame_resp=False` when only nodal data is needed. Source: XMU Chapter13.2 debugging. |
 | 2026-06-23 | 1.18.0 | **3D single-wheelset rigid-body modes & post-loadConst SP patterns (§12t):** Documented lessons from XMU Chapter13.2 conversion — eliminating rigid-body UY modes with 1 N/m soft spring; moving SP constraints MUST be created AFTER `loadConst` to remain modifiable; `ops.timeSeries` tag collisions after `wipeAnalysis` (use higher tags); SmartAnalyze Transient supports per-step `remove("sp")` + `sp()` updates; auxiliary node creation belongs before element definition. |
 | 2026-06-23 | 1.17.0 | **Train-bridge interaction: wheel-rail SP constraints, fix/sp conflict, massless nodes (§12s):** Documented patterns from XMU Chapter13.1 refactoring — wheel position verification against actual node coordinates; `fix()`/`sp()` conflict on same DOF; mass distribution to all beam nodes to avoid singular mass matrices; SmartAnalyze transient compatibility with per-step SP modifications; SP-based moving wheel contact as alternative to custom WheelRail elements; SI-unit model structural conformance to AGENT.md without unit conversion. |
+| 2026-06-23 | 1.20.0 | **beamWithHinges ODB incompatibility & SmartAnalyze convergence tuning (§12v):** (1) beamWithHinges internal sections lack user-visible tags → `save_frame_resp=False` required in CreateODB (fixes "sectionForceDeformation(tag=0) none found" error). (2) Manual `ops.test()`/`ops.algorithm()` before SmartAnalyze is prohibited — SmartAnalyze manages these internally. (3) RC pushover needs full algorithm fallback list + `relaxation=0.5` + `tryAddTestTimes=True` for convergence at moderate drifts. (4) `constraints("Transformation")` preferred over `"Plain"` for SmartAnalyze pushover. (5) Cyclic pushover with negative increments should use a manual `StaticAnalyze` loop, not `static_split`. Source: Citiner conversion (RC cantilever column, fiber-section beamWithHinges, 23-segment cyclic pushover). |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
