@@ -565,5 +565,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 13.1.",
     "Notes": "Converted from main.tcl + bridge.tcl + train.tcl (XMU Chapter 13.1 example). Original units: m, kg, N, Pa -- KEPT in SI (WheelRail element expects SI, not converted to N-mm-MPa). Refactored per AGENT.md standards: SmartAnalyze Transient, parameterised magic numbers, bogie mass distributed to all nodes, wheel UX fix/sp conflict resolved, wheel offset bug fixed. Rail irregularity file in ground_motions/. Folder renamed to match UniqueID. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "XMU_Chapter13_2",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "3D single-wheelset model on rigid track with WheelRail contact elements, rail profiles, lateral excitation pulse, and transient Newmark integration via SmartAnalyze.",
+    "Description of Building Structural System": "Rigid track with 200 rail beam elements on each side (left: 10001-10200, right: 50001-50200) with UIC50 rail profile, fully fixed. Single wheelset with 5 nodes (left/right wheels, extensions, center) connected by rigid elasticBeamColumn beams. WheelRail custom contact elements for left and right rails.",
+    "Description of Model": "3D model (ndm=3, ndf=6). Rail: elasticBeamColumn with mass (60.64 kg/m), Er=206 GPa. Wheelset: rigid beams with lumped mass/inertia on center node (Mw=933 kg). WheelRail elements (100001 left, 200001 right) handle wheel-rail contact with UIC50 rail profile and irregularity files (ground_motions/). Two-phase analysis: static gravity (LoadControl, 20 steps) then loadConst + transient (SmartAnalyze Transient, Newmark 0.5/0.25, 6000 steps, dt=0.001 s). Lateral excitation via Series time series (pulse at t=0.02s). Units: SI (m, kg, N, Pa).",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Elastic steel (Er=2.06e11 Pa, Ew=2.06e11 Pa)",
+    "Lateral system": "Rigid track + single wheelset",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Gravity (self-weight) + lateral pulse excitation (y-direction)",
+    "Earthquake records": "NA (rail profile: UIC50Fine.txt; irregularities: irregLft.txt/irregRht.txt in ground_motions/)",
+    "Opensees Version": "NA (requires WheelRail element -- custom OpenSees build)",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 13.2.",
+    "Notes": "Converted from main.tcl + rail.tcl + wheelset.tcl (XMU Chapter 13.2 example). Original units: m, kg, N, Pa -- KEPT in SI (WheelRail element expects SI, not converted to N-mm-MPa). Conformed to AGENT.md standards: SmartAnalyze Transient, named constants, parameter section, opstool vis stages V1-V4, ODB output, deformation slider. WheelRail is a custom element NOT available in standard OpenSeesPy -- requires custom build. Rail profile and irregularity files in ground_motions/. Reference Tcl files preserved in model root. Folder renamed to match UniqueID. Run with: conda activate opensy && python model.py"
   }
 ]

@@ -2202,6 +2202,76 @@ When SI units are intentionally retained (e.g., the WheelRail element expects m-
 
 The audit items for unit conversion (§5 items 5-6) are SKIPPED, not FAILED, when the catalogue explicitly documents the SI retention rationale.
 
+### §12t — 3D Single-Wheelset on Rigid Track: Rigid-Body Modes, Post-loadConst SP Patterns, SmartAnalyze with Per-Step SP Updates (v1.18.0)
+
+Source: XMU Chapter13.2 conversion (3D single-wheelset on rigid track, original WheelRail custom element replaced with SP-based wheel-rail contact, 6000-step transient).
+
+#### 1. Eliminate Rigid-Body Modes with a Soft Spring
+
+When a wheelset is connected by stiff "rigid" beams and a DOF (e.g., UY translation) has no stiffness from any element, the system matrix is singular. Static solvers fail with convergence errors even with `constraints("Transformation")`.
+
+**Fix:** Add a 1 N/m `zeroLength` spring in the problematic DOF between the free node and a fixed auxiliary node:
+
+```python
+ops.node(NODE_UY_SPRING, 0, 0, R0)
+ops.fix(NODE_UY_SPRING, 1, 1, 1, 1, 1, 1)
+ops.uniaxialMaterial("Elastic", MAT_UY_SPRING, 1.0)     # 1 N/m — negligible
+ops.element("zeroLength", ELE_UY_SPRING, NODE_WHEEL_CENTER, NODE_UY_SPRING,
+            "-mat", MAT_UY_SPRING, "-dir", 2)
+```
+
+- Natural frequency for a 933 kg wheelset: √(1/933)/(2π) ≈ 0.005 Hz — does not affect dynamics
+- Use `constraints("Plain")` for static phase to avoid ill-conditioning from stiff beams under Transformation constraints
+- Higher test tolerance (1.0e-1) and more steps (100) help convergence
+
+#### 2. Moving SP Constraints Must Be Created AFTER `loadConst`
+
+`ops.loadConst("-time", 0.0)` freezes **all** existing load patterns, including SP constraints. A pattern created BEFORE `loadConst` cannot have its SPs removed or updated afterward.
+
+```python
+# BROKEN — pattern created before loadConst
+setup_wheel_sp()           # creates pattern with Constant TS, SP(UX=0)
+ops.loadConst("-time", 0.0)  # freezes the wheel SP pattern
+# later:
+ops.remove("sp", ...)       # ERROR — pattern is frozen
+
+# CORRECT — pattern created after loadConst
+ops.loadConst("-time", 0.0)
+ops.wipeAnalysis()
+setup_wheel_sp()            # creates pattern AFTER loadConst — NOT frozen
+# later:
+ops.remove("sp", ...)       # OK — pattern is modifiable
+```
+
+**Rule:** Any pattern that needs per-step modification (e.g., moving displacement constraints) MUST be created after `ops.loadConst()`. Only gravity and lateral load patterns should exist before `loadConst`.
+
+#### 3. `ops.timeSeries` Tag Collisions After `wipeAnalysis`
+
+Creating a `timeSeries` with a low tag number (e.g., tag 4) after `loadConst` + `wipeAnalysis` can fail with `"TimeSeries *getTimeSeries(int tag) - none found with tag: N"`. This occurs even though `wipeAnalysis` nominally only clears analysis objects, not model objects.
+
+**Fix:** Use higher tag numbers (e.g., 10+) for time series and patterns created after `loadConst`. The collision may be due to internal OpenSeesPy tag namespaces that overlap with low tag values.
+
+#### 4. SmartAnalyze Transient with Per-Step SP Modification
+
+SmartAnalyze Transient supports domain modifications between steps. Apply `ops.remove("sp")` + `ops.sp()` before each `TransientAnalyze()` call:
+
+```python
+for i, _ in enumerate(segs):
+    update_wheel_sp(i * dT)          # remove old SP, add new UX = pVel * t
+    ok = analysis.TransientAnalyze(dT)
+    ...
+
+def update_wheel_sp(t: float) -> None:
+    ops.remove("sp", PAT_WHEEL, NODE_WHEEL_CENTER, 1)
+    ops.sp(NODE_WHEEL_CENTER, 1, pVel * t, PAT_WHEEL)
+```
+
+The domain state at the time of `TransientAnalyze()` is what the solver iteration uses. SP modifications MUST use a non-frozen pattern (created after `loadConst`).
+
+#### 5. Auxiliary Nodes Must Be Created After `ops.model()`
+
+Auxiliary nodes (e.g., the fixed UY spring anchor node) should be created alongside the main model nodes, inside `build_wheelset_nodes()` or equivalent. Their `ops.fix()` constraints belong in the BCs section. This keeps the model topology complete before element definition.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -2227,6 +2297,7 @@ The audit items for unit conversion (§5 items 5-6) are SKIPPED, not FAILED, whe
 | 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
 | 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
 | 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
+| 2026-06-23 | 1.18.0 | **3D single-wheelset rigid-body modes & post-loadConst SP patterns (§12t):** Documented lessons from XMU Chapter13.2 conversion — eliminating rigid-body UY modes with 1 N/m soft spring; moving SP constraints MUST be created AFTER `loadConst` to remain modifiable; `ops.timeSeries` tag collisions after `wipeAnalysis` (use higher tags); SmartAnalyze Transient supports per-step `remove("sp")` + `sp()` updates; auxiliary node creation belongs before element definition. |
 | 2026-06-23 | 1.17.0 | **Train-bridge interaction: wheel-rail SP constraints, fix/sp conflict, massless nodes (§12s):** Documented patterns from XMU Chapter13.1 refactoring — wheel position verification against actual node coordinates; `fix()`/`sp()` conflict on same DOF; mass distribution to all beam nodes to avoid singular mass matrices; SmartAnalyze transient compatibility with per-step SP modifications; SP-based moving wheel contact as alternative to custom WheelRail elements; SI-unit model structural conformance to AGENT.md without unit conversion. |
 
 ---
