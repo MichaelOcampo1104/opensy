@@ -2272,6 +2272,51 @@ The domain state at the time of `TransientAnalyze()` is what the solver iteratio
 
 Auxiliary nodes (e.g., the fixed UY spring anchor node) should be created alongside the main model nodes, inside `build_wheelset_nodes()` or equivalent. Their `ops.fix()` constraints belong in the BCs section. This keeps the model topology complete before element definition.
 
+### §12u — opstool CreateODB and plot_nodal_responses: node_tags Limits Deformation Visualization (v1.19.0)
+
+Source: XMU Chapter13.2 debugging (3D single-wheelset, ~400 rail nodes, 5 tracked wheel nodes, 6000-step transient).
+
+#### 1. `node_tags` in CreateODB Breaks Deformation Plots
+
+`plot_nodal_responses()` loads ALL node coordinates from the model data (`save_model_data()`) but only has deformation data for nodes tracked by `node_tags`. When these sets differ, the deformation overlay fails:
+
+```
+ValueError: operands could not be broadcast together with shapes (5,3) (406,3)
+```
+
+The function does NOT accept a `node_tags` parameter — it always attempts to render the full mesh.
+
+**Fix:** Omit `node_tags` from `CreateODB` when deformation visualization is needed, so ALL nodes are tracked:
+
+```python
+# BROKEN — only 5 nodes tracked; plot_nodal_responses can't render
+odb = opst.post.CreateODB(odb_tag=1, save_nodal_resp=True,
+    node_tags=[1, 51, 1001, 1051, 2001])
+
+# CORRECT — omit node_tags for full mesh tracking
+odb = opst.post.CreateODB(odb_tag=1, save_nodal_resp=True)
+```
+
+**Memory impact:** For ~406 nodes × 6001 steps × 6 DOFs × float32 ≈ 58 MB — manageable for most models.
+
+If filtering is absolutely required (e.g., extreme mesh sizes), the trade-off must be documented: deformation plots and sliders will be unavailable.
+
+#### 2. `save_frame_resp` Defaults to True — Can Exhaust Memory
+
+With `save_frame_resp=True` (the default), `save_response()` builds arrays of shape `(n_steps+1, n_elements, n_resp_components)`. For 402 beam elements × 6001 steps × 6 components × float32 ≈ 55 MB per call. Combined with nodal data, this can exceed available memory.
+
+**Fix:** Explicitly set `save_frame_resp=False` when only nodal displacements are needed:
+
+```python
+odb = opst.post.CreateODB(odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=False,   # ← disable unless element forces are needed
+    save_truss_resp=False,
+)
+```
+
+**Rule:** Always review the default ODB flags. `save_nodal_resp=True` alone is not sufficient — the other `save_*_resp` flags default to True and silently accumulate element data that may never be plotted.
+
 ---
 ## 13. Versioning & Change Log
 
@@ -2297,6 +2342,7 @@ Auxiliary nodes (e.g., the fixed UY spring anchor node) should be created alongs
 | 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
 | 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
 | 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
+| 2026-06-23 | 1.19.0 | **opstool CreateODB node_tags & frame response memory (§12u):** Documented that `node_tags` in CreateODB breaks `plot_nodal_responses` deformation plots — shape mismatch when tracked nodes differ from model mesh nodes; omit `node_tags` for full mesh tracking (~58 MB for 406 nodes × 6001 steps). `save_frame_resp` defaults to True and can exhaust memory (~55 MB for 402 beam elements); set `save_frame_resp=False` when only nodal data is needed. Source: XMU Chapter13.2 debugging. |
 | 2026-06-23 | 1.18.0 | **3D single-wheelset rigid-body modes & post-loadConst SP patterns (§12t):** Documented lessons from XMU Chapter13.2 conversion — eliminating rigid-body UY modes with 1 N/m soft spring; moving SP constraints MUST be created AFTER `loadConst` to remain modifiable; `ops.timeSeries` tag collisions after `wipeAnalysis` (use higher tags); SmartAnalyze Transient supports per-step `remove("sp")` + `sp()` updates; auxiliary node creation belongs before element definition. |
 | 2026-06-23 | 1.17.0 | **Train-bridge interaction: wheel-rail SP constraints, fix/sp conflict, massless nodes (§12s):** Documented patterns from XMU Chapter13.1 refactoring — wheel position verification against actual node coordinates; `fix()`/`sp()` conflict on same DOF; mass distribution to all beam nodes to avoid singular mass matrices; SmartAnalyze transient compatibility with per-step SP modifications; SP-based moving wheel contact as alternative to custom WheelRail elements; SI-unit model structural conformance to AGENT.md without unit conversion. |
 

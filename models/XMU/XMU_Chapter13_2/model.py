@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[3] / "standards"))
-from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis, vis_defo
+from vis_utils import _headless, vis_nodes, vis_model, vis_loads, vis_pre_analysis
 
 # ── 2. TAG REGISTRY ──────────────────────────────────────────────────────────
 TRANSF_RAIL       = 2
@@ -201,9 +201,8 @@ def create_odb(output_dir: Path, odb_tag: int = 1) -> "opst.post.CreateODB":
     odb = opst.post.CreateODB(
         odb_tag=odb_tag,
         save_nodal_resp=True,
+        save_frame_resp=False,
         save_truss_resp=False,
-        node_tags=[NODE_WHEEL_LEFT, NODE_WHEEL_RIGHT, NODE_WHEEL_CENTER,
-                   NODE_WHEEL_L_EXT, NODE_WHEEL_R_EXT],
     )
     odb.save_model_data()
     return odb
@@ -310,9 +309,13 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 # ── 13. POST-PROCESSING ──────────────────────────────────────────────────────
 def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
     if not _headless():
-        vis_defo(output_dir, filename="vis_05_defo_transient.html", resp_dof="UZ")
         opst.vis.plotly.plot_nodal_responses(
-            odb_tag=1, slides=True, defo_scale=10.0,
+            odb_tag=1,
+            resp_type="disp", resp_dof="UZ", defo_scale=10.0,
+        ).write_html(str(output_dir / "vis_05_defo_transient.html"))
+        opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1,
+            slides=True, defo_scale=10.0,
             resp_type="disp", resp_dof="UZ",
         ).write_html(str(output_dir / "vis_06_slider.html"))
 
