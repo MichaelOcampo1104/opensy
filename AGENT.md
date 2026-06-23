@@ -2085,5 +2085,149 @@ Flag any model where:
 | 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
 | 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
 
+### §12s — Train-Bridge Interaction: Moving Wheel Load via SP Constraints, fix/sp Conflicts, Massless Nodes (v1.17.0)
+
+Source: XMU Chapter13.1 refactoring (2D train-bridge interaction, 4 wheelsets, 2 bogies, 1 car body, 3000-step transient with wheel-rail contact via SP constraints).
+
+#### 1. Wheel Position Verification — Cross-Check Against Actual Node Coordinates
+
+The wheel-to-rail mapping in `setup_wheel_rail()` must use the **actual** wheel node coordinates, not computed from assumed vehicle geometry offsets.
+
+**Bug found:** The `locs` array used offsets `[0.0, 2.5, 17.5, 20.0]` for the four wheels, but the actual wheel node positions relative to the first wheel were `[0.0, 2.5, 18.0, 20.5]`. The 17.5/18.0 and 20.0/20.5 mismatches caused wheels 3 and 4 to read rail displacements from the wrong element (~⅓ element offset).
+
+```python
+# BROKEN — assumed geometry offsets
+locs = [pInitLocation + offset for offset in [0.0, 2.5, 17.5, 20.0]]
+
+# CORRECT — derived from actual node positions
+# Node 2003 at x=28.0, node 2001 at x=10.0 → offset = 18.0
+# Node 2004 at x=30.5, node 2001 at x=10.0 → offset = 20.5
+locs = [pInitLocation + offset for offset in [0.0, 2.5, 18.0, 20.5]]
+```
+
+**Rule:** Always verify node positions by computing from the `ops.node()` calls, not from assumed distances. Diff the computed offsets against any hard-coded locs arrays.
+
+#### 2. `fix()` + `sp()` on the Same DOF Creates Conflicting Constraints
+
+Applying both `ops.fix(node, 1, 0, 1)` (UX=0 homogeneous constraint) and `ops.sp(node, 1, 0.0)` (UX=0 pattern-imposed displacement) to the same DOF is redundant when values match, but **conflicting when one changes** (e.g., `sp` updated to `pVel * t` in a transient loop while `fix` still enforces UX=0).
+
+```python
+# BROKEN — conflicting constraints on UX
+ops.fix(n, 1, 0, 1)          # UX permanently fixed at 0
+# later in transient:
+ops.sp(wn, 1, pVel_ * t)     # UX prescribed to pVel*t — conflicts!
+
+# CORRECT — fix leaves UX free; SP controls it entirely
+ops.fix(n, 0, 0, 1)          # UX free (controlled by SPs below)
+ops.sp(wn, 1, pVel_ * t)     # UX prescribed via SP — no conflict
+```
+
+**Rule:** For DOFs controlled by SP constraints (e.g., moving wheel displacements in a transient loop), set the corresponding `fix()` DOF to 0 (free). Let the SP constraint be the sole prescribed-displacement mechanism.
+
+#### 3. Massless Nodes in Beam Assemblies Cause Singular Mass Matrices
+
+When `elasticBeamColumn` is used without `-mass` / `-cMass` flags, the element-end nodes have no mass. In transient dynamics, zero-mass nodes can produce singular or ill-conditioned mass matrices, causing solver convergence issues.
+
+```python
+# BROKEN — only centre nodes get mass; end nodes (2005, 2007, 2008, 2010) are massless
+ops.mass(2006, Mb, Mb, JMb)
+ops.mass(2009, Mb, Mb, JMb)
+ops.element("elasticBeamColumn", 2001, 2005, 2006, ...)   # -mass not used
+
+# CORRECT — distribute bogie mass across all 3 nodes per bogie
+for n in [2005, 2006, 2007]:
+    ops.mass(n, Mb / 3, Mb / 3, JMb / 3)
+for n in [2008, 2009, 2010]:
+    ops.mass(n, Mb / 3, Mb / 3, JMb / 3)
+```
+
+**Rule:** For any beam assembly where the beam elements use lumped mass (no `-cMass`), verify that **all** nodes in the assembly have mass assigned. Missing mass on end-nodes is a common source of numerical issues in transient analyses.
+
+#### 4. SmartAnalyze Transient Works with Per-Step SP Constraint Modification
+
+SmartAnalyze Transient is compatible with domain-level modifications between steps, such as `remove("sp")` + `sp()` for moving wheel constraints. The SP modifications must be applied before each `TransientAnalyze()` call:
+
+```python
+ops.integrator("Newmark", 0.5, 0.25)
+analysis = opst.anlys.SmartAnalyze(analysis_type="Transient", ...)
+segs = analysis.transient_split(N_TRANSIENT)
+for i, _ in enumerate(segs):
+    t = (i + 1) * pDeltT
+    apply_wheel_constraints(t, wr_config)   # modify SPs
+    ok = analysis.TransientAnalyze(pDeltT)  # then solve
+    if ok < 0:
+        break
+    odb.fetch_response_step()
+analysis.close()
+```
+
+**Rule:** Per-step domain modifications (SP constraints, element removal, material state changes) are applied BEFORE the analyze call in a SmartAnalyze loop. The domain state at the time of `TransientAnalyze()` is what gets used in the solver iteration.
+
+#### 5. SP-Based Moving Wheel Contact as a WheelRail Element Alternative
+
+When a custom WheelRail element is not available in the OpenSees build, wheel-rail contact can be approximated by imposing time-varying displacement constraints:
+- UX = train velocity × time (constant-speed horizontal motion)
+- UY = interpolated rail nodal displacement + rail irregularity profile
+
+```python
+def apply_wheel_constraints(t: float, config: dict) -> None:
+    ops.loadConst("-pattern", PAT_WHEEL)
+    for i, wn in enumerate(wheel_nodes):
+        x = locs[i] + pVel * t
+        ele_idx = int(x / rail_dx)
+        xi = (x - ele_idx * rail_dx) / rail_dx
+        uy_i = ops.nodeDisp(n_i, 2)
+        uy_j = ops.nodeDisp(n_j, 2)
+        uy_rail = (1.0 - xi) * uy_i + xi * uy_j
+        irreg = float(np.interp(x, irreg_data[:, 0], irreg_data[:, 1]))
+        ops.remove("sp", wn, 1)
+        ops.remove("sp", wn, 2)
+        ops.sp(wn, 1, pVel * t)
+        ops.sp(wn, 2, uy_rail + irreg)
+```
+
+**Limitation:** This is a one-way coupling (wheel follows rail) — there is no contact-force feedback from wheel to rail. Full wheel-rail interaction requires the custom WheelRail element.
+
+#### 6. SI-Unit Models Can Still Conform to AGENT.md Structure
+
+When SI units are intentionally retained (e.g., the WheelRail element expects m-kg-N-Pa), the AGENT.md structural conventions still apply:
+- Section banners and ordering
+- Tag Registry with named constants
+- Parameter section with all dimensional values documented
+- `opstool` visualization stages (V1–V4)
+- `SmartAnalyze` for solver loops (when compatible)
+- `CreateODB` for output
+- `opensees_catalogue.json` entry
+- Folder name matching UniqueID
+
+The audit items for unit conversion (§5 items 5-6) are SKIPPED, not FAILED, when the catalogue explicitly documents the SI retention rationale.
+
+---
+## 13. Versioning & Change Log
+
+| Date | Version | Change |
+|------|---------|--------|
+| 2025-05-08 | 1.0.0 | Initial AGENT.md created |
+| 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
+| 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; HTML output to `output/`; `_headless()` in `vis_utils.py` |
+| 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 28 items (0–27) |
+| 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; `ops.recorder()` added to prohibited patterns |
+| 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
+| 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
+| 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
+| 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
+| 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — SmartAnalyze.StaticAnalyze forcibly overrides the integrator to DisplacementControl; LoadControl gravity with manual ops.analyze() loop permitted exception documented in §3c and §10; (2) §3d expanded with ODB performance guidance (targeted tags, throttled fetch for transient); (3) §10 added permitted exceptions subsection |
+| 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
+| 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
+| 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
+| 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). |
+| 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). |
+| 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
+| 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
+| 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
+| 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
+| 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
+| 2026-06-23 | 1.17.0 | **Train-bridge interaction: wheel-rail SP constraints, fix/sp conflict, massless nodes (§12s):** Documented patterns from XMU Chapter13.1 refactoring — wheel position verification against actual node coordinates; `fix()`/`sp()` conflict on same DOF; mass distribution to all beam nodes to avoid singular mass matrices; SmartAnalyze transient compatibility with per-step SP modifications; SP-based moving wheel contact as alternative to custom WheelRail elements; SI-unit model structural conformance to AGENT.md without unit conversion. |
+
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.

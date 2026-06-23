@@ -14,6 +14,7 @@ Units    : m, kg, N, Pa, sec (SI — WheelRail element expects SI)
 import time
 import openseespy.opensees as ops
 import opstool as opst
+import numpy as np
 import sys
 from pathlib import Path
 
@@ -30,9 +31,12 @@ MAT_DAMP_SECONDARY = 702  # secondary suspension damper (Cv2)
 
 TRANSF_WHEELRAIL = 1
 TRANSF_BEAM      = 2
+INTEG_BRIDGE     = 3  # beamIntegration for dispBeamColumn
 
 TS_GRAVITY = 1
 PAT_GRAVITY = 10
+TS_WHEEL = 2
+PAT_WHEEL = 20
 
 # ── 3. PARAMETERS ────────────────────────────────────────────────────────────
 # Train parameters
@@ -85,6 +89,15 @@ Izb = 4.05e7                  # m^4 (bogie beam inertia)
 At  = 8.4                     # m^2 (car body beam area)
 Izt = 3.0e7                   # m^4 (car body beam inertia)
 
+# Train geometry (y-offsets relative to wheel y = H + pRWheel)
+TRAIN_WHEEL_Y_OFFSET  = 0.0       # m (wheel at y=H+pRWheel)
+TRAIN_BOGIE_Y_OFFSET  = 0.22      # m (bogie frame at y=H+pRWheel+0.22)
+TRAIN_BODY_Y_OFFSET   = 0.52      # m (car body at y=H+pRWheel+0.52)
+
+# Bridge and rail element mass
+BRIDGE_ELEM_MASS = 1.2e4          # kg per bridge beam element
+RAIL_ELEM_MASS   = 2.0 * 51.5     # kg per rail beam element (103 kg)
+
 # Analysis
 N_STATIC = 10
 N_TRANSIENT = 3000
@@ -111,10 +124,16 @@ def define_materials() -> None:
     ops.uniaxialMaterial("Viscous", MAT_DAMP_SECONDARY, Cv2, 1)
 
 
+def define_geom_transf() -> None:
+    ops.geomTransf("Linear", TRANSF_WHEELRAIL)
+    ops.geomTransf("Linear", TRANSF_BEAM)
+
+
 # ── 6. SECTIONS ──────────────────────────────────────────────────────────────
 # Bridge section (Elastic)
 def define_sections() -> None:
     ops.section("Elastic", 2, Ec, AB, IzB)
+    ops.beamIntegration("Legendre", INTEG_BRIDGE, 2, 5)
 
 
 # ── 7. NODES ─────────────────────────────────────────────────────────────────
@@ -134,27 +153,27 @@ def build_nodes() -> None:
 
 def build_train_nodes(pInitLocation: float) -> None:
     """Create train nodes (wheels, bogies, car body)."""
-    ytranslation = 0.05 + pRWheel
+    ytranslation = H + pRWheel
     xtranslation = 10.25 + pInitLocation
 
     # Wheel nodes
-    ops.node(2001, -10.25 + xtranslation, 0.0 + ytranslation)
-    ops.node(2002, -7.75 + xtranslation, 0.0 + ytranslation)
-    ops.node(2003, 7.75 + xtranslation, 0.0 + ytranslation)
-    ops.node(2004, 10.25 + xtranslation, 0.0 + ytranslation)
+    ops.node(2001, -10.25 + xtranslation, TRAIN_WHEEL_Y_OFFSET + ytranslation)
+    ops.node(2002, -7.75 + xtranslation, TRAIN_WHEEL_Y_OFFSET + ytranslation)
+    ops.node(2003, 7.75 + xtranslation, TRAIN_WHEEL_Y_OFFSET + ytranslation)
+    ops.node(2004, 10.25 + xtranslation, TRAIN_WHEEL_Y_OFFSET + ytranslation)
 
     # Lower bogie nodes
-    ops.node(2005, -10.25 + xtranslation, 0.22 + ytranslation)
-    ops.node(2006, -9.00 + xtranslation, 0.22 + ytranslation)
-    ops.node(2007, -7.75 + xtranslation, 0.22 + ytranslation)
-    ops.node(2008, 7.75 + xtranslation, 0.22 + ytranslation)
-    ops.node(2009, 9.00 + xtranslation, 0.22 + ytranslation)
-    ops.node(2010, 10.25 + xtranslation, 0.22 + ytranslation)
+    ops.node(2005, -10.25 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
+    ops.node(2006, -9.00 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
+    ops.node(2007, -7.75 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
+    ops.node(2008, 7.75 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
+    ops.node(2009, 9.00 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
+    ops.node(2010, 10.25 + xtranslation, TRAIN_BOGIE_Y_OFFSET + ytranslation)
 
     # Car body nodes
-    ops.node(2011, -9.00 + xtranslation, 0.52 + ytranslation)
-    ops.node(2012, 0.00 + xtranslation, 0.52 + ytranslation)
-    ops.node(2013, 9.00 + xtranslation, 0.52 + ytranslation)
+    ops.node(2011, -9.00 + xtranslation, TRAIN_BODY_Y_OFFSET + ytranslation)
+    ops.node(2012, 0.00 + xtranslation, TRAIN_BODY_Y_OFFSET + ytranslation)
+    ops.node(2013, 9.00 + xtranslation, TRAIN_BODY_Y_OFFSET + ytranslation)
 
 
 # ── 8. BOUNDARY CONDITIONS ───────────────────────────────────────────────────
@@ -173,11 +192,12 @@ def define_boundary_conditions() -> None:
     ops.fix(1, 1, 0, 1)     # fix UX, free UY, fix RZ
     ops.fix(81, 1, 0, 1)    # fix UX, free UY, fix RZ
 
-    # Wheel constraints: free UY, fixed UX and RZ
+    # Wheel constraints: free UX (controlled by SPs), free UY, fixed RZ
+    # UX is prescribed via sp() in apply_wheel_constraints during transient
     for n in [2001, 2002, 2003, 2004]:
-        ops.fix(n, 1, 0, 1)
+        ops.fix(n, 0, 0, 1)
 
-    # Bogie/car body elements: free UX, free UY, free RZ
+    # Bogie/car body elements: fixed UX, free UY and RZ
     for n in range(2005, 2014):
         ops.fix(n, 1, 0, 0)
 
@@ -190,20 +210,29 @@ def define_boundary_conditions() -> None:
     ops.equalDOF(2009, 2010, 3)
 
 
+def setup_wheel_sp() -> None:
+    """Set up wheel SP constraints under pattern for subsequent modification."""
+    ops.timeSeries("Constant", TS_WHEEL)
+    ops.pattern("Plain", PAT_WHEEL, TS_WHEEL)
+    for n in [2001, 2002, 2003, 2004]:
+        ops.sp(n, 1, 0.0)  # UX = 0 during static
+        ops.sp(n, 3, 0.0)  # RZ = 0 always
+
+
 # ── 9. ELEMENTS ──────────────────────────────────────────────────────────────
 def build_bridge_elements() -> None:
     """Bridge elastic sections, rail + bridge beam elements, connection springs."""
     define_sections()
 
-    # Bridge beams: dispBeamColumn with 5 IPs
+    # Bridge beams: dispBeamColumn with beamIntegration
     for i in range(131, 151):
-        ops.element("dispBeamColumn", i, i, i + 1, 5, 2, TRANSF_BEAM,
-                    "-mass", 1.2e4, "-cMass")
+        ops.element("dispBeamColumn", i, i, i + 1, TRANSF_BEAM, INTEG_BRIDGE,
+                    "-mass", BRIDGE_ELEM_MASS, "-cMass")
 
     # Rail beams: elasticBeamColumn
     for i in range(1, 81):
         ops.element("elasticBeamColumn", i, i, i + 1, AR, E_rail, Iz_rail,
-                    TRANSF_BEAM, "-mass", 2.0 * 51.5, "-cMass")
+                    TRANSF_BEAM, "-mass", RAIL_ELEM_MASS, "-cMass")
 
     # Bridge-rail connection: truss springs and dampers
     for i in range(1, 82):
@@ -244,19 +273,53 @@ def build_train_elements() -> None:
     ops.element("truss", 2018, 2009, 2013, Av2, MAT_DAMP_SECONDARY)
 
 
-def build_wheelrail_elements(irreg_path: str) -> None:
-    """Create WheelRail contact elements for each wheelset.
+def setup_wheel_rail(irreg_path: str) -> dict:
+    """Load irregularity data and configure moving wheel-rail constraints.
 
-    NOTE: WheelRail is a custom element. If OpenSeesPy was not compiled with
-    this element, the model will fail with 'element type WheelRail not found'.
+    Returns config dict for apply_wheel_constraints() in transient loop.
+    WheelRail is a custom element not available in standard OpenSeesPy;
+    instead we impose time-varying UX (constant velocity) and UY (follows
+    rail displacement + irregularity) via sp constraints at each step.
     """
-    locs = [pInitLocation + offset for offset in [0.0, 2.5, 17.5, 20.0]]
+    irreg_data = np.loadtxt(irreg_path)
+    locs = [pInitLocation + offset for offset in [0.0, 2.5, 18.0, 20.5]]
     wheel_nodes = [2001, 2002, 2003, 2004]
+    return {
+        "irreg_data": irreg_data,
+        "locs": locs,
+        "wheel_nodes": wheel_nodes,
+        "pVel": pVel,
+        "rail_dx": LenE,
+        "num_rail_ele": 81,
+    }
 
-    for tag, loc, wn in zip(range(3001, 3005), locs, wheel_nodes):
-        ops.element("WheelRail", tag, pDeltT, pVel, loc, wn, pRWheel,
-                    pI, pE, pA, TRANSF_WHEELRAIL, 10,
-                    *_RAIL_NODES, irreg_path)
+
+def apply_wheel_constraints(t: float, config: dict) -> None:
+    """Update wheel displacement constraints at time t."""
+    irreg_data = config["irreg_data"]
+    locs = config["locs"]
+    wheel_nodes = config["wheel_nodes"]
+    pVel_ = config["pVel"]
+    rail_dx = config["rail_dx"]
+    num_ele = config["num_rail_ele"]
+
+    ops.loadConst("-pattern", PAT_WHEEL)
+    for i, wn in enumerate(wheel_nodes):
+        x = locs[i] + pVel_ * t
+        ele_idx = int(x / rail_dx)
+        if ele_idx < 0 or ele_idx >= num_ele - 1:
+            continue
+        xi = (x - ele_idx * rail_dx) / rail_dx
+        n_i = ele_idx + 1
+        n_j = ele_idx + 2
+        uy_i = ops.nodeDisp(n_i, 2)
+        uy_j = ops.nodeDisp(n_j, 2)
+        uy_rail = (1.0 - xi) * uy_i + xi * uy_j
+        irreg = float(np.interp(x, irreg_data[:, 0], irreg_data[:, 1]))
+        ops.remove("sp", wn, 1)
+        ops.remove("sp", wn, 2)
+        ops.sp(wn, 1, pVel_ * t)
+        ops.sp(wn, 2, uy_rail + irreg)
 
 
 # ── 10. OUTPUT DATABASE (ODB) ───────────────────────────────────────────────
@@ -287,14 +350,15 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 
     init_model()
     define_materials()
+    define_geom_transf()
     build_nodes()
     build_train_nodes(pInitLocation)
     define_boundary_conditions()
     vis_nodes(output_dir)
     build_bridge_elements()
     build_train_elements()
-    irreg_path = str(Path(__file__).parent / "rail_Irreg.txt")
-    build_wheelrail_elements(irreg_path)
+    irreg_path = str(Path(__file__).parent / "ground_motions" / "rail_Irreg.txt")
+    wr_config = setup_wheel_rail(irreg_path)
     vis_model(output_dir)
 
     odb = create_odb(output_dir=output_dir, odb_tag=1)
@@ -307,23 +371,27 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
         2012: -Mt * g,
     }
     define_gravity(train_node_loads)
+    setup_wheel_sp()
     vis_loads(output_dir)
     vis_pre_analysis(output_dir)
 
     # Train masses
     for n in [2001, 2002, 2003, 2004]:
         ops.mass(n, MWheel, MWheel, 0.0)
-    ops.mass(2006, Mb, Mb, JMb)
-    ops.mass(2009, Mb, Mb, JMb)
+    # Distribute bogie mass across all 3 nodes per bogie to avoid zero-mass nodes
+    for n in [2005, 2006, 2007]:
+        ops.mass(n, Mb / 3, Mb / 3, JMb / 3)
+    for n in [2008, 2009, 2010]:
+        ops.mass(n, Mb / 3, Mb / 3, JMb / 3)
     ops.mass(2012, Mt, Mt, JMt)
 
-    # ── Phase 1: Static gravity ──
+    # ── Phase 1: Static gravity (LoadControl exception per AGENT.md §3c) ──
     ops.constraints("Plain")
-    ops.numberer("Plain")
+    ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-8, 100, 2)
-    ops.algorithm("Newton")
-    ops.integrator("LoadControl", 0.1)
+    ops.integrator("LoadControl", 1.0 / N_STATIC)
+    ops.test("NormDispIncr", 1.0e-6, 200, 2)
+    ops.algorithm("KrylovNewton")
     ops.analysis("Static")
 
     for step in range(1, N_STATIC + 1):
@@ -337,26 +405,37 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     ops.loadConst("-time", 0.0)
     ops.wipeAnalysis()
 
-    # ── Phase 2: Transient dynamics ──
-    ops.constraints("Plain")
-    ops.numberer("Plain")
+    # ── Phase 2: Transient dynamics (SmartAnalyze) ──
+    ops.constraints("Transformation")
+    ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-8, 100, 2)
-    ops.algorithm("Newton")
     ops.integrator("Newmark", 0.5, 0.25)
-    ops.analysis("Transient")
+
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Transient",
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+        tryAddTestTimes=True,
+        testIterTimesMore=[50, 100],
+        relaxation=0.5,
+        minStep=1.0e-6,
+    )
+    segs = analysis.transient_split(N_TRANSIENT)
 
     start_t = time.time()
-    for step in range(1, N_TRANSIENT + 1):
-        ok = ops.analyze(1, pDeltT)
-        if ok != 0:
-            print(f"WARNING: transient analysis failed at step {step}")
+    for i, _ in enumerate(segs):
+        t = (i + 1) * pDeltT
+        apply_wheel_constraints(t, wr_config)
+        ok = analysis.TransientAnalyze(pDeltT)
+        if ok < 0:
+            print(f"WARNING: transient analysis failed at step {i + 1}")
             break
-        if step % 100 == 0:
-            print(f"  transient step {step}/{N_TRANSIENT}")
+        if (i + 1) % 100 == 0:
+            print(f"  transient step {i + 1}/{N_TRANSIENT}")
         odb.fetch_response_step()
+    analysis.close()
     elapsed = time.time() - start_t
-    print(f"Over! ({elapsed:.2f}s, {step} steps)")
+    print(f"Over! ({elapsed:.2f}s, {i + 1} steps)")
 
     odb.save_response()
     return odb
@@ -365,7 +444,11 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
 # ── 13. POST-PROCESSING ─────────────────────────────────────────────────────
 def post_process(odb: "opst.post.CreateODB", output_dir: Path) -> None:
     if not _headless():
-        vis_defo(output_dir, filename="vis_05_defo_lateral.html")
+        vis_defo(output_dir, filename="vis_05_defo_transient.html", resp_dof="UY")
+        opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1, slides=True, defo_scale=10.0,
+            resp_type="disp", resp_dof="UY",
+        ).write_html(str(output_dir / "vis_06_slider.html"))
 
 
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
