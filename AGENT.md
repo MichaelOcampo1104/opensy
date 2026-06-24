@@ -2059,32 +2059,6 @@ Flag any model where:
 
 **Why:** This was discovered during XMU Chapter8.2 verification. Both XMU Chapter8.1 and 8.2 inherited a pattern where `CreateODB` was initialized without `save_nodal_resp=True` and the dynamic analysis used `ops.analyze(4000, 0.01)` without a manual step loop. The analysis converged and file recorders worked fine, but the ODB directory was empty and all deformed-shape HTML files were silently missing. The fix touched two locations (create_odb + run_dynamic) in both models.
 
----
-## 13. Versioning & Change Log
-
-| Date | Version | Change |
-|------|---------|--------|
-| 2025-05-08 | 1.0.0 | Initial AGENT.md created |
-| 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
-| 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; HTML output to `output/`; `_headless()` in `vis_utils.py` |
-| 2025-05-09 | 1.2.0 | `analysis_utils.py` removed; all solver loops replaced with `opst.anlys.SmartAnalyze`; Section 3c added; audit checklist extended to 28 items (0–27) |
-| 2025-05-09 | 1.3.0 | `recorder_utils.py` removed; all response collection replaced with `opst.post.CreateODB`; Section 3d added; `run_analysis` now returns `odb`; `post_process` calls `odb.save_response()`; `ops.recorder()` added to prohibited patterns |
-| 2025-05-09 | 1.4.0 | Consistency fixes: `vis_stage_*` renamed to `vis_*` to match `vis_utils.py` exports; `run_gravity` gains `ctrl_node`/`ctrl_dof` params; V1 stage trigger clarified to after `define_boundary_conditions()`; audit checklist extended to 30 items (0–29) adding `analysis.close()` and `output_dir.mkdir()` checks; `analysis_utils` added to item 2; ALLCAPS naming rule clarified; `num_models` type documented; `vis_defo` updated to use `plot_nodal_responses` (ODB-based); malformed-JSON error handling added to Section 7e |
-| 2025-05-11 | 1.5.0 | **Snippet-by-snippet mode** (§7f) added as default CONVERT workflow — agent processes one code section at a time, confirms each before requesting the next; **New project from scratch mode** (§7g) added — supports designing original OpenSeesPy models via guided Q&A, not limited to existing OpenSees examples; Section 1 updated with mode table (CONVERT / NEW); Section 7 updated with mandatory session-start mode question; snippet identification hint table added to §7f |
-| 2025-05-11 | 1.5.1 | **opstool API corrections:** (1) `plot_model` kwargs renamed throughout — `show_node_label` → `show_node_numbering`, `show_ele_label` → `show_ele_numbering` (correct v1.x API); (2) `CreateODB` `save_every` param removed — does not exist in the real API; (3) `fiber_ele_tags="all"` in selective-saving example replaced with correct `save_fiber_sec_resp=False` bool param; (4) `vis_model()` wrapper signature updated to match corrected kwarg names |
-| 2025-05-11 | 1.5.2 | **API corrections:** (1) `resp_dof` values corrected to uppercase throughout (`"ux"` → `"UX"`, `"uy"` → `"UY"`) — opstool requires uppercase DOF labels in `plot_nodal_responses`; (2) `vis_defo` now forwards `scale` param to `plot_nodal_responses`; (3) `vis_model` stub in canonical script corrected to `show_node_numbering=True` to match `vis_utils.py` defaults and Section 3b table; (4) §7a audit reference corrected from items 0–27 to 0–29 |
-| 2026-05-31 | 1.6.0 | **SmartAnalyze Static limitation & ODB performance:** (1) §3c gravity pattern corrected — SmartAnalyze.StaticAnalyze forcibly overrides the integrator to DisplacementControl; LoadControl gravity with manual ops.analyze() loop permitted exception documented in §3c and §10; (2) §3d expanded with ODB performance guidance (targeted tags, throttled fetch for transient); (3) §10 added permitted exceptions subsection |
-| 2026-06-01 | 1.7.0 | **opstool version compatibility & conda environment:** (1) §11 added documenting the breaking API change between opstool 0.8.7 (GetFEMdata/OpsVisPlotly/HDF5) and 1.0 (CreateODB/vis.plotly/Zarr); (2) `opensy` conda environment documented as target runtime (Python 3.11, opstool 1.0.26); (3) numpy NAN/NaN compatibility patch documented as 0.8.7-only; (4) vis_utils.py rewritten for opstool 1.0 API (plot_model/plot_nodal_responses returning Figure objects); (5) nafeh2022 model ported from 0.8.7 to 1.0 API as worked example of the conversion |
-| 2026-06-14 | 1.8.0 | **Tcl-to-Python conversion guide (§12):** (1) §12a — Tag scheme extraction with `_tag3()` helper pattern for multi-range digit-shift schemes; (2) §12b — Mass placement verification (one-side vs both-side massing doubles translational mass); (3) §12c — Parameter cross-verification against source (E/I swap example from elasticBeamColumn); (4) §12d — ODB throttling for large transient analyses (ODB_EVERY_N, node_tags breaks mesh rendering); (5) §12e — OpenSeesPy beamIntegration limitation (all IPs share one section vs Tcl's per-IP, ~10-15% stiffness difference); (6) §12f — Standalone post_process.py pattern for re-visualization without re-running solver; (7) §12g — Imperial→N-mm conversion checklist with common gotchas. Source: shegay2019 NZ.tcl (37K lines) → model.py (~650 lines) conversion. |
-| 2026-06-15 | 1.9.0 | **MDOF shear building conversion (§12h):** Zhong2022 SimCenter EE-UQ MDOF_BuildingModel Tcl→Python conversion. (1) TwoNodeLink + Steel01 stick architecture with -orient flag; (2) fullGenLapack eigen solver failure with stiffness contrasts → default subspace iteration; (3) ops.wipeAnalysis() required between static gravity and transient dynamic; (4) in-memory EDP tracking via ops.nodeDisp()/ops.nodeAccel() at ODB sample points; (5) SimCenter JSON parameter → model constant mapping; (6) output artifact .gitignore hygiene with .gitkeep preservation. |
-| 2026-06-15 | 1.10.0 | **Ground motion ordering (§12i):** Documented the critical `ops.loadConst()` bug — freezes ALL loads (including UniformExcitation) to t=0 values, permanently disabling ground motion if defined before gravity. GM MUST be defined after `run_gravity()`. Source: NEES2014 conversion (3-story steel MRF). |
-| 2026-06-15 | 1.11.0 | **SI→N-mm conversion (§12j):** Documented the `Pa`/`kg` gotcha in units.py. `Pa = N/mm² = 1.0` (actually 1 MPa, not 1 SI-Pascal). `kg = N·s²/mm = 1.0` (actually 1000 kg = 1 tonne, not 1 kg). SI-sourced models must manually convert: stress ÷1e6, mass ÷1000. Never use `* Pa` or `* kg` from units.py for SI conversions. Source: XMU Chapter4.1 conversion (SI cantilever column). |
-| 2026-06-15 | 1.12.0 | **Aggregator section kN-m→N-mm conversion (§12k):** Documented that Aggregator section materials act as force-deformation (not stress-strain). P stiffness ×1000 (kN→N), Mz stiffness ×1e9 (kN·m→N·mm with curvature 1/m→1/mm). Standard stress conversion (÷1000) gives values 1e6–1e9× too small. Source: XMU Chapter4.2 conversion (portal frame with Aggregator columns). |
-| 2026-06-15 | 1.13.0 | **dispBeamColumn beamIntegration requirement (§12l):** Documented that OpenSeesPy `dispBeamColumn` uses `beamIntegration` — signature is `(eleTag, iNode, jNode, transfTag, integTag)`, NOT `(eleTag, iNode, jNode, nIP, secTag, transfTag)` like `nonlinearBeamColumn`. Source: XMU Chapter4.3 conversion (RC portal frame with fiber-section columns). |
-| 2026-06-16 | 1.14.0 | **Soil-Structure Interaction with Sequential Model Building (§12m):** Documented 2D SSI conversion patterns — MultiYieldSurfaceClay/quadWithSensitivity/Hardening all in standard OpenSeesPy; sequential ndf=3→ndf=2→equalDOF model building; soil body force kN/m³→N/mm³ (÷10⁶); ground motion m/s²→mm/s² (×1000 via timeseries factor, not g_accel); non-standard Newmark parameter preservation; no-Rayleigh-damping convention. Source: XMU Chapter6 conversion (2D RC frame + 5-layer soil deposit under El Centro). |
-| 2026-06-17 | 1.15.0 | **ODB Response Collection: fetch_response_step() is NOT optional (§12n):** Documented that CreateODB must be initialized with `save_nodal_resp=True` + `node_tags` AND `fetch_response_step()` must be called inside every converged step loop. Either missing produces an empty RespStepData directory — deformed-shape plots fail with `FileNotFoundError`. `ops.analyze(N, dt)` provides no hook for fetch, so a manual `ops.analyze(1, dt)` loop is mandatory for any analysis needing ODB deformation output. Debugging protocol and detection rules added. Source: XMU Chapter8.2 verification (both Ch8.1 and 8.2 were affected). |
-| 2026-06-22 | 1.16.0 | **Sensitivity analysis with DDM (§12o) + Explicit dynamics / element removal (§12p) + 3D peridynamic grid model (§12q) + Plain pattern tsTag gotcha (§12r) + vis_utils fix:** Documented OpenSeesPy sensitivity API pitfalls from XMU Chapter11 conversion — `addToParameter` bare keywords, sensitivity recorder single-string arg, SmartAnalyze DDM incompatibility, CreateODB element-type flag matching, `parents[n]` depth dependency, explicit vis_* imports. Added §12p documenting explicit dynamics (CentralDifference) incompatibility with SmartAnalyze, ODB impracticality for large explicit analyses, `nodeCoord` unit awareness, element removal via `ops.remove()`, `numberer Plain` for explicit, `MultipleSupport` pattern syntax, and `vis_defo()` signature missing `odb_tag`/`resp_dof` params. Added §12q documenting 3D peridynamic grid patterns — `node_id()` helper, `set`-based visited check, transition-zone strength scaling (stress vs strain), per-bond Concrete02 materials, ODB truss-response disabling for large bond counts, and 400-step static fetch pattern. Added §12r documenting that `ops.pattern("Plain", tag, "Linear")` fails because the third arg must be a numeric tsTag, not a type string — explicit `ops.timeSeries("Linear", tsTag)` required. Fixed `vis_utils.py:vis_defo()` to accept `odb_tag`, `resp_type`, and `resp_dof` kwargs and forward them to `plot_nodal_responses()`. Sources: XMU Chapter12.2 PD conversion (2D, explicit, bond-breaking) and XMU Chapter12.3 PD conversion (3D, static, Concrete02). |
-
 ### §12s — Train-Bridge Interaction: Moving Wheel Load via SP Constraints, fix/sp Conflicts, Massless Nodes (v1.17.0)
 
 Source: XMU Chapter13.1 refactoring (2D train-bridge interaction, 4 wheelsets, 2 bogies, 1 car body, 3000-step transient with wheel-rail contact via SP constraints).
@@ -2468,11 +2442,360 @@ The original Tcl uses lb, in, psi (not kip). Verify by cross-checking E against 
 
 **Rule:** When converting imperial Tcl models, always verify the base unit system by cross-checking a known physical relationship (E vs fc', steel E = 29,000 ksi, etc.) against the Tcl values.
 
+#### 8. `cvals = list(vals)` Must Be Assigned Before the `if` Block
+
+When processing `uniaxialMaterial` commands in a loop where only some material types need unit conversion, the converted-variables list must be initialised unconditionally:
+
+```python
+# BROKEN — cvals is only defined inside the if block
+for tag, mtype, vals in tcl_data["uniaxial_mat"]:
+    if mtype == "IMKPeakOriented":
+        cvals = list(vals)      # ← only assigned for IMK
+        cvals[0] *= LBIN2NMM
+    ops.uniaxialMaterial(mtype, tag, *cvals)  # UnboundLocalError for Elastic
+
+# CORRECT — cvals initialised before the if block
+for tag, mtype, vals in tcl_data["uniaxial_mat"]:
+    cvals = list(vals)           # ← always assigned
+    if mtype == "IMKPeakOriented":
+        cvals[0] *= LBIN2NMM
+    ops.uniaxialMaterial(mtype, tag, *cvals)
+```
+
+**Rule:** In any loop where a subset of items needs transformation, initialise the working variable unconditionally before the conditional logic.
+
+#### 9. `CreateODB` Has No `save_eles_resp` Parameter
+
+`opst.post.CreateODB` does NOT accept a generic `save_eles_resp` flag. Each element type has its own dedicated flag:
+
+```python
+# BROKEN — raises KeyError: "Incorrect parameter save_eles_resp"
+odb = opst.post.CreateODB(odb_tag=1, save_eles_resp=True)
+
+# CORRECT — use element-type-specific flags
+odb = opst.post.CreateODB(odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=True,   # elasticBeamColumn, dispBeamColumn, etc.
+    save_link_resp=True,    # zeroLength, twoNodeLink, etc.
+    save_truss_resp=True,   # truss elements
+)
+```
+
+**Valid flags** (from opstool 1.0.26): `elastic_frame_sec_points`, `interpolate_beam_disp`, `section_response_dof`, `compute_mechanical_measures`, `project_gauss_to_nodes`, `save_nodal_resp`, `save_frame_resp`, `save_truss_resp`, `save_link_resp`, `save_shell_resp`, `save_fiber_sec_resp`, `save_plane_resp`, `save_brick_resp`, `save_contact_resp`, `save_sensitivity_resp`, `node_tags`, `frame_tags`, `truss_tags`, `link_tags`, `shell_tags`, `fiber_ele_tags`, `plane_tags`, `brick_tags`, `contact_tags`, `sensitivity_para_tags`.
+
+**Rule:** Always use element-type-specific `save_*_resp` flags. The generic `save_eles_resp` does not exist.
+
+### §12x — Tcl `forceBeamColumn HingeRadau` Parsing: Parameter Swap + Integration Type Mismatch (v1.22.0)
+
+Source: BhatZeeshanManzoor G+4 RC infilled frame conversion (3D, 5-story, IMKPeakOriented + Pinching4 + fiber sections, STKO/SimCenter Tcl → Python).
+
+#### 1. The Tcl `HingeRadau` Format: `$secTag $lpI $nIpI $lpJ $nIpJ`
+
+In STKO-exported Tcl, `forceBeamColumn` with the `HingeRadau` flag follows this argument order:
+
+```tcl
+element forceBeamColumn $eleTag $iNode $jNode $transfTag HingeRadau $secTag $lpI $nIpI $lpJ $nIpJ
+```
+
+The parameters after `HingeRadau` are: **section tag, hinge length I, number of IPs I, hinge length J, number of IPs J**.
+
+The last value (`nIpJ`) looks like an IP count but can be mistaken for a section tag by a naive parser, especially when the IP counts happen to fall in the same numeric range as valid section tags (e.g., `nIpJ=7` and fiber section 7 both exist).
+
+#### 2. The Bug: `secTag` and `nIpJ` Swapped, `Lobatto` Replaces `HingeRadau`
+
+The parser swapped the first and last HingeRadau parameters, then created the wrong integration type:
+
+```python
+# BROKEN — secTag and nIpJ swapped, Lobatto instead of HingeRadau
+np_i = int(parts[7])       # actually secTag → mislabeled
+lp_i = float(parts[8])     # lpI ✓
+np_j = int(parts[9])       # actually nIpI → mislabeled
+lp_j = float(parts[10])    # lpJ ✓
+sec_tag = int(parts[11])   # actually nIpJ → WRONG VALUE for section tag!
+ops.beamIntegration("Lobatto", int_tag, sec_tag, 5)  # uses nIpJ as section tag!
+```
+
+**Three simultaneous failures:**
+1. `sec_tag` receives `nIpJ` (e.g., 7) instead of the real section tag (e.g., 6)
+2. `beamIntegration("Lobatto", ...)` is used instead of `beamIntegration("HingeRadau", ...)` — Lobatto distributes IPs along the full element; HingeRadau concentrates them in the hinge regions
+3. `5` is hardcoded as the number of IPs, discarding the hinge length parameters entirely
+
+#### 3. The Fix: Correct Parameter Extraction + HingeRadau Integration
+
+```python
+# CORRECT — secTag is parts[7], nIpJ is parts[11]
+sec_tag = int(parts[7])      # secTag
+lp_i = float(parts[8])       # lpI
+# parts[9]  = nIpI — not a beamIntegration HingeRadau parameter
+lp_j = float(parts[10])      # lpJ
+# parts[11] = nIpJ — not a beamIntegration HingeRadau parameter
+int_key = (sec_tag, lp_i, lp_j)
+# HingeRadau: (tag, secTagI, lpI, secTagJ, lpJ, secTagE)
+ops.beamIntegration("HingeRadau", int_tag, sec_tag, lp_i, sec_tag, lp_j, sec_tag)
+ops.element("forceBeamColumn", tag, iNode, jNode, transfTag, int_tag)
+```
+
+**`beamIntegration("HingeRadau", ...)` signature (OpenSeesPy):**
+```python
+ops.beamIntegration("HingeRadau", tag, secTagI, lpI, secTagJ, lpJ, secTagE)
+```
+- `secTagI`: section tag for hinge at end I
+- `lpI`: plastic hinge length at end I
+- `secTagJ`: section tag for hinge at end J
+- `lpJ`: plastic hinge length at end J
+- `secTagE`: section tag for the elastic interior
+
+This differs from the Tcl documentation which often lists `(secTagE, lpI, lpJ, secTagH)` — in OpenSeesPy, each section tag comes **before** its corresponding hinge length, and all three section positions (I-hinge, J-hinge, elastic interior) are explicit. For typical fiber-section models, all three use the same section tag.
+
+The `nIpI`/`nIpJ` values from the Tcl **do not map to `beamIntegration HingeRadau` parameters** — the Tcl element-level `-HingeRadau` flag and the `beamIntegration HingeRadau` object have different signatures. `beamIntegration HingeRadau` determines the number of Radau integration points per hinge internally (2 per hinge region is typical). The Tcl `nIpI`/`nIpJ` parameters are silently dropped in the Python translation.
+
+**Impact if unfixed:** Every `forceBeamColumn` with HingeRadau gets:
+- Lobatto integration with Gaussian-like IP distribution (no hinge concentration) → plasticity can't localize correctly at beam ends
+- The wrong fiber section (nIpJ instead of secTag) → potentially a non-existent section tag or the wrong material model
+- Fixed 5 IPs regardless of element length or hinge length
+- Element stiffness and nonlinear response are fundamentally incorrect
+
+#### 4. Verification Methodology: Cross-Check Against Known Section Tags
+
+To resolve parameter ordering ambiguity when both candidate values map to valid section tags, cross-check with a known format. For this model, the presence of both fiber section 6 and fiber section 7, and both section 18 and section 19, made either interpretation internally consistent. The correct ordering was confirmed by:
+1. Checking that the `-HingeRadau` element-level flag is documented as `$secTag $lpI $nIpI $lpJ $nIpJ` in OpenSees source
+2. Verifying that STKO exports follow this convention
+3. Confirming that `beamIntegration HingeRadau` accepts `(secTagE, lpI, lpJ, secTagH)` — NOT `(nIpI, lpI, nIpJ, lpJ, secTagH)`
+
+**Rule:** When parsing Tcl element commands with inline integration flags, always verify the Tcl argument order against the corresponding OpenSeesPy `beamIntegration` signature. They are often **different APIs** — the Tcl element wrapper accepts parameters that the standalone `beamIntegration` object does not.
+
+#### 5. `_force_beam()` Helper Uses Tcl Syntax in Python — Never Works
+
+A helper function defined but never called still merits flagging:
+
+```python
+# BROKEN — OpenSeesPy forceBeamColumn takes an integration tag, not inline flags
+def _force_beam(elem_tag, n1, n2, transf_tag, sec_tag, hinge_len=225.0, hinge_ip=6):
+    ops.element("forceBeamColumn", elem_tag, n1, n2, transf_tag,
+                "-HingeRadau", hinge_ip, hinge_len, hinge_ip, hinge_len, sec_tag)
+```
+
+In OpenSeesPy, `forceBeamColumn` signature is `(tag, iNode, jNode, transfTag, integTag)`. The `-HingeRadau` inline flag is Tcl-only — it would raise `OpenSeesError` if called. Always create a `beamIntegration` object and pass its tag.
+
+**Rule:** Any helper that calls `ops.element()` with Tcl-style dash-prefixed flags (`-HingeRadau`, `-integration`, `-sections`) is dead code in OpenSeesPy — these flags only work in the Tcl interpreter.
+
+#### 6. Penalty Constraints + Rigid Diaphragms → Singular/Ill-Conditioned System
+
+STKO-exported Tcl often uses `constraints("Penalty", 1e13, 1e13)` to enforce multi-point constraints (rigidLinks, rigidDiaphragms, equalDOFs). Combined with the model's own very stiff elements (zeroLength with 1e13 stiffness), this creates an extremely ill-conditioned system:
+
+```
+NormDispIncr: current Norm: 1.62  Norm deltaR: 4.06e9
+```
+
+The displacement correction is tiny (1.62) but the residual force is enormous (4e9) — the hallmark of penalty-method failure. Tiny constraint violations produce huge penalty forces that dominate the residual.
+
+**Fix:** Use `constraints("Transformation")` instead. Transformation handles multi-point constraints by variable elimination (not penalty springs), avoiding the ill-conditioning entirely:
+
+```python
+# BROKEN — penalty + stiff elements = ill-conditioned system
+ops.constraints("Penalty", 1e13, 1e13)
+
+# CORRECT — variable elimination, no penalty springs
+ops.constraints("Transformation")
+```
+
+This applies to both gravity (static LoadControl) and transient analysis phases. The fix has no effect on results — it only changes how constraints are enforced numerically.
+
+**Rule:** When converting STKO/SimCenter Tcl models, always replace `constraints("Penalty", ...)` with `constraints("Transformation")`. The only exception is when the model explicitly requires penalty for a specific reason (e.g., Lagrange multipliers are incompatible with the chosen solver).
+
+#### 7. `beamIntegration("HingeRadau")` + `forceBeamColumn` = State Determination Failure
+
+Even with the correct signature, `beamIntegration("HingeRadau", ...)` causes forceBeamColumn's flexibility-based state determination to fail on the first gravity step:
+
+```
+ForceBeamColumn3d::update - failed to get compatible element forces & deformations
+for element: 258 (dW: << -2348.93, dW0: 4.40778e+15)
+```
+
+The Tcl element-level `-HingeRadau` flag creates an integration with a different internal IP distribution than the standalone `beamIntegration("HingeRadau")` object. The Tcl flag uses `nIpI`/`nIpJ` to control the number of integration points in each hinge region; the standalone `beamIntegration` determines this internally (typically 2 Radau points per hinge + fixed interior points), which may be insufficient for forceBeamColumn's force interpolation functions to represent distributed gravity loads.
+
+**Fix:** Use Lobatto integration with the correct section tag, carrying forward the max of `nIpI`/`nIpJ` from the Tcl as the Lobatto IP count:
+
+```python
+# CORRECT — Lobatto with Tcl's IP count, correct section tag
+sec_tag = int(parts[7])                           # $secTag (was swapped with nIpJ)
+n_ip = max(int(parts[9]), int(parts[11]))         # nIpI, nIpJ → IP count
+ops.beamIntegration("Lobatto", int_tag, sec_tag, n_ip)
+ops.element("forceBeamColumn", tag, iNode, jNode, transfTag, int_tag)
+```
+
+This accepts the ~10% stiffness approximation documented in §12e (all IPs share one section vs Tcl's per-IP sections). The section tag fix is more critical than the integration type — using the wrong section tag (nIpJ instead of secTag) causes fundamentally incorrect element response.
+
+**Symptom of HingeRadau failure:** forceBeamColumn state determination fails at the very first gravity step with `dW0` on the order of 10¹⁵ — the initial energy norm is astronomically large, indicating the flexibility-based iteration starts from an incompatible state.
+
+**Rule:** For STKO/SimCenter Tcl models, parse the HingeRadau element flag to extract secTag correctly. Use `beamIntegration("HingeRadau", tag, secTag, lpI, secTag, lpJ, secTag)` + `dispBeamColumn`. The `nIpI`/`nIpJ` from the Tcl are dropped (cannot be mapped to `beamIntegration HingeRadau`). The hinge lengths (`lpI`/`lpJ`, typically 200-225 mm) are preserved via the `HingeRadau` beamIntegration. Prefer `HingeRadau` over `Lobatto` for dispBeamColumn — it concentrates IPs at element ends (correct for plasticity) and uses the Tcl hinge-length data.
+
+#### 8. `dispBeamColumn` + Fiber Sections = Newton Tangent Ill-Conditioning
+
+Even after fixing the element type and integration, any Newton-type algorithm (Newton, KrylovNewton, NewtonLineSearch) diverges within 1-2 gravity steps:
+
+```
+WARNING: numeric analysis returns 1 -- Umfpackgenlinsolver::solve
+StaticAnalysis::analyze() - the Algorithm failed at step: 0 with domain at load factor 0.2
+```
+
+The tangent stiffness matrix becomes numerically singular after the first converged step. This is NOT caused by:
+- Concrete tensile cracking (observed even with purely linear-elastic materials)
+- P-Delta geometric nonlinearity (observed with `Linear` geomTransf)
+- Constraint handler choice (observed with both `Penalty` and `Transformation`)
+- HingeRadau vs Lobatto integration (both fail identically)
+
+The root cause appears to be fundamental ill-conditioning in the 3D dispBeamColumn fiber-section tangent when combined with rigidDiaphragm constraints and stiff zeroLength joint elements (stiffness ratio ~10^7-10^8 between zeroLength 1e13 and fiber beam ~1e6 N/mm).
+
+#### 9. ModifiedNewton + Penalty Gravity Strategy
+
+**Symptom:** Gravity analysis with Newton/KrylovNewton diverges. ModifiedNewton converges stably but slowly.
+
+**Fix — ModifiedNewton with relaxed tolerance:**
+
+```python
+ops.constraints("Penalty", 1.0e13, 1.0e13)
+ops.numberer("RCM")
+ops.system("UmfPack")
+ops.test("NormDispIncr", 0.01, 500, 2)  # relaxed tolerance
+ops.algorithm("ModifiedNewton")           # initial elastic stiffness throughout
+ops.integrator("LoadControl", 0.02)      # 50 small steps
+ops.analysis("Static")
+```
+
+**Why this works:** ModifiedNewton uses the initial (elastic) stiffness for all iterations. This stiffness is well-conditioned (no cracked fibers, no softened materials). Each iteration direction is stable, even for ill-conditioned tangent problems. The trade-off is slow convergence — early steps converge in 3-10 iterations, later steps need 30-100+ iterations.
+
+**Concrete tensile strength:** Define `Concrete02` with elevated tensile strength (`ft = 20.0` instead of physical ~3.0 MPa) for the entire analysis. This suppresses premature tensile cracking that would destabilise even ModifiedNewton. Post-cracking response is governed by steel reinforcement, so the exact `ft` value has negligible effect on global hysteretic behavior.
+
+**IMPORTANT — materials cannot be redefined in OpenSeesPy:**
+```python
+ops.uniaxialMaterial("Concrete02", 1, ...)  # defines tag 1
+ops.uniaxialMaterial("Concrete02", 1, ...)  # ERROR: MapOfTaggedObjects refuses duplicate
+```
+
+`ops.remove("uniaxialMaterial", tag)` is also NOT supported. Materials must be defined once with the desired parameters — there is no mechanism to modify them later for different analysis phases (e.g., gravity vs transient). The same `ft` value persists through the entire analysis.
+
+**Current limitation:** ModifiedNewton reaches ~66% of full gravity (load factor 0.66 with 50 steps). At ~68% load factor, even ModifiedNewton diverges (`norm = inf` after 300+ iterations), likely due to material compressive softening (Concrete02 nonlinear compression + Pinching4 infill strut degradation). For models needing full gravity, further investigation is required — possible approaches include two-phase gravity application or displacement-controlled loading.
+
+**Rule:** For 3D fiber-section models with large stiffness contrasts (zeroLength joints, rigidDiaphragm):
+1. Use `Penalty(1e13, 1e13)` constraints — Penalty springs regularise the stiffness matrix better than `Transformation` elimination
+2. Use `ModifiedNewton` algorithm — avoids Newton tangent ill-conditioning
+3. Use `NormDispIncr` test with relaxed tolerance (0.01) and many iterations (500)
+4. Use small load steps (0.02) — the consistent step size makes ModifiedNewton's convergence predictable
+5. Define Concrete02 with elevated `ft` from the start — materials cannot be redefined later
+6. Use `dispBeamColumn` with `beamIntegration("HingeRadau", ...)` preserving hinge lengths — avoids forceBeamColumn state determination failures while keeping hinge-concentrated IP distribution
+
+### §12y — opstool `tcl2py`: Actual Execution, MP Workarounds, and Analysis-Stripping Strategy (v1.23.0)
+
+Source: BhatZeeshanManzoor G+4 RC infilled frame, STKO/SimCenter Tcl → Python conversion (2026-06-25).
+
+#### 1. `tcl2py` Executes OpenSees Commands During Conversion — NOT Pure Syntax Translation
+
+`opstool.pre.tcl2py()` evaluates Tcl source files through a Tcl interpreter that mirrors OpenSees commands to OpenSeesPy. During evaluation, it **actually runs** `ops.analyze()` calls. This has two critical implications:
+
+- **Convergence failures block conversion.** If the source Tcl's gravity analysis doesn't converge in OpenSeesPy, tcl2py will raise a TclError and halt — producing zero output.
+- **The converted output reproduces the source approach literally.** tcl2py does NOT fix known OpenSeesPy incompatibilities (e.g., forceBeamColumn state determination, Newton ill-conditioning, Concrete02 ft values). It faithfully translates what the Tcl source specifies.
+
+```python
+# tcl2py translates this Tcl:
+# element forceBeamColumn 23 268 16 23 -HingeRadau 6 200.0 5 200.0 7
+# ...to:
+ops.beamIntegration('HingeRadau', 23, *[6, 200.0, 6, 200.0, 7])
+ops.element('forceBeamColumn', 23, 268, 16, 23, 23)
+# Same forceBeamColumn + HingeRadau that fails in OpenSeesPy (§12x).
+```
+
+**Rule:** tcl2py is a literal translator, not a fixer. Expect every source-Tcl convergence problem to be faithfully reproduced in the converted output.
+
+#### 2. OpenSeesMP Code Blocks Conversion
+
+STKO-generated analysis scripts contain OpenSeesMP (parallel processing) code that tcl2py cannot evaluate:
+
+```tcl
+set param_id [getPID]       # getPID() returns None in standard OpenSeesPy → Tcl evaluation fails
+set num_proc [getNP]        # getNP() returns None → "None must be equal to 40" error
+```
+
+**Workaround — patch the source Tcl before feeding to tcl2py:**
+
+```tcl
+# Replace:
+set param_id [getPID]
+# With:
+set param_id 0
+
+# Comment out MP processor-count check:
+# set num_proc [getNP]
+# set num_param [expr int($num_dt/2)]
+# if {$num_proc != $num_param} { ... }
+set num_proc 1
+
+# Replace [getPID] in recorder/monitor filenames:
+# "./monitor_[getPID].plt" → "./monitor_0.plt"
+```
+
+**Also remove Tcl MP synchronization primitives:**
+```tcl
+# barrier / after 1000 set end 1 / vwait end
+# These are Tcl/Tk event-loop commands that may not work in tcl2py's interpreter.
+# Replace with simple puts statements.
+```
+
+#### 3. Analysis Execution Loops Must Be Commented Out
+
+tcl2py evaluates all Tcl code including `for` loops and `while 1` loops that drive the analysis. When `ops.analyze()` fails inside these loops, the Tcl `error` statement halts the entire conversion.
+
+**Workaround — comment out execution loops before conversion:**
+
+The two execution blocks that must be stripped:
+
+1. **Gravity analysis loop** (`for {set incr 1} {$incr <= $num_incr} {incr incr}`) — calls `analyze 1` inside a for loop, converts `error "the analysis did not converge"` into a TclError
+2. **Transient analysis loop** (`while 1`) — adaptive time-stepping with `analyze 1 $dt` and error-on-failure
+
+Leave the analysis **setup** commands (constraints, numberer, system, test, algorithm, integrator, analysis) unchanged so tcl2py converts them. Add dummy post-loop statements so the converted Python has valid variable bindings:
+
+```tcl
+# The transient analysis converged successfully (dummy for conversion)
+set time $total_time
+```
+
+**Rule:** When converting via tcl2py, strip execution loops but preserve analysis configuration. The converted output will have the correct setup (constraints, algorithm, integrator, etc.) that you can then adjust per the lessons in §12x (ModifiedNewton, relaxed tolerance, etc.).
+
+#### 4. What tcl2py Output Is Useful For
+
+Even though tcl2py produces code that needs the same fixes as manual conversion, the output is valuable for:
+
+| Use | Detail |
+|-----|--------|
+| **Model definition verification** | All materials, sections, nodes, elements, and fiber discretization are converted faithfully — cross-check your manual conversion |
+| **Recorder setup** | `ops.recorder('Drift', ...)`, `ops.recorder('Node', ...)` are correctly converted with all arguments |
+| **RigidDiaphragm commands** | All `ops.rigidDiaphragm()` calls are converted verbatim |
+| **EleLoad patterns** | All `ops.eleLoad()` beam-distributed loads are converted verbatim |
+| **Rayleigh damping** | `ops.rayleigh()` with correct coefficients |
+| **Ground motion setup** | `ops.timeSeries('Path', ...)` and `ops.pattern('UniformExcitation', ...)` correctly created |
+| **MPCO recorder** | The `.mpco` and `.mpco.cdata` infrastructure is preserved |
+
+**Rule:** Use tcl2py as a verification tool, not a replacement for manual conversion. After converting, diff the model definition sections (materials/sections/elements/nodes) against your manual conversion. Apply the §12x fixes (dispBeamColumn, ModifiedNewton, elevated ft) to the tcl2py output.
+
+#### 5. tcl2py Warnings — Expected and Ignorable
+
+During conversion, tcl2py emits warnings that are expected for fiber-section models:
+
+```
+Warning: -GJ or -torsion not used for fiber section, GJ=100000000 is assumed!
+```
+
+This is informational — fiber sections in OpenSeesPy default to GJ=1e8 N·mm when no torsional stiffness is assigned. It does NOT indicate an error in the conversion.
+
+**Rule:** These warnings can be safely ignored. They appear once per fiber section definition (typically 10-20 times for a multi-element RC frame model).
+
 ---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-25 | 1.23.0 | **opstool tcl2py conversion behavior & workarounds (§12y):** (1) tcl2py actually executes OpenSees commands during conversion, not just syntax translation — convergence failures in source Tcl will block conversion; (2) OpenSeesMP code (getPID/getNP/barrier/after/vwait) must be stripped before conversion; (3) analysis execution loops must be commented out (leave setup commands for conversion); (4) tcl2py output reproduces source Tcl literally (forceBeamColumn + Newton + ft=3.0) — all §12x fixes still required; (5) tcl2py useful as verification tool for model definition, recorder setup, rigidDiaphragm, GM loading, Rayleigh damping. Source: BhatZeeshanManzoor G+4 RC infilled frame. |
 | 2025-05-08 | 1.0.0 | Initial AGENT.md created |
 | 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
 | 2025-05-09 | 1.1.1 | opstool API corrected to `opst.vis.plotly.plot_model(...).write_html()`; HTML output to `output/`; `_headless()` in `vis_utils.py` |
@@ -2497,6 +2820,7 @@ The original Tcl uses lb, in, psi (not kip). Verify by cross-checking E against 
 | 2026-06-23 | 1.18.0 | **3D single-wheelset rigid-body modes & post-loadConst SP patterns (§12t):** Documented lessons from XMU Chapter13.2 conversion — eliminating rigid-body UY modes with 1 N/m soft spring; moving SP constraints MUST be created AFTER `loadConst` to remain modifiable; `ops.timeSeries` tag collisions after `wipeAnalysis` (use higher tags); SmartAnalyze Transient supports per-step `remove("sp")` + `sp()` updates; auxiliary node creation belongs before element definition. |
 | 2026-06-23 | 1.17.0 | **Train-bridge interaction: wheel-rail SP constraints, fix/sp conflict, massless nodes (§12s):** Documented patterns from XMU Chapter13.1 refactoring — wheel position verification against actual node coordinates; `fix()`/`sp()` conflict on same DOF; mass distribution to all beam nodes to avoid singular mass matrices; SmartAnalyze transient compatibility with per-step SP modifications; SP-based moving wheel contact as alternative to custom WheelRail elements; SI-unit model structural conformance to AGENT.md without unit conversion. |
 | 2026-06-23 | 1.20.0 | **beamWithHinges ODB incompatibility & SmartAnalyze convergence tuning (§12v):** (1) beamWithHinges internal sections lack user-visible tags → `save_frame_resp=False` required in CreateODB (fixes "sectionForceDeformation(tag=0) none found" error). (2) Manual `ops.test()`/`ops.algorithm()` before SmartAnalyze is prohibited — SmartAnalyze manages these internally. (3) RC pushover needs full algorithm fallback list + `relaxation=0.5` + `tryAddTestTimes=True` for convergence at moderate drifts. (4) `constraints("Transformation")` preferred over `"Plain"` for SmartAnalyze pushover. (5) Cyclic pushover with negative increments should use a manual `StaticAnalyze` loop, not `static_split`. Source: Citiner conversion (RC cantilever column, fiber-section beamWithHinges, 23-segment cyclic pushover). |
+| 2026-06-24 | 1.22.0 | **Tcl forceBeamColumn HingeRadau conversion + gravity convergence (§12x):** (1) Tcl format `HingeRadau $secTag $lpI $nIpI $lpJ $nIpJ` was mis-parsed — secTag swapped with nIpJ. (2) dispBeamColumn+HingeRadau preserves hinge lengths (200-225mm); forceBeamColumn state determination is unreliable in OpenSeesPy. (3) Newton/KrylovNewton diverge on gravity step 2 — 3D dispBeamColumn fiber-section tangent becomes singular due to stiffness contrasts (zeroLength 1e13 vs fiber beam 1e6). (4) ModifiedNewton+Penalty(1e13) is the stable combination — reaches ~66% gravity with relaxed tolerance (0.01). (5) `ops.uniaxialMaterial` cannot redefine existing tags; `ops.remove("uniaxialMaterial")` not supported — Concrete02 ft must be elevated (20 MPa) from initial definition. (6) Penalty springs regularise the matrix better than Transformation elimination for models with rigidDiaphragm + stiff zeroLength joints. Source: BhatZeeshanManzoor G+4 RC infilled frame, STKO/SimCenter Tcl -> Python. |
 
 ---
 *This file is the single source of truth for the OpenSeesPy standardisation agent.
