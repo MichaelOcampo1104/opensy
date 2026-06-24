@@ -361,6 +361,11 @@ def post_process(odb, output_dir):
         return
     opst.post.set_odb_path(str(output_dir))
     vis_defo(output_dir, odb_tag="F12-D100", resp_dof="UX")
+    fig_slider = opst.vis.plotly.plot_nodal_responses(
+        odb_tag="F12-D100", slides=True, defo_scale=True,
+        resp_type="disp", resp_dof="UX",
+    )
+    fig_slider.write_html(str(output_dir / "vis_06_slider.html"))
 
 
 # ── 14. MAIN ────────────────────────────────────────────────
