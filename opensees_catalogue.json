@@ -607,5 +607,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from ref/monotonicTemplate.tcl and ref/cyclicTemplate.tcl (Citiner group). Original units: kN, m, kPa — converted to N, mm, MPa. CYCLIC=True (default) selects 23-segment alternating protocol; set CYCLIC=False for monotonic. Plastic hinge length PHL=99.82 mm from AdaBoost model (companion notebook in ref/). Tcl reference files preserved in ref/. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "CookDustin_F12-D100",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "2D 4-bay × 12-story RC special moment frame pushover with concentrated IMKPeakOriented plasticity hinges and leaning column. FEMA P695 'm112v5' archetype from NHERI SimCenter pipeline.",
+    "Description of Building Structural System": "2D RC special moment frame (SMF) per FEMA P695: 4 bays × 12 stories, 180 in first story, 156 in upper stories, total 1896 in (4.87 m). Concrete frame with beams and columns: 53 beam elements, 31 column elements, 24 leaning-column truss elements, 168 rigid-offset elements. Beam and column ends use IMKPeakOriented rotational springs (168) with Elastic axial/shear springs (168). PDelta geometric transformation on frame columns; Linear transformation on beams and rigid offsets. Leaning column via truss elements (tag range 85-108) at x=820 in (20.83 m).",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3). 401 nodes, 365 of which have masses. 276 elasticBeamColumn elements (A, E, Iz parsed from Tcl — cracked-section values that differ from CSV gross iz by ~1.1× factor). 336 zeroLength elements: 168 rotational IMKPeakOriented (dir 3) + 168 axial/shear Elastic (dir 1, 2). 171 uniaxialMaterial: 168 IMKPeakOriented (K0, Mp converted lb·in → N·mm, all other params dimensionless) + 3 Elastic. Units converted lb·in·psi → N·mm·MPa: coords ×25.4, A ×645.16, Iz ×416231.4, E ×0.0068948, K0/Mp ×112.98, mass ×0.1751 (lb·s²/in → N·s²/mm). Gravity: story dead+0.25×live from story.csv proportioned to nodal masses from node.csv via LoadControl (10 steps). Pushover: inverted-triangular lateral load, DisplacementControl at roof (200 steps to 10 % drift, ~37.3 mm/step). Fallback algorithms: ModifiedNewton → NewtonLineSearch on divergence. ODB with fetch_response_step each converged step.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (IMKPeakOriented rotational hinges + elastic beam-column elements)",
+    "Lateral system": "RC SMF (Special Moment Frame) with leaning column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static pushover (inverted-triangular lateral + gravity)",
+    "Earthquake records": "NA",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "FEMA P695; NHERI SimCenter pipeline (Cook Dustin 'm112v5')",
+    "Notes": "Converted from F12-D100_ref/model.tcl (Cook Dustin, NHERI SimCenter pipeline). Original units: lb, in, psi — converted to N, mm, MPa. Tcl parsing approach: model.py reads model.tcl directly for all materials/elements/nodes/BCs, guaranteeing exact match with reference. CSVs used only for gravity load distribution (story dead+live loads from story.csv, nodal mass weights from node.csv). IMKPeakOriented K0 (index 0) and Mp (indices 4, 10) multiplied by 112.98 lb·in→N·mm; E multiplied by 0.0068948 psi→MPa; coordinates by 25.4; areas by 645.16; Iz by 416231.4. Elastic materials (steel stiffness ratios, tag range 1-3) left dimensionless. BeamWithHinges not used — this model uses elasticBeamColumn so the save_frame_resp/sectionForceDeformation bug does not apply. Tcl is model-only (no analysis section) — analysis added in model.py (gravity LoadControl + displacement-controlled pushover). No SmartAnalyze needed — simple manual loops suffice for monotonic pushover. Run with: conda activate opensy && python model.py"
   }
 ]

@@ -2374,6 +2374,100 @@ The Tcl templates use `constraints("Plain")` throughout. SmartAnalyze pushover w
 
 `analysis.static_split(protocol, maxStep)` is designed for monotonic protocols with positive targets. For cyclic segments with negative `remaining`, use a manual loop calling `StaticAnalyze(node, dof, seg=dU)` repeatedly with constant `dU = remaining / n_steps` (positive or negative). This matches the OReilly2019 cyclic pattern.
 
+### §12w — CookDustin F12-D100: Tcl-Parsing RC Frame with IMKPeakOriented Hinges, SmartAnalyze Hang Prevention (v1.21.0)
+
+Source: CookDustin F12-D100 conversion (2D 4-bay × 12-story RC SMF with concentrated IMKPeakOriented plasticity hinges, leaning column, Tcl model-only, lb-in-psi → N-mm-MPa).
+
+#### 1. Tcl Parsing Over CSV Reconstruction for Cracked-Section Properties
+
+The Tcl `elasticBeamColumn` commands contain A, E, Iz values that differ from the CSV `element_table` gross-section properties (Iz factor ≈1.1 — cracked/effective section ratio computed by the SimCenter pipeline). Parsing the Tcl directly guarantees exact match with the reference; CSV values would introduce systematic stiffness errors.
+
+```python
+# Parsing approach: read model.tcl line-by-line for all element/material/node/BC data
+tcl_data = _parse_tcl(TCL_PATH)
+# CSVs used only for non-structural data (story gravity loads from story.csv)
+```
+
+**Rule:** When Tcl and CSVs both exist and the Tcl values represent post-processed (cracked/effective) section properties, parse the Tcl. Reserve CSVs for metadata the Tcl doesn't contain.
+
+#### 2. IMKPeakOriented Unit Conversion: Only K₀ and Mₚ Are Dimensional
+
+IMKPeakOriented has 23 float parameters. Of these, only two carry physical dimensions:
+- **K₀** (index 0): rotational stiffness — lb·in/rad → N·mm/rad (× 112.98)
+- **Mₚ** (indices 4, 10): positive/negative plastic moment — lb·in → N·mm (× 112.98)
+
+All other parameters (post-yield stiffness ratio, ductility capacities, cyclic degradation parameters) are **dimensionless ratios** and pass through unconverted.
+
+```python
+cvals = list(vals)
+if len(cvals) >= 1:
+    cvals[0] *= LBIN2NMM   # K0
+if len(cvals) >= 5:
+    cvals[4] *= LBIN2NMM   # Mp positive
+if len(cvals) >= 11:
+    cvals[10] *= LBIN2NMM  # Mp negative
+```
+
+**Rule:** For IMK/hysteretic material models, identify which parameters are stiffness/strength (need unit conversion) and which are dimensionless shape parameters (pass through). A wholesale conversion of all parameters introduces errors.
+
+#### 3. SmartAnalyze Aggressive Retry Settings Cause Hangs on IMK Hinge Softening
+
+SmartAnalyze's `tryAddTestTimes=True` + `relaxation=0.5` + `minStep=1.0e-4` triggers indefinite retry when an IMKPeakOriented hinge enters its post-peak descending branch. The solver subdivides steps down to 1e-4 of the original increment, retrying all 6 algorithm types at each subdivision, never converging.
+
+**Fix:** Keep SmartAnalyze simple for RC frame pushover — just `tryAlterAlgoTypes=True` with `algoTypes=[40, 10, 20, 30]` (KrylovNewton → Newton → ModifiedNewton → NewtonLineSearch). Fail fast and report divergence:
+
+```python
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30],    # no tryAddTestTimes, relaxation, or minStep
+)
+```
+
+**Symptom of hang:** SmartAnalyze progress bar freezes (e.g., 17/200) with no error message; user must Ctrl+C; `save_response()` and all subsequent output never execute.
+
+**Rule:** Use the full aggressive retry settings (§12v-3) only for models that have demonstrated convergence issues with the simple settings. For IMK hinge models that can genuinely soften (descending branch), the simple settings let the analysis report failure immediately instead of hanging.
+
+#### 4. Do NOT Set `ops.constraints`/`numberer`/`system` Before SmartAnalyze After Manual Gravity
+
+After `ops.analysis("Static")` in the manual LoadControl gravity phase, the constraint/numberer/system handlers are frozen. Calling them again before SmartAnalyze produces `"WARNING can't set handler after analysis is created"` and has no effect. SmartAnalyze sets these handlers internally.
+
+```python
+# Gravity (manual LoadControl — permitted exception)
+ops.analysis("Static")
+for _ in range(N_GRAV_STEPS):
+    ops.analyze(1)
+    odb.fetch_response_step()
+ops.loadConst("-time", 0.0)
+
+# Pushover (SmartAnalyze) — NO manual constraints/numberer/system calls
+analysis = opst.anlys.SmartAnalyze(analysis_type="Static", ...)
+```
+
+**Rule:** After any manual `ops.analysis()` call, do NOT set handlers again before SmartAnalyze. SmartAnalyze handles its own handler setup.
+
+#### 5. `set_odb_path()` Must Be Called Before `plot_nodal_responses()` in `post_process`
+
+The ODB path is set in `create_odb()` inside `run_analysis()`. When `post_process()` calls `vis_defo()` → `plot_nodal_responses()`, the path may not be active. Always call `opst.post.set_odb_path(str(output_dir))` in `post_process` before any visualization function that reads ODB data.
+
+#### 6. `vis_defo()` Positional Arg Pitfall
+
+`vis_defo(output_dir: Path, filename: str = "vis_05_deformed.html", odb_tag: int = 1, ...)` — passing the ODB object as the second positional argument maps to `filename`, not `odb_tag`. The call must use keyword arguments:
+
+```python
+# BROKEN — odb object passed as filename
+vis_defo(output_dir, odb, resp_dof="UX")
+
+# CORRECT — odb_tag as keyword; odb object not needed by vis_defo
+vis_defo(output_dir, odb_tag="F12-D100", resp_dof="UX")
+```
+
+#### 7. Verify Source Units Carefully: lb/in/psi vs kip/in/ksi
+
+The original Tcl uses lb, in, psi (not kip). Verify by cross-checking E against concrete code formula: E = 57,000√fc' in psi. For fc' = 7000 psi, E = 57,000√7000 ≈ 4,768,962 psi — matches the Tcl value. For kip units, this would be 4,769 ksi, which is implausibly high.
+
+**Rule:** When converting imperial Tcl models, always verify the base unit system by cross-checking a known physical relationship (E vs fc', steel E = 29,000 ksi, etc.) against the Tcl values.
+
 ---
 ## 13. Versioning & Change Log
 
