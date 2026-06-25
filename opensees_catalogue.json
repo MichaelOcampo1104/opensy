@@ -670,5 +670,26 @@
     "Suggested Model citation": "Schellenberg, A. Building1DOFwithTMD.tcl — NEEShybrid / mosqueda specimen.",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from tcl_ref/Building1DOFwithTMD.tcl (Andreas Schellenberg). kip-in to N-mm conversion. OpenFresco experimental elements removed (expElmFact=0). Sine excitation replaces missing Loma Prieta motion files. Gravity before loadConst, GM after per AGENT.md 12z-1. SmartAnalyze Transient. T1=0.269s (3.71 Hz). Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "pedroArduino_freefield",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "1D effective-stress site response analysis of a 3-layer soil column on a 2% slope using SSPquadUP coupled u-p elements with PressureDependMultiYield02.",
+    "Description of Building Structural System": "30m soil column (2m loose sand / 8m medium sand / 20m dense sand) on elastic half-space (Vs=700 m/s). Water table at 2m depth. 2% slope with periodic lateral boundaries. Lysmer dashpot base.",
+    "Description of Model": "2D coupled u-p model with 60 SSPquadUP elements (1-column mesh). 3 PressureDependMultiYield02 materials with calibrated liquefaction parameters. Rayleigh damping 2% on 0.2-20 Hz. Three-phase analysis: (1) elastic gravity (Newmark, 100 steps at dt=500s), (2) plastic gravity (100 steps at dt=1s), (3) dynamic SmartAnalyze Transient (7990 steps, dt=0.005s, Newmark 0.5/0.25). Synthetic Ricker wavelet excitation (peak 0.15 m/s). Post-shake consolidation with 20% damping. ODB response collection.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Soil (PressureDependMultiYield02)",
+    "Lateral system": "1D soil column with periodic boundaries",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic base excitation (velocity input via Lysmer dashpot)",
+    "Earthquake records": "Synthetic Ricker wavelet (dt=0.005s, 7990 pts, peak=0.15 m/s at 1.5 Hz)",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "McGann, Shin, Arduino, Mackenzie-Helnwein — U. Washington.",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "Converted from tcl_ref/freeFieldEffective.tcl. Retains source units (kN, m, kPa, sec) per XMU_Chapter8 precedent for coupled u-p models. setParameter uses -val flag (not -value). SSPquadUP body forces in m/s^2. Gravity uses transient Newmark for consolidation. SmartAnalyze Transient handles 7990-step dynamic. Run with: conda activate opensy && python model.py"
   }
 ]
