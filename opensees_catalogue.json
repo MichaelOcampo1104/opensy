@@ -628,5 +628,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Elwood, K. J. — UBC / UC Berkeley RC column test database.",
     "Notes": "Converted from Tcl reference files (modelMaterial9.tcl + modelGeometry9.tcl + wallDriver.tcl) in tcl_refs/staticFiles/. Original units: ksi, in, kip — all converted to N, mm, MPa. Key conversion note: Source Tcl uses forceBeamColumn -sections for per-IP graded confinement (10 IPs with 9 Aggregator section variants). OpenSeesPy beamIntegration supports only one section per element — a single representative section (SEC_AGG_5, mid-height) is used for all IPs (~10-15% stiffness difference expected per AGENT.md §12e). Aggregator Vy shear material uses force-deformation interpretation: fy × 4448.22 (kip→N), E × (4448.22/25.4) (ksi→N/mm). Gravity via manual LoadControl loop (AGENT.md §3c exception). Reference Tcl files preserved in tcl_refs/. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "elwoodkenneth_C10",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Cyclic displacement-controlled pushover of a single RC column (C10 specimen) with fiber-section forceBeamColumn elements, graded confinement layers, and Aggregator shear spring (Vy).",
+    "Description of Building Structural System": "Single RC column (wall-like section, 1454 mm wide x 200 mm deep, 3260 mm tall) with concentrated longitudinal reinforcement and confined core concrete. C10 specimen from Ken Elwood's RC column test database — shear-critical response.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 2 forceBeamColumn elements (10 Lobatto integration points each) using fiber-discretised RC sections with Aggregator shear spring (Vy). 36 Concrete02 materials (4 concrete groups) and 18 Steel02 + 18 MinMax wrappers capture graded confinement. C10 variant: group 101-109 uses fc=-4.743 MPa with constant epsU=-0.008. Gravity axial load (1452 kN) followed by 15-cycle displacement-controlled pushover (peak amplitudes from +/-3 mm to +/-103 mm).",
+    "Year of design and construction": "NA (laboratory test specimen)",
+    "2D/3D": "2D",
+    "Material": "RC (fiber-section forceBeamColumn)",
+    "Lateral system": "Cantilever column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static cyclic displacement-controlled pushover",
+    "Earthquake records": "NA",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Elwood, K. J. — UBC / UC Berkeley RC column test database.",
+    "Notes": "Converted from Tcl reference files (modelMaterial9.tcl + modelGeometry9.tcl + wallDriver.tcl) in tcl_ref/. Variant of elwoodKenneth with different column height (3260 mm vs 3300 mm), concrete confinement params (group 101-109: fc=-4.743 MPa, epsU=-0.008 constant), and 15-cycle protocol (max 102.85 mm). Lateral pattern defined after loadConst per AGENT.md 12z-1. Manual solver loop per AGENT.md 12z-3. Run with: conda activate opensy && python model.py"
   }
 ]
