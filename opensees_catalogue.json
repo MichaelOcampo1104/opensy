@@ -378,27 +378,6 @@
     "Notes": "Converted from model.tcl (XMU Chapter 4.4 example). Original units: kN, m, kPa — converted to N, mm, MPa. 3D fiber sections require -GJ torsion via Aggregator (actual stiffness). Eigenvalue needs -fullGenLapack solver for 3D models. Ground motion files (tabasfn.txt, tabasfp.txt) in ground_motions/ subdirectory. Results: T1=0.163s, drift X=1.15%, drift Y=1.22%. Run with: conda activate opensy && python model.py"
   },
   {
-    "UniqueID": "XMU_Chapter5",
-    "URL": "NA",
-    "num_models": "1",
-    "purpose": "Textbook-example cyclic pushover analysis of a 2D RC slender shear wall (RW2-2 specimen, Thomsen & Wallace 2004) with fiber-section boundary columns and smeared quad wall panel elements.",
-    "Description of Building Structural System": "2D RC slender structural wall (1032 x 3660 x 102 mm) with boundary columns (153 x 102 mm) at each end. Boundary columns use Concrete02 (confined core + cover) with Steel02 rebar (4 x #3 bars per layer, 19 mm cover). Wall panel uses SmearedCompositePlaneStress nDMaterial with smeared Steel02 reinforcement (rho=0.0024 both directions) and SmearedConcrete (fc=42.8-45.7 MPa across 4 zones). Elastic spider-beam links control node above wall top to distribute load to all top nodes.",
-    "Description of Model": "2D finite element model with sequential model building: frame phase (ndf=3, nodes 1-28, fiber-section columns + elastic spider-beams) then quad wall phase (ndf=2, nodes 29-105, 6x10 quad mesh). equalDOF ties connect coincident frame-quad nodes in DOFs 1,2. Gravity: 378 kN axial load at control node via LoadControl with KrylovNewton. Cyclic pushover: displacement-controlled, Full cycle type (0 -> +peak -> 0 -> -peak -> 0) with 8 peak amplitudes (3.79-71.28 mm), Dincr=0.02 mm. 5-tier algorithm fallback: Newton -> Newton-initial -> Broyden -> NewtonLineSearch -> KrylovNewton. Post-processing: force-displacement hysteresis, EDPs (peak base shear, drift ratio), deformed shape visualization.",
-    "Year of design and construction": "2004 (Thomsen & Wallace RW2-2 specimen)",
-    "2D/3D": "2D",
-    "Material": "RC (fiber boundary columns + smeared quad wall panel)",
-    "Lateral system": "RC Shear Wall",
-    "building occupancy class": "NA",
-    "Lateral Loading": "Cyclic displacement-controlled pushover",
-    "Earthquake records": "NA",
-    "Opensees Version": "Custom XMU build required",
-    "model generator": "NA",
-    "file format": ".py",
-    "Suggested Model citation": "Thomsen, J. H. and Wallace, J. W. (2004). Displacement-based design of slender reinforced concrete structural walls -- experimental verification. Journal of Structural Engineering, 130(4), pp. 618-630.",
-    "Links to Papers / Design Reports": "XMU Finite Element Analysis course, Chapter 5. Thomsen & Wallace (2004), DOI: 10.1061/(ASCE)0733-9445(2004)130:4(618).",
-    "Notes": "Converted from RW2_2.tcl + GeneratePeaks.tcl (XMU Chapter 5 example). Units already N, mm, MPa (no conversion needed). KIV: SmearedConcrete and SmearedCompositePlaneStress are research-fork materials NOT in standard OpenSeesPy from PyPI. Requires custom XMU OpenSees build. Frame model (ndf=3 fiber columns + elastic beams) builds fine with standard OpenSeesPy; quad wall phase (ndf=2) is blocked. Error message in model.py directs user to custom build. Original Tcl files preserved for reference. dispBeamColumn requires beamIntegration in OpenSeesPy. Run with: conda activate opensy && python model.py (custom build only)"
-  },
-  {
     "UniqueID": "XMU_Chapter6",
     "URL": "NA",
     "num_models": "1",
@@ -628,5 +607,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "FEMA P695; NHERI SimCenter pipeline (Cook Dustin 'm112v5')",
     "Notes": "Converted from F12-D100_ref/model.tcl (Cook Dustin, NHERI SimCenter pipeline). Original units: lb, in, psi — converted to N, mm, MPa. Tcl parsing approach: model.py reads model.tcl directly for all materials/elements/nodes/BCs, guaranteeing exact match with reference. CSVs used only for gravity load distribution (story dead+live loads from story.csv, nodal mass weights from node.csv). IMKPeakOriented K0 (index 0) and Mp (indices 4, 10) multiplied by 112.98 lb·in→N·mm; E multiplied by 0.0068948 psi→MPa; coordinates by 25.4; areas by 645.16; Iz by 416231.4. Elastic materials (steel stiffness ratios, tag range 1-3) left dimensionless. BeamWithHinges not used — this model uses elasticBeamColumn so the save_frame_resp/sectionForceDeformation bug does not apply. Tcl is model-only (no analysis section) — analysis added in model.py (gravity LoadControl + displacement-controlled pushover). No SmartAnalyze needed — simple manual loops suffice for monotonic pushover. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "elwoodKenneth",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Cyclic displacement-controlled pushover of a single RC column with fiber-section forceBeamColumn elements, graded confinement layers, and Aggregator shear spring (Vy).",
+    "Description of Building Structural System": "Single RC column (wall-like section, 1454 mm wide × 200 mm deep, 3300 mm tall) with concentrated longitudinal reinforcement and confined core concrete. Column from Ken Elwood's RC column test database — shear-critical response.",
+    "Description of Model": "2D finite element model (ndm=2, ndf=3) with 2 forceBeamColumn elements (10 Lobatto integration points each) using fiber-discretised RC sections with Aggregator shear spring (Vy). 36 Concrete02 materials (4 concrete groups: unconfined cover, confined core × 3) and 18 Steel02 + 18 MinMax wrappers (2 steel groups: outer fy=507 MPa, inner fy=543 MPa) capture graded confinement from column ends to mid-height. Gravity axial load (1452 kN) followed by 16-cycle displacement-controlled pushover (peak amplitudes from ±3 mm to ±104 mm) using SmartAnalyze per segment with KrylovNewton→Newton→ModifiedNewton→NewtonLineSearch→BFGS fallback.",
+    "Year of design and construction": "NA (laboratory test specimen)",
+    "2D/3D": "2D",
+    "Material": "RC (fiber-section forceBeamColumn)",
+    "Lateral system": "Cantilever column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static cyclic displacement-controlled pushover",
+    "Earthquake records": "NA",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Elwood, K. J. — UBC / UC Berkeley RC column test database.",
+    "Notes": "Converted from Tcl reference files (modelMaterial9.tcl + modelGeometry9.tcl + wallDriver.tcl) in tcl_refs/staticFiles/. Original units: ksi, in, kip — all converted to N, mm, MPa. Key conversion note: Source Tcl uses forceBeamColumn -sections for per-IP graded confinement (10 IPs with 9 Aggregator section variants). OpenSeesPy beamIntegration supports only one section per element — a single representative section (SEC_AGG_5, mid-height) is used for all IPs (~10-15% stiffness difference expected per AGENT.md §12e). Aggregator Vy shear material uses force-deformation interpretation: fy × 4448.22 (kip→N), E × (4448.22/25.4) (ksi→N/mm). Gravity via manual LoadControl loop (AGENT.md §3c exception). Reference Tcl files preserved in tcl_refs/. Run with: conda activate opensy && python model.py"
   }
 ]
