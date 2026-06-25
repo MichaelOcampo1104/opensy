@@ -649,5 +649,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Elwood, K. J. — UBC / UC Berkeley RC column test database.",
     "Notes": "Converted from Tcl reference files (modelMaterial9.tcl + modelGeometry9.tcl + wallDriver.tcl) in tcl_ref/. Variant of elwoodKenneth with different column height (3260 mm vs 3300 mm), concrete confinement params (group 101-109: fc=-4.743 MPa, epsU=-0.008 constant), and 15-cycle protocol (max 102.85 mm). Lateral pattern defined after loadConst per AGENT.md 12z-1. Manual solver loop per AGENT.md 12z-3. Run with: conda activate opensy && python model.py"
+  },
+  {
+    "UniqueID": "mosqueda",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Transient dynamic analysis of a 3D SDOF building with a TripleFrictionPendulum TMD isolator under multi-support sine excitation.",
+    "Description of Building Structural System": "3D SDOF building with elastic X/Y/Z springs and a TMD using TripleFrictionPendulum (FPSB) bearing. Original hybrid simulation specimen by Andreas Schellenberg (NEEShybrid).",
+    "Description of Model": "3D finite element model (ndm=3, ndf=6) with 3 nodes: fixed base (node 1), building mass (node 2, 181 N-s2/mm), TMD mass (node 3, 25.4 N-s2/mm). twoNodeLink element with elastic stiffness (kx=114 kN/mm, ky=178 kN/mm, kz=863 kN/mm). TripleFrictionPendulum element with 3 Coulomb friction models (mu=0.055/0.13/0.13), pendulum radii L1=55mm/L2=436mm/L3=436mm. Rayleigh damping 5% on initial stiffness. Gravity (2002 kN + 249 kN) + multi-support sine excitation (0.5 Hz, 38 mm, 30s). Eigenvalue analysis. SmartAnalyze Transient with Newmark integration (8192 steps, dt=0.00488s). ODB response collection.",
+    "Year of design and construction": "NA (laboratory specimen)",
+    "2D/3D": "3D",
+    "Material": "Elastic (building) + TripleFrictionPendulum (TMD)",
+    "Lateral system": "SDOF with TMD isolation (FPSB)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic multi-support sine excitation (X-direction)",
+    "Earthquake records": "Sine wave (0.5 Hz, 38 mm amplitude, 30s, synthetic)",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "Schellenberg, A. Building1DOFwithTMD.tcl — NEEShybrid / mosqueda specimen.",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "Converted from tcl_ref/Building1DOFwithTMD.tcl (Andreas Schellenberg). kip-in to N-mm conversion. OpenFresco experimental elements removed (expElmFact=0). Sine excitation replaces missing Loma Prieta motion files. Gravity before loadConst, GM after per AGENT.md 12z-1. SmartAnalyze Transient. T1=0.269s (3.71 Hz). Run with: conda activate opensy && python model.py"
   }
 ]
