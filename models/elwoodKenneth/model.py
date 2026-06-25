@@ -239,7 +239,7 @@ N_IP      = 10
 GRAV_LAMBDA_STEP = 1.0 / N_GRAV_STEPS
 
 # Pushover analysis
-MAX_STEP_SIZE = 0.5              # mm — max displacement increment
+MAX_STEP_SIZE = 0.2              # mm — max displacement increment
 
 
 # ── 4. MODEL INITIALISATION ──────────────────────────────────────────────────
@@ -578,14 +578,13 @@ def _run_cycle_segment(
     ctrl_node: int,
     ctrl_dof: int = CTRL_DOF,
 ) -> bool:
-    """Run one displacement-controlled segment using a manual solver loop.
+    """Run one displacement-controlled segment using SmartAnalyze.
 
-    Manual loop is used instead of SmartAnalyze because:
-    1. SmartAnalyze's default EnergyIncr test (1e-10) is too tight for
-       fiber-section RC at large drift — manual control lets us relax
-       tolerance and use algorithm fallbacks.
-    2. The original Tcl's CyclicSolutionAlgorithm uses manual per-step
-       displacement control with Newton→NewtonLineSearch fallback.
+    SmartAnalyze manages constraints, numberer, system, test, and algorithm
+    internally per AGENT.md §3c. Test tolerance relaxed from 1e-10 to 1e-5
+    (NormDispIncr) for fiber-section RC — the default EnergyIncr is too tight
+    for Concrete02 at >1% drift where the state determination produces minor
+    force imbalances (~50 N at 1452 kN axial load).
 
     Args:
         odb: Active ODB.
@@ -598,47 +597,35 @@ def _run_cycle_segment(
     """
     abs_target = abs(target_disp)
     if abs_target < 1.0e-6:
-        return True  # zero target — skip
+        return True
 
     n_steps = max(1, int(abs_target / MAX_STEP_SIZE))
     step_size = target_disp / n_steps
 
-    ops.constraints("Transformation")
-    ops.numberer("RCM")
-    ops.system("BandGeneral")
-    ops.test("NormDispIncr", 1.0e-5, 200)
-    ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, step_size)
-    ops.analysis("Static")
+    analysis = opst.anlys.SmartAnalyze(
+        analysis_type="Static",
+        testType="NormDispIncr",
+        testTol=1.0e-5,
+        testIterTimes=200,
+        tryAlterAlgoTypes=True,
+        algoTypes=[40, 10, 20, 30],
+        tryLooseTestTol=True,
+        looseTestTolTo=1.0e-4,
+        tryAddTestTimes=True,
+        testIterTimesMore=[50, 100],
+    )
 
-    algo_chain = [
-        ("KrylovNewton", []),
-        ("Newton", []),
-        ("NewtonLineSearch", []),
-        ("ModifiedNewton", []),
-    ]
-
-    for step_idx in range(n_steps):
-        algo_worked = False
-        for algo_name, algo_args in algo_chain:
-            ops.algorithm(algo_name, *algo_args)
-            ok = ops.analyze(1)
-            if ok == 0:
-                algo_worked = True
-                break
-
-        if not algo_worked:
-            # Last resort: KrylovNewton with relaxed tolerance
-            ops.test("NormDispIncr", 1.0e-4, 500)
-            ops.algorithm("KrylovNewton")
-            ok = ops.analyze(1)
-            if ok != 0:
-                print(f"  Convergence failed at step {step_idx + 1}/{n_steps} "
-                      f"(disp ~{step_size * step_idx:.3f} mm)")
-                return False
-
+    protocol = [target_disp]
+    segs = analysis.static_split(protocol, maxStep=step_size)
+    ok = True
+    for seg in segs:
+        result = analysis.StaticAnalyze(node=ctrl_node, dof=ctrl_dof, seg=seg)
         odb.fetch_response_step()
-
-    return True
+        if result < 0:
+            ok = False
+            break
+    analysis.close()
+    return ok
 
 
 def run_cyclic_pushover(odb: "opst.post.CreateODB") -> None:

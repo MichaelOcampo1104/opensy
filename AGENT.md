@@ -2847,7 +2847,7 @@ ops.fix(NODE_BASE, 1, 1, 1)  # direct fixity on base node
 
 **When can zeroLength base springs be removed?** When the model does NOT need per-DOF reaction separation, and ODB nodal reaction collection suffices. If the source Tcl uses zeroLength elements only for convenience (not for nonlinear base behavior), removing them simplifies the model and improves convergence.
 
-#### 3. SmartAnalyze EnergyIncr Test Too Tight for Fiber-Section RC Beyond 1% Drift
+#### 3. SmartAnalyze Test Tolerance Configuration for Fiber-Section RC Pushover
 
 `opst.anlys.SmartAnalyze` uses a default `EnergyIncr` test with tolerance 1e-10 and 10 max iterations. For fiber-section RC columns with Concrete02 materials entering the descending branch (>1% drift), this tolerance is too tight:
 
@@ -2857,52 +2857,60 @@ CTestEnergyIncr::test() - failed to converge after: 10 iterations
   Norm deltaX: 4.85e-05, Norm deltaR: 56.5
 ```
 
-SmartAnalyze subdivides the step down to its `minStep` (1e-4 fraction) and aborts, even though Norm deltaX (4.85e-5) indicates the displacement solution is nearly converged. The EnergyIncr is 4 orders of magnitude above tolerance due to numerical noise in fiber-section state determination, not genuine non-convergence.
+The EnergyIncr is 4 orders of magnitude above tolerance due to force imbalance from fiber-section state determination (~50 N at 1452 kN axial = 0.004%), even though the displacement solution is fully converged (Norm deltaX = 4.85e-5).
 
-SmartAnalyze does not expose the test tolerance as a user parameter, so the fix is to replace SmartAnalyze with a **manual solver loop** using a relaxed `NormDispIncr` test:
+**Fix:** SmartAnalyze accepts test-control kwargs — pass `testType` and `testTol` to switch from `EnergyIncr` to `NormDispIncr` with a relaxed tolerance:
 
 ```python
-ops.constraints("Transformation")
-ops.numberer("RCM")
-ops.system("BandGeneral")
-ops.test("NormDispIncr", 1.0e-5, 200)
-ops.integrator("DisplacementControl", ctrl_node, ctrl_dof, step_size)
-ops.analysis("Static")
-
-algo_chain = [
-    ("KrylovNewton", []),
-    ("Newton", []),
-    ("NewtonLineSearch", []),
-    ("ModifiedNewton", []),
-]
-
-for step_idx in range(n_steps):
-    algo_worked = False
-    for algo_name, algo_args in algo_chain:
-        ops.algorithm(algo_name, *algo_args)
-        if ops.analyze(1) == 0:
-            algo_worked = True
-            break
-    if not algo_worked:
-        # Last resort: KrylovNewton with relaxed tolerance
-        ops.test("NormDispIncr", 1.0e-4, 500)
-        ops.algorithm("KrylovNewton")
-        if ops.analyze(1) != 0:
-            return False  # genuinely failed
-    odb.fetch_response_step()
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    testType="NormDispIncr",          # ← was "EnergyIncr"
+    testTol=1.0e-5,                   # ← was 1.0e-10
+    testIterTimes=200,                # ← was 10
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30],
+    tryLooseTestTol=True,             # auto-relax if convergence stalls
+    looseTestTolTo=1.0e-4,
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+)
 ```
+
+Note: `tryLooseTestTolTo` is derived from `testTol` (not `looseTestTolTo`), so set it explicitly.
 
 **Key parameters for RC pushover:**
 
-| Parameter | SmartAnalyze default | Manual loop recommendation |
-|-----------|---------------------|---------------------------|
-| Test type | `EnergyIncr` | `NormDispIncr` |
-| Tolerance | 1e-10 | 1e-5 (1e-4 fallback) |
-| Max iterations | 10 | 200 (500 fallback) |
-| Algorithm fallback | Automatic | KrylovNewton → Newton → NewtonLineSearch → ModifiedNewton |
-| Step subdivision | Automatic (can hang) | Fixed step size, fallback on failure |
+| Parameter | Default | RC pushover recommendation |
+|-----------|---------|---------------------------|
+| `testType` | `"EnergyIncr"` | `"NormDispIncr"` |
+| `testTol` | 1e-10 | 1e-5 |
+| `testIterTimes` | 10 | 200 |
+| `tryLooseTestTol` | `False` | `True` (auto-relax to 1e-4) |
+| `tryAlterAlgoTypes` | `False` | `True` |
+| `algoTypes` | [40,10,20,30,50,60,70,90] | [40, 10, 20, 30] |
+| `tryAddTestTimes` | `False` | `True` |
+| `testIterTimesMore` | [50] | [50, 100] |
 
-#### 4. Algorithm Selection for RC Pushover: KrylovNewton Over Newton
+#### 4. Smaller Step Size for forceBeamColumn Element-Level Convergence
+
+Even with a relaxed test tolerance, `SmartAnalyze` can fail at large drift (>1%) with:
+```
+ForceBeamColumn2d::update - failed to get compatible element forces & deformations
+```
+
+This is an **element-level** state determination failure — the flexibility-based forceBeamColumn element's internal Newton iteration diverges when fiber sections enter the softening branch. Unlike the global solver test tolerance, this is controlled by the element's own internal iteration and is sensitive to step size.
+
+**Fix:** Reduce `MAX_STEP_SIZE` from 0.5 mm to 0.2 mm (or smaller). Smaller displacement increments give the forceBeamColumn element's internal iteration smaller changes to process, keeping the element-level Newton within its convergence radius:
+
+```python
+MAX_STEP_SIZE = 0.2  # mm — 0.5 mm caused element-level failure at ~1% drift
+```
+
+This allows SmartAnalyze to complete the full cyclic protocol (15-16 cycles, 102-104 mm peak, 3.2% drift) without element-level state determination failures.
+
+**Rule of thumb:** If SmartAnalyze fails with `ForceBeamColumn2d::update - failed to get compatible element forces & deformations`, reduce `MAX_STEP_SIZE` by 2-3×. If it fails with a test/convergence error, adjust `testTol`/`testType`. If it hangs subdividing below `minStep`, the section has genuinely softened past zero stiffness — accept the failure as a physical limit of the model.
+
+#### 5. Algorithm Selection for RC Pushover: KrylovNewton Over Newton
 
 For fiber-section forceBeamColumn elements under cyclic pushover with axial gravity preload, KrylovNewton (algoType=40) converges where Newton (algoType=10) fails. The Krylov acceleration in KrylovNewton provides better search directions for the flexibility-based element state determination.
 
@@ -2913,11 +2921,11 @@ For fiber-section forceBeamColumn elements under cyclic pushover with axial grav
 4. `ModifiedNewton` — uses initial stiffness, converges slowly but stably
 5. `KrylovNewton` with relaxed tolerance (1e-4) — last resort
 
-#### 5. Gravity Analysis: `NormDispIncr` + `KrylovNewton` More Robust Than Tcl's `NormUnbalance` + `Newton`
+#### 6. Gravity Analysis: `NormDispIncr` + `KrylovNewton` More Robust Than Tcl's `NormUnbalance` + `Newton`
 
 The source Tcl uses `test NormUnbalance 1e-6 75` and `algorithm Newton` for gravity. In OpenSeesPy, switching to `test NormDispIncr 1.0e-5 200` and `algorithm KrylovNewton` provides more reliable convergence for fiber-section models under pure axial load. The `NormDispIncr` test checks displacement increments (which converge monotonically for load-controlled gravity) rather than force unbalance (which can oscillate in the first step).
 
-#### 6. Cyclic Pushover Protocol: Natural Peak-to-Peak Flow
+#### 7. Cyclic Pushover Protocol: Natural Peak-to-Peak Flow
 
 The original Tcl's `CyclicSolutionAlgorithm.tcl` was a shared helper (not present in the repository). The cyclic protocol can be reconstructed from the peak-displacement list as a flat sequence of alternating positive/negative targets:
 
@@ -2940,7 +2948,8 @@ The DisplacementControl integrator drives from the current position to each succ
 
 | Date | Version | Change |
 |------|---------|--------|
-| 2026-06-25 | 1.24.0 | **RC column cyclic pushover — lateral pattern ordering, manual solver loop for fiber-section softening, zeroLength stiffness contrast (§12z):** (1) Lateral load pattern for DisplacementControl MUST be defined AFTER `ops.loadConst("-time", 0.0)` — if frozen at λ=0, DisplacementControl computes infinite load factor (6.59e19). Same mechanism as §12i (GM ordering). (2) ZeroLength base springs (1.75e14 N/mm) with fiber-section columns (7e8 N/mm) create ~2.4e5 stiffness contrast causing Newton to diverge on gravity step 0 — fix by fixing base node directly. (3) SmartAnalyze's default EnergyIncr test (1e-10) too tight for Concrete02 softening >1% drift — use manual ops.analyze() loop with NormDispIncr 1e-5 and algorithm fallback chain. (4) KrylovNewton (algoType=40) preferred over Newton for fiber-section RC pushover. (5) Natural peak-to-peak cyclic flow eliminates need for return-to-zero segments. Source: elwoodKenneth conversion (2D RC cantilever column, fiber-section forceBeamColumn, 36 Concrete02, 18 Steel02, 16-cycle cyclic pushover to 3.2% drift). |
+| 2026-06-25 | 1.25.0 | **§12z corrected — SmartAnalyze supports testType/testTol kwargs; element-level step-size fix:** (1) SmartAnalyze accepts `testType`, `testTol`, `testIterTimes`, `tryLooseTestTol`, `looseTestTolTo` as kwargs — no need for manual solver loop. Use `testType="NormDispIncr"`, `testTol=1.0e-5` for fiber-section RC pushover. (2) `ForceBeamColumn2d::update - failed to get compatible element forces & deformations` at >1% drift is an element-level convergence issue fixed by reducing `MAX_STEP_SIZE` from 0.5 to 0.2 mm (gives forceBeamColumn's internal Newton smaller increments). (3) Both elwoodKenneth and elwoodkenneth_C10 now use SmartAnalyze exclusively — all cycles through 3.2% drift complete with 🎉. Source: elwoodkenneth_C10 verification. |
+| 2026-06-25 | 1.24.0 | **RC column cyclic pushover — lateral pattern ordering, zeroLength stiffness contrast, SmartAnalyze test tolerance (§12z):** (1) Lateral load pattern for DisplacementControl MUST be defined AFTER `ops.loadConst("-time", 0.0)` — if frozen at λ=0, DisplacementControl computes infinite load factor (6.59e19). Same mechanism as §12i (GM ordering). (2) ZeroLength base springs (1.75e14 N/mm) with fiber-section columns (7e8 N/mm) create ~2.4e5 stiffness contrast causing Newton to diverge on gravity step 0 — fix by fixing base node directly. (3) KrylovNewton (algoType=40) preferred over Newton for fiber-section RC pushover. (4) Natural peak-to-peak cyclic flow eliminates need for return-to-zero segments. Source: elwoodKenneth conversion (2D RC cantilever column, fiber-section forceBeamColumn, 36 Concrete02, 18 Steel02, 16-cycle cyclic pushover to 3.2% drift). |
 | 2026-06-25 | 1.23.0 | **opstool tcl2py conversion behavior & workarounds (§12y):** (1) tcl2py actually executes OpenSees commands during conversion, not just syntax translation — convergence failures in source Tcl will block conversion; (2) OpenSeesMP code (getPID/getNP/barrier/after/vwait) must be stripped before conversion; (3) analysis execution loops must be commented out (leave setup commands for conversion); (4) tcl2py output reproduces source Tcl literally (forceBeamColumn + Newton + ft=3.0) — all §12x fixes still required; (5) tcl2py useful as verification tool for model definition, recorder setup, rigidDiaphragm, GM loading, Rayleigh damping. Source: BhatZeeshanManzoor G+4 RC infilled frame. |
 | 2025-05-08 | 1.0.0 | Initial AGENT.md created |
 | 2025-05-09 | 1.1.0 | Unit system → N/mm/MPa; opstool stages added; JSON catalogue workflow added |
