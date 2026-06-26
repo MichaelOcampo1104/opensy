@@ -3101,19 +3101,128 @@ For a 1-column soil mesh (N_ELEM_X=1, N_NODE_X=2) with `equalDOF` tying each hor
 
 ```python
 # Stress contours (shows 2D field across element interiors)
+# Use resp_type="Stresses" (Gauss-point, averaged per element) — NOT
+# "StressesAtNodes", which is all-zeros for single-Gauss-point elements
+# like quadUP (see §12ad).
 opst.vis.plotly.plot_unstruct_responses(
     odb_tag=1, slides=True, ele_type="Plane",
-    resp_type="StressesAtNodes", resp_dof="sigma22",  # vertical stress
+    resp_type="Stresses", resp_dof="sigma22",  # vertical stress
 )
 # Shear stress with deformation overlay
 opst.vis.plotly.plot_unstruct_responses(
     odb_tag=1, slides=True, ele_type="Plane",
-    resp_type="StressesAtNodes", resp_dof="sigma12",  # shear stress
+    resp_type="Stresses", resp_dof="sigma12",  # shear stress
     show_defo=True, defo_scale=30,
+)
+# Pore pressure: read from nodal 'pressure' (valid) not sigma33
+opst.vis.plotly.plot_nodal_responses(
+    odb_tag=1, slides=True, resp_type="pressure",
 )
 ```
 
-These show the 2D stress field across element interiors, which is the proper diagnostic for verifying a site response model is working (gravitational stress gradient with depth, dynamic shear waves propagating upward).
+These show the 2D stress field across element interiors, which is the proper diagnostic for verifying a site response model is working (gravitational stress gradient with depth, dynamic shear waves propagating upward). See §12ad for why `StressesAtNodes` must be avoided on single-Gauss-point elements.
+
+### §12ac — ODB Path Ordering: `set_odb_path` MUST Precede `CreateODB` (v1.28.0)
+
+Source: pedroArduino_freefield — output plots missing because response data was written to the wrong directory.
+
+#### The Bug
+
+`opst.post.set_odb_path()` migrates any existing ODB data from the default `.opstool.output/` into the target path. But it only takes effect for **subsequent** ODB operations — if `CreateODB` is instantiated *before* `set_odb_path` is called, the response data silently lands in the default `.opstool.output/` instead of the intended `output/`. The model's own `output/RespStepData-1.odb` directory is created (by `save_model_data`) but ends up **empty**, while the real data sits hidden in the repo-root default.
+
+```python
+# BROKEN — CreateODB before set_odb_path; response data misrouted
+odb = opst.post.CreateODB(odb_tag=1, save_nodal_resp=True, ...)
+opst.post.set_odb_path(str(output_dir))   # too late — ODB already initialized
+odb.save_model_data()
+
+# CORRECT — set_odb_path first
+opst.post.set_odb_path(str(output_dir))   # MUST precede CreateODB
+odb = opst.post.CreateODB(odb_tag=1, save_nodal_resp=True, ...)
+odb.save_model_data()
+```
+
+#### Symptom
+
+- `output/RespStepData-1.odb/` exists but is empty (no `part_i.zarr` inside)
+- `post_process.py` fails with `FileNotFoundError: No parts found in .../RespStepData-1.odb`
+- `get_nodal_responses()` / `get_element_responses()` raise errors or return empty
+- The data *is* there — but in `.opstool.output/` at the repo root, not where you expect
+
+This is a **silent failure**: the model runs to completion with no error, and only post-processing reveals the data is unreachable. Compounding the problem, the default `.opstool.output/` is gitignored, so the data vanishes from version control entirely.
+
+#### Detection in Existing Models
+
+Flag any model where `opst.post.set_odb_path(...)` appears *after* `opst.post.CreateODB(...)` in the same scope. The canonical pattern in §3d shows the correct order (`set_odb_path` first), but this lesson formalizes *why*: the path migration only applies to ODBs created after the call.
+
+**Rule:** `opst.post.set_odb_path(str(output_dir))` is the **first** ODB-related call in `run_analysis()` / `__main__`, preceding `CreateODB`. This is already what §3d shows — treat it as a hard ordering requirement, not a style preference.
+
+### §12ad — Single-Gauss-Point Elements: Use `Stresses`, Not `StressesAtNodes` (v1.28.0)
+
+Source: pedroArduino_freefield — stress contour plots all read zero despite valid analysis.
+
+#### The Bug
+
+opstool's Gauss-point-to-node stress projection (`StressesAtNodes`, `StressMeasuresAtNodes`) only supports specific `(element_type, num_nodes, num_gauss_points)` combinations:
+
+```python
+# opstool/utils/ele_shape_func.py — supported quad projection keys
+("quad", 4, 4), ("quad", 9, 9), ("quad", 8, 9)   # NO ("quad", 4, 1)
+```
+
+For elements that report **only 1 Gauss point** — notably `quadUP` (FourNodeQuadUP), and any reduced-integration quad — the lookup `get_gp2node_func("quad", 4, 1)` returns `None`. The projection then falls back to a **zero fill** (see `_get_plane_resp.py:310`), and every `StressesAtNodes` value is `0.0` across all elements and all time steps.
+
+This is a **silent failure**: the Gauss-point `Stresses` are valid (verified: σ₂₂ from −308 kPa at base to −4 kPa at surface — a physically correct vertical stress profile), but the node-projected view is all-zeros. No warning, no error — just zeros where stresses should be.
+
+#### The Fix
+
+Read Gauss-point data directly with `resp_type="Stresses"`. opstool's `plot_unstruct_responses` averages the Gauss-point values per element internally (trivial when there's only 1 GP), so contour plots work correctly:
+
+```python
+# BROKEN — all-zeros for quadUP (1 GP unsupported by projection)
+opst.vis.plotly.plot_unstruct_responses(
+    odb_tag=1, ele_type="Plane",
+    resp_type="StressesAtNodes", resp_dof="sigma22",   # ← 0.0 everywhere
+)
+
+# CORRECT — Gauss-point Stresses, averaged per element
+opst.vis.plotly.plot_unstruct_responses(
+    odb_tag=1, ele_type="Plane",
+    resp_type="Stresses", resp_dof="sigma22",          # ← valid values
+)
+```
+
+For **pore pressure** in coupled u-p elements, `Stresses` σ₃₃ is the out-of-plane total stress component, *not* pore water pressure. Read PWP from nodal `pressure` instead, which is always valid regardless of element type:
+
+```python
+# Pore water pressure — read from nodal data, not sigma33
+opst.vis.plotly.plot_nodal_responses(
+    odb_tag=1, resp_type="pressure",   # ← valid (absmax 381 kPa verified)
+)
+```
+
+When extracting raw arrays (e.g. for stress profiles or stress-strain loops), read `plane["Stresses"]` and collapse the `GaussPoints` dimension:
+
+```python
+plane = opst.post.get_element_responses(odb_tag=1, ele_type="Plane")
+sigma22 = plane["Stresses"].sel(stressDOFs="sigma22").isel(time=-1)
+sigma22_final = sigma22.mean(dim="GaussPoints")   # collapse GP axis
+```
+
+#### Detection in Existing Models
+
+Flag any `post_process.py` that uses `resp_type="StressesAtNodes"` (or `StressMeasuresAtNodes`) on a model using `quadUP`, `SSPquadUP`, or any element with a single Gauss point. Quick check:
+
+```python
+import opstool as opst
+from opstool.utils import get_gp2node_func
+# If this returns None, StressesAtNodes will be all-zeros:
+f = get_gp2node_func("quad", 4, 1)   # quadUP reports (quad, 4, 1) → None
+```
+
+Also check the ODB directly: if `Stresses` has nonzero absmax but `StressesAtNodes` is all-zeros, the projection is unsupported for that element type.
+
+**Rule:** Prefer `resp_type="Stresses"` (Gauss-point) over `StressesAtNodes` for all u-p coupled elements (`quadUP`, `SSPquadUP`, `bbarQuadUP`, `NineFourNodeQuadUP`). The `AtNodes` variants only work for elements whose `(type, nodes, GP)` triple is in opstool's projection table. The Gauss-point variant works universally and is what opstool's own contour plotting averages internally.
 
 ---
 
@@ -3121,6 +3230,7 @@ These show the 2D stress field across element interiors, which is the proper dia
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-26 | 1.28.0 | **ODB path ordering & single-Gauss-point stress projection (§12ac, §12ad):** (1) `opst.post.set_odb_path()` MUST be called BEFORE `CreateODB` — calling it after silently misroutes response data to the default `.opstool.output/` (repo root, gitignored), leaving `output/RespStepData-1.odb` empty. Silent failure: model runs clean, only post-processing reveals data unreachable. (2) `StressesAtNodes` reads all-zeros for single-Gauss-point elements (quadUP, reduced-integration quads) — opstool's Gauss→node projection supports only quad(4,4)/(9,9)/(8,9), not (4,1); the projection returns None and falls back to zero-fill. The Gauss-point `Stresses` are valid. Fix: use `resp_type="Stresses"` (averaged per element) not `StressesAtNodes`; read pore pressure from nodal `pressure` not σ₃₃. Verified σ₂₂ −308 to −4 kPa (correct vertical stress profile), σ₁₂ peak 63 kPa. (3) §12ab §4 corrected — its example recommended the broken `StressesAtNodes`. Source: pedroArduino_freefield stress contour debugging. |
 | 2026-06-26 | 1.27.0 | **SSPquadUP correct signature & cross-element-type conversion hazards (§12ab):** (1) SSPquadUP has matTag BEFORE thick (opposite of quadUP) plus two extra args: e0 (initial void ratio per layer) and press (reference pressure 1.5e-6 kPa) — both REQUIRED at element level, not just in material. (2) Three different u-p element types exist for the same physics (SSPquadUP/quadUP/9_4_QuadUP) with distinct signatures — never copy arg lists across element types; identify source element first. (3) PostShake=1 parameter MUST be set on all PDMY02 elements after dynamic phase to activate post-shaking consolidation — missing it means no excess PWP dissipation. (4) 1D site response models with 1-column mesh + equalDOF produce deformed shapes that look like "one line" — this is correct; use plot_unstruct_responses for stress contour diagnostics instead. Source: pedroArduino_freefield SSPquadUP correction (1D PDMY02 soil column, 3-layer, Lysmer dashpot). |
 | 2026-06-26 | 1.26.0 | **Effective-stress site response — quadUP signature & base fixity (§12aa):** (1) `quadUP` element requires `fmass` (fluid mass density) as the 4th arg after the 4 nodes (`thick matTag bulk fmass hPerm vPerm b1 b2` — 8 args, not 7). Omitting it shifts args left → zero gravity body force, silent failure with no deformation. Cross-element-type conversion (SSPquadUP→quadUP) must re-derive args from Python docs, never copy the Tcl list. (2) Sloped free-field columns need temporary base UX fixity during gravity (`fix 1 1 1 0`) then removal before dynamic (`remove sp 1 1`) — without it the rigid-body drift mode diverges (`ok=-3`, Norm R≈1e5, all disp 0.0). (3) OpenSeesPy `fix()` errors (unlike Tcl) if a DOF already has an SP — release with `ops.remove("sp", node, dof)` before re-fixing. Source: pedroArduino_freefield conversion (1D PDMY02 soil column, quadUP + Lysmer dashpot, kN-m-kPa-s). |
 | 2026-06-25 | 1.25.0 | **§12z corrected — SmartAnalyze supports testType/testTol kwargs; element-level step-size fix:** (1) SmartAnalyze accepts `testType`, `testTol`, `testIterTimes`, `tryLooseTestTol`, `looseTestTolTo` as kwargs — no need for manual solver loop. Use `testType="NormDispIncr"`, `testTol=1.0e-5` for fiber-section RC pushover. (2) `ForceBeamColumn2d::update - failed to get compatible element forces & deformations` at >1% drift is an element-level convergence issue fixed by reducing `MAX_STEP_SIZE` from 0.5 to 0.2 mm (gives forceBeamColumn's internal Newton smaller increments). (3) Both elwoodKenneth and elwoodkenneth_C10 now use SmartAnalyze exclusively — all cycles through 3.2% drift complete with 🎉. Source: elwoodkenneth_C10 verification. |
