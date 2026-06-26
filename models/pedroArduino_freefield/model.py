@@ -289,7 +289,8 @@ if __name__ == "__main__":
 
     define_elements(n_elem)
 
-    # ODB
+    # ODB — set_odb_path MUST precede CreateODB so response data lands in output/
+    opst.post.set_odb_path(str(output_dir))
     odb = opst.post.CreateODB(
         odb_tag=1,
         model_update=False,
@@ -299,7 +300,6 @@ if __name__ == "__main__":
         compute_mechanical_measures=True,
         project_gauss_to_nodes="copy",
     )
-    opst.post.set_odb_path(str(output_dir))
     odb.save_model_data()
 
     # Gravity
@@ -374,3 +374,24 @@ if __name__ == "__main__":
 
     odb.save_response()
     print("\n=== Complete ===")
+
+    # ── 15. POST-PROCESSING ──────────────────────────────────────────────────
+    # Render deformed-shape HTML plots from the ODB (no re-run needed).
+    # Set OPENSEES_HEADLESS=1 to suppress in batch runs.
+    print("\n=== Post-Process: rendering plots ===")
+    try:
+        opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1, step="absMax", defo_scale=True,
+            resp_type="disp", resp_dof="UX",
+        ).write_html(str(output_dir / "vis_05_peak_deformed.html"))
+        print("  -> vis_05_peak_deformed.html")
+    except Exception as e:
+        print(f"  Skipped peak plot: {e}")
+    try:
+        opst.vis.plotly.plot_nodal_responses(
+            odb_tag=1, slides=True, defo_scale=True,
+            resp_type="disp", resp_dof="UX",
+        ).write_html(str(output_dir / "vis_06_slider.html"))
+        print("  -> vis_06_slider.html")
+    except Exception as e:
+        print(f"  Skipped slider plot: {e}")
