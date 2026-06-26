@@ -3224,12 +3224,71 @@ Also check the ODB directly: if `Stresses` has nonzero absmax but `StressesAtNod
 
 **Rule:** Prefer `resp_type="Stresses"` (Gauss-point) over `StressesAtNodes` for all u-p coupled elements (`quadUP`, `SSPquadUP`, `bbarQuadUP`, `NineFourNodeQuadUP`). The `AtNodes` variants only work for elements whose `(type, nodes, GP)` triple is in opstool's projection table. The Gauss-point variant works universally and is what opstool's own contour plotting averages internally.
 
+### §12ae — 9_4_QuadUP Site Response: Base Bubble-Node Fixity, Plastic-Gravity Solver & Post-Shake Divergence (v1.29.0)
+
+Source: misty_effective stress site resp — model diverged at the elastic→plastic gravity transition; full post-shake consolidation diverged.
+
+#### 1. 9-node edge-mid ("bubble") nodes need the base UY fixity too
+
+The `9_4_QuadUP` (NineFourNodeQuadUP) element has 4 corner nodes (ndf=3: UX, UY, PWP) plus 4 edge-mid + 1 center node (ndf=2: UX, UY). When converting the notebook's interleaved node-tag arithmetic to a clean coordinate-grid mesh, it is easy to fix the base **corner** nodes' UY (`fix(n, 0, 1, 0)`) and forget the base **edge-mid** node. That bottom-mid node sits on y=0; left free in UY it bows downward (~6 mm during elastic gravity), and the elastic→plastic PDMY02 transition then **diverges** (Norm R ~6.6e5, ok=-3).
+
+The notebook's `ops.fix(2, 0, 1)` (node 2 = the base interior/center node) is exactly this fix. In a grid mesh it generalises to fixing UY on the bottom-edge-mid node of every base-row element:
+
+```python
+for ele_tag, (i, j) in _iter_elements():
+    if j == 0:                       # base row
+        n_bot = bubble[ele_tag][0]   # bottom edge-mid node
+        ops.fix(n_bot, 0, 1)         # UX free, UY fixed (matches base corners)
+```
+
+Without this, even the correct plastic-gravity solver (below) only cycles at Norm~0.005. With it, Norm R drops ~5400×.
+
+#### 2. Plastic gravity needs KrylovNewton + small dt
+
+The notebook does `analyze(40, 500.0)` for the plastic (stage 1) gravity. Under OpenSeesPy this diverges on the PDMY02 elastic→plastic transition: Newton converges the elastic phase but **cycles at Norm~0.005** (just above 1e-4) once the material switches to plastic — the tangent near the yield surface defeats plain Newton-Raphson. The fix: **KrylovNewton** (secant acceleration escapes the cycle) with **dt=1.0** (small steps cross the transition). This mirrors the working `pedroArduino_freefield` recipe but with KrylovNewton instead of Newton:
+
+```python
+# elastic stage 0: Newton, dt=500, 100 steps  (ok=0)
+# plastic stage 1: KrylovNewton, dt=1.0, 100 steps  (ok=0)
+ops.algorithm("KrylovNewton")
+ops.test("NormDispIncr", 1.0e-4, 50, 1)
+ops.analyze(100, 1.0)
+```
+
+Verified: top-node UY = −0.0161 m (sensible for a 30 m column under gravity).
+
+#### 3. Post-shake (PostShake=1) diverges at dt ≥ 0.01
+
+After dynamic shaking, `setParameter(... PostShake 1)` switches PDMY02 into post-shake consolidation mode and excess pore pressure begins to dissipate. The notebook drives this to t=100 s with Newton + dt=0.05 + tol=1e-5. On the 9_4_QuadUP mesh under OpenSeesPy this **diverges**: Norm R blows up (9e3 → 4.7e5 → 2.9e6 → 3.7e11) within 5 iterations, then NaN. **Only dt ≤ 0.005 is stable** (converges in 3 iterations/step at tol=1e-3 with KrylovNewton). Because a full 100 s consolidation at dt=0.005 is ~16000 steps (hours), make post-shake **bounded and best-effort**:
+
+```python
+odb.save_response()          # save the verified DYNAMIC response FIRST
+activate_postshake(n_elem)   # PostShake=1
+# bounded post-shake: small batches at dt=0.005, bail on first non-converged step
+ops.test("NormDispIncr", 1.0e-3, 50, 1); ops.algorithm("KrylovNewton")
+for b in range(6):           # 6 batches × 50 steps
+    if ops.analyze(50, 0.005) != 0:
+        break                # stop cleanly; dynamic results already on disk
+    odb.save_response()
+```
+
+#### 4. opstool does not capture the u-p pore-pressure DOF (shared with §12ad)
+
+For both `9_4_QuadUP` and `quadUP`, opstool's ODB `pressure` field reads **all-zeros** — the pore-pressure DOF (dof 3) is not mapped into the saved nodal response (it lands in the UZ slot, which opstool leaves zero for 2D nodes). This is identical in the sibling `pedroArduino_freefield`. Verify the effective-stress physics through the Gauss-point **σ₂₂ contour** instead (−429 kPa at base → −4.5 kPa at surface = correct vertical effective-stress gradient). Excess-PWP time histories need `ops.recorder('Node', ..., '-dof', 3, 'vel')`.
+
+#### Detection / rules
+
+- **9_4_QuadUP conversions:** after building the mesh, assert that every node on the base line (y=0) — corners AND edge-mids — is UY-fixed. A missing base bubble fixity shows up as elastic gravity converging but plastic gravity diverging at step 1.
+- **PDMY02 elastic→plastic transition diverging:** switch plastic gravity to KrylovNewton + dt≈1.0. Newton cycling at Norm just above tol (vs blowing up) is the signature.
+- **PostShake consolidation diverging:** cap dt at 0.005 (KrylovNewton, tol=1e-3). Always `odb.save_response()` the dynamic results BEFORE post-shake so a divergent post-shake cannot discard the verified run.
+
 ---
 
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-26 | 1.29.0 | **9_4_QuadUP site response — base bubble-node fixity, plastic-gravity solver, post-shake divergence (§12ae):** (1) The 9-node `9_4_QuadUP` element's base **edge-mid ("bubble") node** must share the base UY fixity (`fix(n_bot, 0, 1)`, the notebook's `ops.fix(2, 0, 1)`) — left free it bows ~6 mm downward and the elastic→plastic PDMY02 transition diverges (Norm R ~6.6e5). This is easy to miss when rewriting the notebook's interleaved node tags into a clean grid mesh. (2) Plastic gravity (stage 1) needs **KrylovNewton + dt=1.0** — the notebook's `analyze(40, 500)` diverges under OpenSeesPy because Newton cycles at Norm~0.005 near the PDMY02 yield surface; KrylovNewton's secant acceleration escapes it. (3) Post-shake (PostShake=1) **diverges at dt≥0.01** (Norm R → ~1e11 → NaN); only dt=0.005 is stable, making a full 100 s consolidation ~16000 steps — so post-shake must be bounded/best-effort and `odb.save_response()` of the dynamic results must happen BEFORE post-shake. (4) opstool does not capture the u-p pore-pressure DOF into the `pressure` field (all-zeros) for 9_4_QuadUP/quadUP — verify physics via the σ₂₂ contour instead. Source: misty_effective stress site resp (9-node coupled u-p, 3-layer PDMY02, Lysmer dashpot). |
 | 2026-06-26 | 1.28.0 | **ODB path ordering & single-Gauss-point stress projection (§12ac, §12ad):** (1) `opst.post.set_odb_path()` MUST be called BEFORE `CreateODB` — calling it after silently misroutes response data to the default `.opstool.output/` (repo root, gitignored), leaving `output/RespStepData-1.odb` empty. Silent failure: model runs clean, only post-processing reveals data unreachable. (2) `StressesAtNodes` reads all-zeros for single-Gauss-point elements (quadUP, reduced-integration quads) — opstool's Gauss→node projection supports only quad(4,4)/(9,9)/(8,9), not (4,1); the projection returns None and falls back to zero-fill. The Gauss-point `Stresses` are valid. Fix: use `resp_type="Stresses"` (averaged per element) not `StressesAtNodes`; read pore pressure from nodal `pressure` not σ₃₃. Verified σ₂₂ −308 to −4 kPa (correct vertical stress profile), σ₁₂ peak 63 kPa. (3) §12ab §4 corrected — its example recommended the broken `StressesAtNodes`. Source: pedroArduino_freefield stress contour debugging. |
 | 2026-06-26 | 1.27.0 | **SSPquadUP correct signature & cross-element-type conversion hazards (§12ab):** (1) SSPquadUP has matTag BEFORE thick (opposite of quadUP) plus two extra args: e0 (initial void ratio per layer) and press (reference pressure 1.5e-6 kPa) — both REQUIRED at element level, not just in material. (2) Three different u-p element types exist for the same physics (SSPquadUP/quadUP/9_4_QuadUP) with distinct signatures — never copy arg lists across element types; identify source element first. (3) PostShake=1 parameter MUST be set on all PDMY02 elements after dynamic phase to activate post-shaking consolidation — missing it means no excess PWP dissipation. (4) 1D site response models with 1-column mesh + equalDOF produce deformed shapes that look like "one line" — this is correct; use plot_unstruct_responses for stress contour diagnostics instead. Source: pedroArduino_freefield SSPquadUP correction (1D PDMY02 soil column, 3-layer, Lysmer dashpot). |
 | 2026-06-26 | 1.26.0 | **Effective-stress site response — quadUP signature & base fixity (§12aa):** (1) `quadUP` element requires `fmass` (fluid mass density) as the 4th arg after the 4 nodes (`thick matTag bulk fmass hPerm vPerm b1 b2` — 8 args, not 7). Omitting it shifts args left → zero gravity body force, silent failure with no deformation. Cross-element-type conversion (SSPquadUP→quadUP) must re-derive args from Python docs, never copy the Tcl list. (2) Sloped free-field columns need temporary base UX fixity during gravity (`fix 1 1 1 0`) then removal before dynamic (`remove sp 1 1`) — without it the rigid-body drift mode diverges (`ok=-3`, Norm R≈1e5, all disp 0.0). (3) OpenSeesPy `fix()` errors (unlike Tcl) if a DOF already has an SP — release with `ops.remove("sp", node, dof)` before re-fixing. Source: pedroArduino_freefield conversion (1D PDMY02 soil column, quadUP + Lysmer dashpot, kN-m-kPa-s). |
