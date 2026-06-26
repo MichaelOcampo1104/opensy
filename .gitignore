@@ -9,6 +9,9 @@ models/**/output/**
 Opensees_references/**/.opstool.output/
 Opensees_references/**/_OPSTOOL_ODB/
 
+# Large simulation output data files (>100 MB, rejected by GitHub)
+Opensees_references/Geo_expl/**/*.txt
+
 # Python cache
 __pycache__/
 *.pyc
