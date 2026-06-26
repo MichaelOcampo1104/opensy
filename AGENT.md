@@ -2942,12 +2942,95 @@ The DisplacementControl integrator drives from the current position to each succ
 
 **Symptom if return-to-zero is attempted:** With `target_disp=0`, the function computes `step_size = 0 / n_steps = 0`, and the DisplacementControl integrator attempts zero-displacement steps, producing a `step_size must be > 0` error (or hangs at the current position).
 
+### §12aa — Effective-Stress Site Response: quadUP Argument Signature & Base UX Fixity (v1.26.0)
+
+Source: pedroArduino_freefield conversion (1D effective-stress soil column, 3-layer PDMY02, quadUP + Lysmer dashpot, kN-m-kPa-s units).
+
+#### 1. `quadUP` Element Signature: `fmass` Is NOT Optional — Don't Omit It
+
+The `quadUP` (FourNodeQuadUP) element signature has **8** material/property args after the 4 node tags:
+
+```
+element quadUP eleTag iNode jNode kNode lNode  thick matTag bulk fmass hPerm vPerm b1 b2
+```
+
+The `fmass` (fluid mass density) argument sits between `bulk` and `hPerm`. Omitting it shifts every subsequent argument left, producing a model that **runs without error** but silently applies zero gravity and bogus permeability — the worst kind of bug (no crash, no warning, wrong physics).
+
+**Real example (pedroArduino_freefield):**
+
+| Position | Expected | What the bug fed it | Effect |
+|----------|----------|----------------------|--------|
+| fmass | fluid ρ | `1.0` (intended hPerm) | harmless coincidence |
+| hPerm | hPerm | `1.0` (intended vPerm) | harmless coincidence |
+| vPerm | vPerm | `BODY_X` ≈ −0.098 | negative permeability |
+| b1 | bx | `BODY_Y` = −9.81 | horizontal force 100× too large |
+| **b2** | **by** | *(missing → 0.0)* | **no vertical gravity at all** |
+
+**Symptom:** Zero deformation / settlement in the gravity phase. The column never consolidates because the vertical body force never reaches OpenSees.
+
+**Root cause:** The inline comment was written as `# quadUP: thick, matTag, bulk, hPerm, vPerm, bx, by` — it omitted `fmass` — and the code was written to match the wrong comment. The Tcl source used `SSPquadUP` (a *different* signature with `eInit` + `alpha`), so the arg list could not be copied across element types verbatim.
+
+**Fix:**
+
+```python
+# quadUP: thick, matTag, bulk, fmass, hPerm, vPerm, b1, b2
+ops.element("quadUP", tag, nI, nI + 1, nI + N_NODE_X + 1, nI + N_NODE_X,
+            1.0, k, bulk, 1.0, 1.0, 1.0, BODY_X, BODY_Y)
+#           thick  mat    bulk    fmass  hPerm  vPerm  b1     b2
+```
+
+**Detection in Existing Models:** Flag any `quadUP` element call with fewer than 8 args after the 4 nodes. Cross-check the arg count against the [OpenSees quadUP wiki](https://opensees.berkeley.edu/wiki/index.php/Four_Node_Quad_u-p_Element) signature. When converting a Tcl that uses a different u-p element type (`SSPquadUP`, `bbarQuadUP`, `NineFourNodeQuadUP`), do NOT copy the argument list — each has a distinct signature. Re-derive from the Python docs.
+
+**Rule:** When converting between coupled u-p element types (`SSPquadUP` → `quadUP` or vice versa), treat the element construction line as a from-scratch translation, never a copy. The body-force and permeability arguments land in different positions across these elements.
+
+#### 2. Gravity-Phase Base UX Fixity — `fix 1 1 1 0` Then `remove sp 1 1`
+
+On a sloped free-field column (even 1% grade), the horizontal component of gravity body force has no resisting stiffness in UX at the base once the Lysmer dashpot is the only lateral restraint. This creates a **rigid-body horizontal drift mode** that diverges with a huge residual norm.
+
+**Symptom:** `analyze` returns `-3` with `Norm R: 98044.1` on the first plastic gravity step; all node displacements read as exactly 0.0 (Newton never converges, nothing is recorded). The norm is enormous (≈1e5) compared to a normal unconverged step (≈1e-1).
+
+**Fix — match the Tcl exactly:**
+
+```python
+# Gravity phase: temporarily fix base UX for stability
+ops.fix(1, 1, 1, 0)        # tcl: fix 1 1 1 0
+# ... gravity analysis ...
+ops.remove("sp", 1, 1)     # tcl: remove sp 1 1 — free base UX before dynamic
+```
+
+The temporary UX fix is **removed before the dynamic phase** so the base is free to follow the input motion transmitted through the Lysmer dashpot. Skipping the removal would clamp the base and block the seismic input entirely.
+
+**Verified by isolated probe:** base UX-free → `ok=-3`, all disp 0.0; base UX-fixed → `ok=0`, top node settles 15 mm. This is not optional for sloped columns — even a 1° slope needs it.
+
+#### 3. OpenSeesPy `fix()` Errors on a DOF Already Constrained (unlike Tcl `fix`)
+
+OpenSeesPy's `ops.fix(node, *dofs)` raises `OpenSeesError` if the node already has an SP constraint on any of the specified DOFs. Tcl's `fix` silently overwrites. This bites when a node has a base BC (`fix(i, 0, 1, 0)` — UY fixed) and gravity wants to re-fix the full triple (`fix(1, 1, 1, 0)` — UY re-specified).
+
+**Symptom:**
+
+```
+Domain::addSP_Constraint - cannot add as node already constrained in that dof
+SP_Constraint: 16  Node: 1 DOF: 2 ...
+opensees.OpenSeesError: See stderr output
+```
+
+**Fix:** Release the conflicting DOF's existing SP before re-fixing:
+
+```python
+# Node 1 already has UY (DOF 2) fixed from base BC; release it before re-fixing
+ops.remove("sp", 1, 2)
+ops.fix(1, 1, 1, 0)
+```
+
+`ops.remove("sp", node, dof)` is the OpenSeesPy equivalent of Tcl `remove sp $node $dof`. It returns `None` on success (verified). This pattern (release-then-refix) is needed whenever you overlay a fuller fixity on a node that already has a partial one.
+
 ---
 
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-26 | 1.26.0 | **Effective-stress site response — quadUP signature & base fixity (§12aa):** (1) `quadUP` element requires `fmass` (fluid mass density) as the 4th arg after the 4 nodes (`thick matTag bulk fmass hPerm vPerm b1 b2` — 8 args, not 7). Omitting it shifts args left → zero gravity body force, silent failure with no deformation. Cross-element-type conversion (SSPquadUP→quadUP) must re-derive args from Python docs, never copy the Tcl list. (2) Sloped free-field columns need temporary base UX fixity during gravity (`fix 1 1 1 0`) then removal before dynamic (`remove sp 1 1`) — without it the rigid-body drift mode diverges (`ok=-3`, Norm R≈1e5, all disp 0.0). (3) OpenSeesPy `fix()` errors (unlike Tcl) if a DOF already has an SP — release with `ops.remove("sp", node, dof)` before re-fixing. Source: pedroArduino_freefield conversion (1D PDMY02 soil column, quadUP + Lysmer dashpot, kN-m-kPa-s). |
 | 2026-06-25 | 1.25.0 | **§12z corrected — SmartAnalyze supports testType/testTol kwargs; element-level step-size fix:** (1) SmartAnalyze accepts `testType`, `testTol`, `testIterTimes`, `tryLooseTestTol`, `looseTestTolTo` as kwargs — no need for manual solver loop. Use `testType="NormDispIncr"`, `testTol=1.0e-5` for fiber-section RC pushover. (2) `ForceBeamColumn2d::update - failed to get compatible element forces & deformations` at >1% drift is an element-level convergence issue fixed by reducing `MAX_STEP_SIZE` from 0.5 to 0.2 mm (gives forceBeamColumn's internal Newton smaller increments). (3) Both elwoodKenneth and elwoodkenneth_C10 now use SmartAnalyze exclusively — all cycles through 3.2% drift complete with 🎉. Source: elwoodkenneth_C10 verification. |
 | 2026-06-25 | 1.24.0 | **RC column cyclic pushover — lateral pattern ordering, zeroLength stiffness contrast, SmartAnalyze test tolerance (§12z):** (1) Lateral load pattern for DisplacementControl MUST be defined AFTER `ops.loadConst("-time", 0.0)` — if frozen at λ=0, DisplacementControl computes infinite load factor (6.59e19). Same mechanism as §12i (GM ordering). (2) ZeroLength base springs (1.75e14 N/mm) with fiber-section columns (7e8 N/mm) create ~2.4e5 stiffness contrast causing Newton to diverge on gravity step 0 — fix by fixing base node directly. (3) KrylovNewton (algoType=40) preferred over Newton for fiber-section RC pushover. (4) Natural peak-to-peak cyclic flow eliminates need for return-to-zero segments. Source: elwoodKenneth conversion (2D RC cantilever column, fiber-section forceBeamColumn, 36 Concrete02, 18 Steel02, 16-cycle cyclic pushover to 3.2% drift). |
 | 2026-06-25 | 1.23.0 | **opstool tcl2py conversion behavior & workarounds (§12y):** (1) tcl2py actually executes OpenSees commands during conversion, not just syntax translation — convergence failures in source Tcl will block conversion; (2) OpenSeesMP code (getPID/getNP/barrier/after/vwait) must be stripped before conversion; (3) analysis execution loops must be commented out (leave setup commands for conversion); (4) tcl2py output reproduces source Tcl literally (forceBeamColumn + Newton + ft=3.0) — all §12x fixes still required; (5) tcl2py useful as verification tool for model definition, recorder setup, rigidDiaphragm, GM loading, Rayleigh damping. Source: BhatZeeshanManzoor G+4 RC infilled frame. |
