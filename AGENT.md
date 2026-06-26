@@ -3024,12 +3024,104 @@ ops.fix(1, 1, 1, 0)
 
 `ops.remove("sp", node, dof)` is the OpenSeesPy equivalent of Tcl `remove sp $node $dof`. It returns `None` on success (verified). This pattern (release-then-refix) is needed whenever you overlay a fuller fixity on a node that already has a partial one.
 
+### §12ab — SSPquadUP Correct Element Signature & Cross-Element-Type Conversion Hazards (v1.27.0)
+
+Source: pedroArduino_freefield SSPquadUP correction — the original `model.py` used `quadUP` but the Tcl source uses `SSPquadUP`. Three different conversions of the same Tcl exist, each using a different element type.
+
+#### 1. SSPquadUP Element Signature: matTag BEFORE thick, Plus e0 and press
+
+The SSPquadUP (Stabilized Single-Point Quad u-p) signature has **10** material/property args after the 4 node tags:
+
+```
+element SSPquadUP eleTag nI nJ nK nL  matTag thick bulk fmass hPerm vPerm e0 press bx by
+element quadUP    eleTag nI nJ nK nL  thick matTag bulk fmass hPerm vPerm         b1 b2
+```
+
+**Critical differences vs quadUP:**
+
+| Position | SSPquadUP | quadUP | Impact if swapped |
+|----------|-----------|--------|-------------------|
+| 1st arg | **matTag** | **thick** | Material tag → thickness slot → wrong soil layer |
+| 2nd arg | **thick** | **matTag** | Thickness → material slot → bogus material |
+| 7th arg | **e0** (void ratio) | *(absent)* | Missing → SSPquadUP gets 0 or garbage |
+| 8th arg | **press** (ref pressure) | *(absent)* | Missing → effective-stress calc broken |
+| 9th/10th | bx, by | b1, b2 | Same function, different position in list |
+
+SSPquadUP requires `e0` (initial void ratio, e.g. 0.77 for loose sand, 0.47 for dense) and `press` (reference pressure, typically 1.5e-6 kPa) passed at the **element level** — not just inside the PDMY02 material definition. Without `press`, the effective-stress calculation has no reference pressure and produces wrong results.
+
+**Correct Python for SSPquadUP:**
+
+```python
+ops.element("SSPquadUP", tag,
+    nI, nI + 1, nI + N_NODE_X + 1, nI + N_NODE_X,
+    k,              # matTag ← BEFORE thick
+    1.0,            # thick
+    s["uBulk"],     # bulk
+    1.0,            # fmass
+    1.0, 1.0,       # hPerm, vPerm (temp = 1.0 for gravity)
+    s["e0"],        # e0 ← REQUIRED, per-layer void ratio
+    PRESS,          # press ← REQUIRED, 1.5e-6 kPa
+    BODY_X, BODY_Y) # body forces
+```
+
+#### 2. Cross-Element-Type Conversion: Never Copy the Arg List
+
+Three different u-p element types exist for the same physics, each with a distinct signature:
+
+| Element | Nodes | Key extra args | Source |
+|---------|-------|---------------|--------|
+| `SSPquadUP` | 4 | e0, press | Tcl `freeFieldEffective.tcl` |
+| `quadUP` | 4 | *(none)* | Current `model.py` (wrong) |
+| `9_4_QuadUP` | 9 (4 PP) | Different topology | Notebook `Effective Stress Site Response_rev.ipynb` |
+
+**Rule:** When converting between coupled u-p element types, treat the element construction line as a from-scratch translation. Identify the source element type FIRST by grepping the Tcl for `element SSPquadUP\|quadUP\|9_4_QuadUP\|bbarQuadUP`, then look up the correct Python signature. Never assume they're interchangeable.
+
+#### 3. PostShake Parameter: Activate PDMY02 Consolidation Mode
+
+After the dynamic phase, PDMY02 materials need `PostShake=1` set on all elements to activate post-shaking consolidation (excess pore pressure dissipation):
+
+```tcl
+# Tcl source (L528):
+setParameter -value 0 -eleRange 1 3125 PostShake 1
+```
+
+```python
+# Python equivalent:
+for ele in range(1, n_elem + 1):
+    ops.setParameter("-val", 1, "-ele", ele, "PostShake")
+```
+
+**Symptom of missing PostShake:** The post-shake consolidation phase runs but excess pore pressures do not dissipate — the model stays in a post-liquefaction state. No error or warning is produced.
+
+#### 4. 1D Site Response Visualization: Deformed Shape Is One Line
+
+For a 1-column soil mesh (N_ELEM_X=1, N_NODE_X=2) with `equalDOF` tying each horizontal pair for periodic boundaries, all nodes at the same elevation share the same lateral displacement. The deformed shape in UX is a single vertical line shifting side-to-side — this is **correct behavior**, not a bug.
+
+**Better diagnostics for soil models:** Use stress contour plots instead of displacement plots:
+
+```python
+# Stress contours (shows 2D field across element interiors)
+opst.vis.plotly.plot_unstruct_responses(
+    odb_tag=1, slides=True, ele_type="Plane",
+    resp_type="StressesAtNodes", resp_dof="sigma22",  # vertical stress
+)
+# Shear stress with deformation overlay
+opst.vis.plotly.plot_unstruct_responses(
+    odb_tag=1, slides=True, ele_type="Plane",
+    resp_type="StressesAtNodes", resp_dof="sigma12",  # shear stress
+    show_defo=True, defo_scale=30,
+)
+```
+
+These show the 2D stress field across element interiors, which is the proper diagnostic for verifying a site response model is working (gravitational stress gradient with depth, dynamic shear waves propagating upward).
+
 ---
 
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-26 | 1.27.0 | **SSPquadUP correct signature & cross-element-type conversion hazards (§12ab):** (1) SSPquadUP has matTag BEFORE thick (opposite of quadUP) plus two extra args: e0 (initial void ratio per layer) and press (reference pressure 1.5e-6 kPa) — both REQUIRED at element level, not just in material. (2) Three different u-p element types exist for the same physics (SSPquadUP/quadUP/9_4_QuadUP) with distinct signatures — never copy arg lists across element types; identify source element first. (3) PostShake=1 parameter MUST be set on all PDMY02 elements after dynamic phase to activate post-shaking consolidation — missing it means no excess PWP dissipation. (4) 1D site response models with 1-column mesh + equalDOF produce deformed shapes that look like "one line" — this is correct; use plot_unstruct_responses for stress contour diagnostics instead. Source: pedroArduino_freefield SSPquadUP correction (1D PDMY02 soil column, 3-layer, Lysmer dashpot). |
 | 2026-06-26 | 1.26.0 | **Effective-stress site response — quadUP signature & base fixity (§12aa):** (1) `quadUP` element requires `fmass` (fluid mass density) as the 4th arg after the 4 nodes (`thick matTag bulk fmass hPerm vPerm b1 b2` — 8 args, not 7). Omitting it shifts args left → zero gravity body force, silent failure with no deformation. Cross-element-type conversion (SSPquadUP→quadUP) must re-derive args from Python docs, never copy the Tcl list. (2) Sloped free-field columns need temporary base UX fixity during gravity (`fix 1 1 1 0`) then removal before dynamic (`remove sp 1 1`) — without it the rigid-body drift mode diverges (`ok=-3`, Norm R≈1e5, all disp 0.0). (3) OpenSeesPy `fix()` errors (unlike Tcl) if a DOF already has an SP — release with `ops.remove("sp", node, dof)` before re-fixing. Source: pedroArduino_freefield conversion (1D PDMY02 soil column, quadUP + Lysmer dashpot, kN-m-kPa-s). |
 | 2026-06-25 | 1.25.0 | **§12z corrected — SmartAnalyze supports testType/testTol kwargs; element-level step-size fix:** (1) SmartAnalyze accepts `testType`, `testTol`, `testIterTimes`, `tryLooseTestTol`, `looseTestTolTo` as kwargs — no need for manual solver loop. Use `testType="NormDispIncr"`, `testTol=1.0e-5` for fiber-section RC pushover. (2) `ForceBeamColumn2d::update - failed to get compatible element forces & deformations` at >1% drift is an element-level convergence issue fixed by reducing `MAX_STEP_SIZE` from 0.5 to 0.2 mm (gives forceBeamColumn's internal Newton smaller increments). (3) Both elwoodKenneth and elwoodkenneth_C10 now use SmartAnalyze exclusively — all cycles through 3.2% drift complete with 🎉. Source: elwoodkenneth_C10 verification. |
 | 2026-06-25 | 1.24.0 | **RC column cyclic pushover — lateral pattern ordering, zeroLength stiffness contrast, SmartAnalyze test tolerance (§12z):** (1) Lateral load pattern for DisplacementControl MUST be defined AFTER `ops.loadConst("-time", 0.0)` — if frozen at λ=0, DisplacementControl computes infinite load factor (6.59e19). Same mechanism as §12i (GM ordering). (2) ZeroLength base springs (1.75e14 N/mm) with fiber-section columns (7e8 N/mm) create ~2.4e5 stiffness contrast causing Newton to diverge on gravity step 0 — fix by fixing base node directly. (3) KrylovNewton (algoType=40) preferred over Newton for fiber-section RC pushover. (4) Natural peak-to-peak cyclic flow eliminates need for return-to-zero segments. Source: elwoodKenneth conversion (2D RC cantilever column, fiber-section forceBeamColumn, 36 Concrete02, 18 Steel02, 16-cycle cyclic pushover to 3.2% drift). |
