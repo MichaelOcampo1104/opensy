@@ -40,13 +40,17 @@ for dof in ["UX", "UY"]:
         print(f"  {dof}: max={abs_max:.4f}, min={abs_min:.4f}, peak_abs={peak:.4f}")
 
 # ── 5. SIGMA22 — Vertical effective stress (should increase with depth) ─────
+# NOTE: use "Stresses" (Gauss-point, averaged per element), NOT "StressesAtNodes".
+# quadUP reports only 1 Gauss point, so opstool's Gauss->node projection
+# (which only supports quad(4,4)/(9,9)/(8,9)) returns None -> zeros.
+# Pore pressure is read separately from nodal "pressure" (valid).
 print("\n=== Plotting: sigma22 (vertical stress) ===")
 try:
     fig = opst.vis.plotly.plot_unstruct_responses(
         odb_tag=ODB_TAG,
         slides=True,
         ele_type="Plane",
-        resp_type="StressesAtNodes",
+        resp_type="Stresses",
         resp_dof="sigma22",
         unit_symbol="kPa",
     )
@@ -62,7 +66,7 @@ try:
         odb_tag=ODB_TAG,
         slides=True,
         ele_type="Plane",
-        resp_type="StressesAtNodes",
+        resp_type="Stresses",
         resp_dof="sigma12",
         show_defo=True,
         defo_scale=30,
@@ -73,38 +77,20 @@ try:
 except Exception as e:
     print(f"  FAILED: {e}")
 
-# ── 7. Pore pressure (sigma33 or pore_pressure) ─────────────────────────────
-# Note: for coupled u-p, pore pressure may be in nodal 'Vel' (dof 3)
-# or in plane element 'StressesAtNodes' sigma33 component
-print("\n=== Plotting: pore pressure / sigma33 ===")
+# ── 7. Pore pressure (sigma33 or nodal pressure) ────────────────────────────
+# For coupled u-p: nodal "pressure" holds pore water pressure (valid).
+# sigma33 in Stresses is the out-of-plane total stress component, not pwp.
+print("\n=== Plotting: pore pressure (nodal pressure) ===")
 try:
-    # Try sigma33 in plane stresses
-    fig = opst.vis.plotly.plot_unstruct_responses(
+    fig = opst.vis.plotly.plot_nodal_responses(
         odb_tag=ODB_TAG,
         slides=True,
-        ele_type="Plane",
-        resp_type="StressesAtNodes",
-        resp_dof="sigma33",
-        unit_symbol="kPa",
+        resp_type="pressure",
     )
-    fig.write_html(str(output_dir / "vis_12_sigma33.html"))
-    print("  -> vis_12_sigma33.html")
+    fig.write_html(str(output_dir / "vis_12_porepressure.html"))
+    print("  -> vis_12_porepressure.html")
 except Exception as e:
-    print(f"  sigma33 plot failed: {e}")
-
-# Try nodal pore pressure (UY for pore pressure nodes? or use nodal responses)
-try:
-    if "Vel" in nodal.data_vars:
-        fig = opst.vis.plotly.plot_nodal_responses(
-            odb_tag=ODB_TAG,
-            slides=True,
-            resp_type="Vel",
-            resp_dof="UY",
-        )
-        fig.write_html(str(output_dir / "vis_13_pwp.html"))
-        print("  -> vis_13_pwp.html (nodal Vel UY)")
-except Exception as e:
-    print(f"  nodal pwp plot failed: {e}")
+    print(f"  nodal pore pressure plot failed: {e}")
 
 # ── 8. Deformed shape with explicit scaling ─────────────────────────────────
 print("\n=== Plotting: deformed shape (UX, explicit scale) ===")
@@ -159,21 +145,18 @@ try:
 except Exception as e:
     print(f"  FAILED: {e}")
 
-# ── 10. Stress profile with depth at peak time ──────────────────────────────
+# ── 10. Stress profile with depth at final step ─────────────────────────────
+# Read Gauss-point Stresses directly (StressesAtNodes is zero for quadUP —
+# see note in §5). Each element has 1 GP; collapse the GP axis with mean.
 print("\n=== Stress profile at final step ===")
 try:
-    sigma22_nodes = plane["StressesAtNodes"].sel(stressDOFs="sigma22")
-    # Last time step
-    sigma22_final = sigma22_nodes.isel(time=-1)
-
-    # Get node coordinates from the ODB model data
-    # The node Y coordinates give depth (0 = base, 30 = surface)
-    # For a rough depth profile, group by Y coordinate bands
+    sigma22_gp = plane["Stresses"].sel(stressDOFs="sigma22").isel(time=-1)
+    sigma22_final = sigma22_gp.mean(dim="GaussPoints")
     print(f"  sigma22 at final step: min={float(sigma22_final.min()):.1f}, "
           f"max={float(sigma22_final.max()):.1f} kPa")
 
-    sigma12_nodes = plane["StressesAtNodes"].sel(stressDOFs="sigma12")
-    sigma12_final = sigma12_nodes.isel(time=-1)
+    sigma12_gp = plane["Stresses"].sel(stressDOFs="sigma12").isel(time=-1)
+    sigma12_final = sigma12_gp.mean(dim="GaussPoints")
     print(f"  sigma12 at final step: min={float(sigma12_final.min()):.1f}, "
           f"max={float(sigma12_final.max()):.1f} kPa")
 
