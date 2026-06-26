@@ -4,6 +4,11 @@
 models/**/output/**
 !models/**/output/.gitkeep
 
+# OpenSees output files — large generated artifacts
+*.nc
+Opensees_references/**/.opstool.output/
+Opensees_references/**/_OPSTOOL_ODB/
+
 # Python cache
 __pycache__/
 *.pyc

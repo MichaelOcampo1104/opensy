@@ -1,0 +1,395 @@
+Current Domain Information
+	Current Time: 2
+tCommitted Time: 2
+NODE DATA: NumNodes: 22
+
+ Node: 1
+	Coordinates  : 0 0 
+	Disps: 0 0 
+	 unbalanced Load: 0 0 
+	ID : -1 -1 
+
+
+ Node: 2
+	Coordinates  : 1 0 
+	Disps: 0 0 
+	 unbalanced Load: 0 0 
+	ID : -1 -1 
+
+
+ Node: 3
+	Coordinates  : 0 1 
+	Disps: 0.000108728 -0.000291234 
+	 unbalanced Load: 0 0 
+	ID : 18 19 
+
+
+ Node: 4
+	Coordinates  : 1 1 
+	Disps: 0.000108728 -0.000291234 
+	 unbalanced Load: 0 0 
+	ID : 18 19 
+
+
+ Node: 5
+	Coordinates  : 0 2 
+	Disps: 0.00020601 -0.000551812 
+	 unbalanced Load: 0 0 
+	ID : 16 17 
+
+
+ Node: 6
+	Coordinates  : 1 2 
+	Disps: 0.00020601 -0.000551812 
+	 unbalanced Load: 0 0 
+	ID : 16 17 
+
+
+ Node: 7
+	Coordinates  : 0 3 
+	Disps: 0.000291848 -0.000781734 
+	 unbalanced Load: 0 0 
+	ID : 14 15 
+
+
+ Node: 8
+	Coordinates  : 1 3 
+	Disps: 0.000291848 -0.000781734 
+	 unbalanced Load: 0 0 
+	ID : 14 15 
+
+
+ Node: 9
+	Coordinates  : 0 4 
+	Disps: 0.00036624 -0.000981 
+	 unbalanced Load: 0 0 
+	ID : 12 13 
+
+
+ Node: 10
+	Coordinates  : 1 4 
+	Disps: 0.00036624 -0.000981 
+	 unbalanced Load: 0 0 
+	ID : 12 13 
+
+
+ Node: 11
+	Coordinates  : 0 5 
+	Disps: 0.000429187 -0.00114961 
+	 unbalanced Load: 0 0 
+	ID : 10 11 
+
+
+ Node: 12
+	Coordinates  : 1 5 
+	Disps: 0.000429187 -0.00114961 
+	 unbalanced Load: 0 0 
+	ID : 10 11 
+
+
+ Node: 13
+	Coordinates  : 0 6 
+	Disps: 0.00048069 -0.00128756 
+	 unbalanced Load: 0 0 
+	ID : 8 9 
+
+
+ Node: 14
+	Coordinates  : 1 6 
+	Disps: 0.00048069 -0.00128756 
+	 unbalanced Load: 0 0 
+	ID : 8 9 
+
+
+ Node: 15
+	Coordinates  : 0 7 
+	Disps: 0.000520747 -0.00139486 
+	 unbalanced Load: 0 0 
+	ID : 6 7 
+
+
+ Node: 16
+	Coordinates  : 1 7 
+	Disps: 0.000520747 -0.00139486 
+	 unbalanced Load: 0 0 
+	ID : 6 7 
+
+
+ Node: 17
+	Coordinates  : 0 8 
+	Disps: 0.00054936 -0.0014715 
+	 unbalanced Load: 0 0 
+	ID : 4 5 
+
+
+ Node: 18
+	Coordinates  : 1 8 
+	Disps: 0.00054936 -0.0014715 
+	 unbalanced Load: 0 0 
+	ID : 4 5 
+
+
+ Node: 19
+	Coordinates  : 0 9 
+	Disps: 0.000566527 -0.00151748 
+	 unbalanced Load: 0 0 
+	ID : 2 3 
+
+
+ Node: 20
+	Coordinates  : 1 9 
+	Disps: 0.000566527 -0.00151748 
+	 unbalanced Load: 0 0 
+	ID : 2 3 
+
+
+ Node: 21
+	Coordinates  : 0 10 
+	Disps: 0.00057225 -0.00153281 
+	 unbalanced Load: 0 0 
+	ID : 0 1 
+
+
+ Node: 22
+	Coordinates  : 1 10 
+	Disps: 0.00057225 -0.00153281 
+	 unbalanced Load: 0 0 
+	ID : 0 1 
+
+ELEMENT DATA: NumEle: 10
+
+FourNodeQuad, element id:  1
+	Connected external nodes:  1 2 4 3 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -58.2469 -93.195 6.52365 
+		Gauss point 2: -58.2469 -93.195 6.52365 
+		Gauss point 3: -58.2469 -93.195 6.52365 
+		Gauss point 4: -58.2469 -93.195 6.52365 
+
+FourNodeQuad, element id:  2
+	Connected external nodes:  3 4 6 5 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -52.1156 -83.385 5.83695 
+		Gauss point 2: -52.1156 -83.385 5.83695 
+		Gauss point 3: -52.1156 -83.385 5.83695 
+		Gauss point 4: -52.1156 -83.385 5.83695 
+
+FourNodeQuad, element id:  3
+	Connected external nodes:  5 6 8 7 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -45.9844 -73.575 5.15025 
+		Gauss point 2: -45.9844 -73.575 5.15025 
+		Gauss point 3: -45.9844 -73.575 5.15025 
+		Gauss point 4: -45.9844 -73.575 5.15025 
+
+FourNodeQuad, element id:  4
+	Connected external nodes:  7 8 10 9 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -39.8531 -63.765 4.46355 
+		Gauss point 2: -39.8531 -63.765 4.46355 
+		Gauss point 3: -39.8531 -63.765 4.46355 
+		Gauss point 4: -39.8531 -63.765 4.46355 
+
+FourNodeQuad, element id:  5
+	Connected external nodes:  9 10 12 11 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -33.7219 -53.955 3.77685 
+		Gauss point 2: -33.7219 -53.955 3.77685 
+		Gauss point 3: -33.7219 -53.955 3.77685 
+		Gauss point 4: -33.7219 -53.955 3.77685 
+
+FourNodeQuad, element id:  6
+	Connected external nodes:  11 12 14 13 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -27.5906 -44.145 3.09015 
+		Gauss point 2: -27.5906 -44.145 3.09015 
+		Gauss point 3: -27.5906 -44.145 3.09015 
+		Gauss point 4: -27.5906 -44.145 3.09015 
+
+FourNodeQuad, element id:  7
+	Connected external nodes:  13 14 16 15 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -21.4594 -34.335 2.40345 
+		Gauss point 2: -21.4594 -34.335 2.40345 
+		Gauss point 3: -21.4594 -34.335 2.40345 
+		Gauss point 4: -21.4594 -34.335 2.40345 
+
+FourNodeQuad, element id:  8
+	Connected external nodes:  15 16 18 17 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -15.3281 -24.525 1.71675 
+		Gauss point 2: -15.3281 -24.525 1.71675 
+		Gauss point 3: -15.3281 -24.525 1.71675 
+		Gauss point 4: -15.3281 -24.525 1.71675 
+
+FourNodeQuad, element id:  9
+	Connected external nodes:  17 18 20 19 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -9.19688 -14.715 1.03005 
+		Gauss point 2: -9.19687 -14.715 1.03005 
+		Gauss point 3: -9.19687 -14.715 1.03005 
+		Gauss point 4: -9.19688 -14.715 1.03005 
+
+FourNodeQuad, element id:  10
+	Connected external nodes:  19 20 22 21 
+	thickness:  1
+	surface pressure:  0
+	mass density:  0
+	body forces:  0.6867 -9.81
+FluidSolidPorousMaterial
+	Stress (xx yy xy)
+		Gauss point 1: -3.06563 -4.905 0.34335 
+		Gauss point 2: -3.06563 -4.905 0.34335 
+		Gauss point 3: -3.06563 -4.905 0.34335 
+		Gauss point 4: -3.06563 -4.905 0.34335 
+
+SP_Constraints: numConstraints: 4
+SP_Constraint: 0	 Node: 1 DOF: 1 ref value: 0 current value: 0
+SP_Constraint: 1	 Node: 1 DOF: 2 ref value: 0 current value: 0
+SP_Constraint: 2	 Node: 2 DOF: 1 ref value: 0 current value: 0
+SP_Constraint: 3	 Node: 2 DOF: 2 ref value: 0 current value: 0
+
+Pressure_Constraints: numConstraints: 0
+
+MP_Constraints: numConstraints: 10
+MP_Constraint: 0
+	Node Constrained: 4 node Retained: 3
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 1
+	Node Constrained: 6 node Retained: 5
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 2
+	Node Constrained: 8 node Retained: 7
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 3
+	Node Constrained: 10 node Retained: 9
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 4
+	Node Constrained: 12 node Retained: 11
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 5
+	Node Constrained: 14 node Retained: 13
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 6
+	Node Constrained: 16 node Retained: 15
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 7
+	Node Constrained: 18 node Retained: 17
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 8
+	Node Constrained: 20 node Retained: 19
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+MP_Constraint: 9
+	Node Constrained: 22 node Retained: 21
+ constrained dof: 1 2 
+ retained dof: 1 2 
+ constraint matrix: 
+1 0 
+0 1 
+
+
+
+LOAD PATTERNS: numPatterns: 0
+
+
+PARAMETERS: numParameters: 0
+

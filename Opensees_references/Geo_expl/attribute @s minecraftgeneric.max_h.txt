@@ -1,0 +1,8 @@
+attribute @s minecraft:generic.max_health base set 60
+give @p minecraft:torch 64
+
+
+https://www.pcgamer.com/best-minecraft-seeds
+Lush Frozen Outpost Island
+ 
+6942699783490145785

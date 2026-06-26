@@ -1,0 +1,3 @@
+Layer 1 is next to the bed rock,,,,,,,,,,,
+soil_mattag,nd,soil_satdensity,modG,modK,cohesion,"peak_shear_strain,",friction_angle,reference_pressure,pressure_dependence,nsurf,physical_tag
+1,2,1.7,106250,70833.33,95,0.05,0,80,0,25,Soil

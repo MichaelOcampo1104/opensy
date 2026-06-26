@@ -1,0 +1,81 @@
+// Gmsh project created on Thu Mar 26 16:59:55 2020
+gridsize = 1;
+
+H = 10;
+// Points of the slope
+Point(1) = {0, 0, 0, gridsize};
+Point(2) = {3.2 * H, 0, 0, gridsize};
+Point(3) = {1.2 * H, H, 0, gridsize};
+Point(4) = {0, H, 0, gridsize};
+Point(5) = {0, -0.5 * H, gridsize};
+Point(6) = {3.2 * H, -0.5 * H, gridsize};
+Point(7) = {5.2 * H, -0.5 * H, gridsize};
+Point(8) = {5.2 * H, 0, gridsize};
+
+// Lines
+Line(1) = {1, 2};
+Line(2) = {2, 3};
+Line(3) = {3, 4};
+Line(4) = {1, 4};
+Line(5) = {5, 1};
+Line(6) = {5, 6};
+Line(7) = {6, 7};
+Line(8) = {7, 8};
+Line(9) = {8, 2};
+Line(10) = {6, 2};
+
+// Plane surface, Slope
+Curve Loop(1) = {1, 2, 3, -4};
+Plane Surface(1) = {1};
+
+// Plane surface, Foundation
+Curve Loop(2) = {6, 10, -1, -5};
+Plane Surface(2) = {2};
+
+// Plane surface, foundation beyond toe
+Curve Loop(3) = {7, 8, 9, -10};
+Plane Surface(3) = {3};
+
+// Physical groups
+// Fix the bottom boundary in x and y
+Physical Curve("Fix_110") = {6, 7};
+// Fix the left edge in x
+Physical Curve("Fix_100") = {4, 5, 8};
+
+Physical Surface("Slope") = {1};
+Physical Surface("Foundation") = {2, 3};
+
+// Transfinite curve, slope
+nnums = 21;
+Transfinite Curve {1} = nnums Using Progression 1;
+Transfinite Curve {2} = nnums Using Progression 1;
+Transfinite Curve {3} = nnums Using Progression 1;
+Transfinite Curve {4} = nnums Using Progression 1;
+
+nnumf = 11;
+// Transfinite curve, foundation
+Transfinite Curve {6} = nnums Using Progression 1;
+Transfinite Curve {10} = nnumf Using Progression 1;
+Transfinite Curve {5} = nnumf Using Progression 1;
+//Transfinite curve, foundation beyond toe
+Transfinite Curve {7} = nnums Using Progression 1;
+Transfinite Curve {8} = nnumf Using Progression 1;
+Transfinite Curve {9} = nnums Using Progression 1;
+
+// Transfinite surface, slope
+Transfinite Surface {1};
+// Transfinite surfce, foundation
+Transfinite Surface {2};
+// Transfinite surface, foundation beyond toe
+Transfinite Surface {3};
+
+// Recombine for quad elements
+Recombine Surface {1, 2, 3};
+// Recombine Surface {2};
+
+// Remove duplicate entities
+Coherence Mesh;
+
+// Renumber nodes and elements in continuous sequence
+RenumberMeshNodes;
+RenumberMeshElements;
