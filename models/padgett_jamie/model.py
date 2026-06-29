@@ -182,7 +182,7 @@ gm_dt   = 0.005                 # ground-motion time step [s] (synthetic record)
 gm_npts = 4000                  # number of synthetic points (20 s at dt=gm_dt)
 grav_ramp_dur = 2.0             # gravity ramp duration [s] (transient ramp 0→100%)
 odb_every_n = 5                 # throttle ODB in transient
-USE_SMARTANALYZE = False        # True: SmartAnalyze + fictitious-mass regularization
+USE_SMARTANALYZE = True         # True: SmartAnalyze + fictitious-mass regularization
                                 # False: manual Newton loop (proven, full coverage)
 MIN_MASS = 1.0e-6               # fictitious mass for zero-mass DOF regularization [N·s²/mm]
 
