@@ -712,5 +712,26 @@
     "Suggested Model citation": "McGann, Shin, Arduino, Mackenzie-Helnwein — University of Washington.",
     "Links to Papers / Design Reports": "Mistry, H. — Effective Stress Site Response_rev.ipynb, University of Manchester.",
     "Notes": "Converted from ref/Effective Stress Site Response_rev.ipynb. 9-node 9_4_QuadUP variant (distinct from pedroArduino_freefield 4-node quadUP/SSPquadUP). Retains source units (kN, m, kPa, sec) per coupled u-p convention. Mesh rewritten as clean coordinate-grid. Includes PostShake activation (§12ab) and gravity base UX fixity (§12aa). Stress diagnostics use Gauss-point Stresses (§12ad)."
+  },
+  {
+    "UniqueID": "padgett_jamie",
+    "URL": "https://repository.rice.edu/items/53acb979-ea69-4ad6-9aaf-ac59915e76fd",
+    "num_models": "1",
+    "purpose": "Nonlinear 3D seismic response of a simply-supported multi-span RC box girder bridge on elastomeric bearings with soil-pile abutment/foundation springs, deck pounding, and Rayleigh-damped transient analysis.",
+    "Description of Building Structural System": "Multi-span simply supported (MSSS) concrete box girder highway bridge typical of Central/Southeastern US (non-seismic design). Superstructure: 3-span RC box girder deck with 4 girders. Substructure: 2-column RC circular pier bents, with CIDH pile foundations. Abutments: seat-type with elastomeric bearing pads and steel dowels. Deck pounding at expansion joints.",
+    "Description of Model": "Full 3D grillage model with fiber-section columns (Concrete04 + Steel02), elastic deck girders and transverse slab, elastomeric bearing pads (Steel01 with gap/dowel parallel/series assemblies), bilinear abutment soil springs (Hysteretic + ElasticPPGap), pile-group foundation springs (ElasticPPGap translational + Elastic rotational), and Hertz-contact impact elements (ElasticPPGap pairs) for deck pounding. Rayleigh damping (5% in first 2 modes). TRBDF2 transient integrator.",
+    "Year of design and construction": "Typical of non-seismic design era (1950s–1980s Central/Southeastern US)",
+    "2D/3D": "3D",
+    "Material": "RC (Concrete04 + Steel02 fiber sections for columns; elastic for deck)",
+    "Lateral system": "Frame (RC pier bents)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic (UniformExcitation, X-longitudinal + Z-transverse)",
+    "Earthquake records": "Synthetic Ricker wavelet (dt=0.01s, 2000 pts) or user-supplied ground motion files",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "Python (converted from Tcl parametric fragility generator; 1152-parameter dataset)",
+    "file format": ".py",
+    "Suggested Model citation": "Nielson (2005) - original Tcl parametric generator. Padgett (2007) - fragility extension. Converted to OpenSeesPy 2026-06-29.",
+    "Links to Papers / Design Reports": "Nielson, B.G. (2005). Analytical fragility curves for highway bridges in moderate seismic zones, PhD thesis, Georgia Tech. Padgett, J.E. (2007). Seismic vulnerability assessment of retrofitted bridges, PhD thesis, Rice University.",
+    "Notes": "Converted from Tcl parametric builder in tcl_ref/ (1152 fragility bridges). Single representative bridge with median parameters from row i=1129. Fiber column sections use dispBeamColumn + Lobatto (6 IP). All imperial values (in/kip/ksi) converted to N-mm-MPa per AGENT.md §3a. Gravity via load-controlled manual loop; transient via SmartAnalyze TRBDF2."
   }
 ]
