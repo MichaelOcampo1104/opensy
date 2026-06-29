@@ -3415,10 +3415,80 @@ This reduces 22,000 calls → ~880, which completes in minutes rather than hours
 
 ---
 
+### §12ag — SmartAnalyze Compatibility for Stiffness-Contrast Models: Fictitious Mass Regularisation (v1.31.0)
+
+Source: `padgett_jamie` SmartAnalyze variant — 3-span MSSS bridge with fiber columns, bearings, and rigid links (1e6× stiffness contrast).
+
+#### 1. Zero-Mass Free DOFs Cause K_eff Singularity at Micro-Step Sizes
+
+SmartAnalyze's adaptive sub-stepping reduces the time step when convergence is slow. At very small Δt (≈6e-7s), the Newmark effective-stiffness matrix is dominated by the mass-proportional term:
+
+```
+K_eff = 1/(β·Δt²)·M + γ/(β·Δt)·C + K
+```
+
+At Δt = 6e-7s: `1/(β·Δt²) ≈ 1.1e13`. For DOFs where M = 0 (e.g., bearing-top nodes, bent-bottom nodes), the mass term vanishes and `K_eff ≈ K`. If the tangent stiffness K for those DOFs is also ill-conditioned (from stiffness contrast), K_eff becomes near-singular and the linear solver fails.
+
+**Symptom:** SmartAnalyze reduces the step to `Current step 6.104e-07 is below the min step 1.000e-06` and then fails with UmfPack/SuperLU factorization error.
+
+#### 2. Fix: `_ensure_minimum_mass(1e-6)` for Every Free DOF
+
+Assign a tiny fictitious mass (1e-6 N·s²/mm) to every free DOF that has zero mass. This is ~0.00003% of the deck mass (≈3 N·s²/mm) — negligible for global dynamics but critical for regularising K_eff:
+
+```python
+def _ensure_minimum_mass(min_mass: float = 1.0e-6) -> None:
+    """Assign a tiny fictitious mass to every free DOF that has zero mass."""
+    for tag in ops.getNodeTags():
+        masses = [ops.nodeMass(tag, dof) for dof in range(1, 7)]
+        if any(m < min_mass for m in masses):
+            patched = [max(m, min_mass) for m in masses]
+            ops.mass(tag, *patched)
+```
+
+Call this **after** `define_masses()` and **before** creating the ODB (the ODB snapshots the mass distribution at `save_model_data()`).
+
+#### 3. Results: SmartAnalyze Performance With vs Without Fictitious Mass
+
+| Configuration | Steps converged | Failure mode |
+|---|---|---|
+| No fictitious mass, SmartAnalyze | 0/1200 | UmfPack error at step 1 |
+| `_ensure_minimum_mass(1e-6)`, SmartAnalyze | 648/1200 (54%) | Convergence at peak GM amplitude |
+| `_ensure_minimum_mass(1e-6)`, manual Newton dt=0.001 | 1200/1200 (100%) | No failures |
+
+The fictitious mass enables SmartAnalyze to get past the initial-step singularity. For full-coverage production runs, the manual Newton loop at fixed dt=0.001 is still more robust (it subdivides the GM step into 5× smaller increments, making each Newton iteration easier to converge).
+
+#### 4. Toggleable Flag Pattern
+
+For models where both SmartAnalyze and a manual loop are useful, use a module-level flag:
+
+```python
+USE_SMARTANALYZE = False  # True → SmartAnalyze; False → manual Newton loop
+
+def run_analysis(output_dir):
+    ...
+    define_masses()
+    if USE_SMARTANALYZE:
+        _ensure_minimum_mass()
+    ...
+```
+
+This keeps a single `model.py` that supports both modes. Users developing the model can iterate quickly with SmartAnalyze, then switch to the manual loop for production runs.
+
+#### Detection / Rules
+
+- **If SmartAnalyze fails with UmfPack/SuperLU solver error at the very first step** → check for zero-mass free DOFs. Use `ops.getNodeTags()` + `ops.nodeMass(tag, dof)` to audit.
+- **If the model has zeroLength elements (bearings, springs, impact) AND beam elements** → the bearing-adjacent nodes (bearing-top etc.) likely have no mass. Add fictitious masses.
+- **Fictitious mass should be ≤ 1e-6 for bridge models** (as a fraction of the smallest real mass). For smaller models, scale proportionally.
+- **For the manual Newton loop fallback**, use `dt_analysis = 0.001` with `steps_per_gm = round(gm_dt / dt_analysis)` — this gives 5× sub-stepping for `gm_dt=0.005`, matching the Tcl source's approach.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-06-29 | 1.31.0 | **SmartAnalyze compatibility via fictitious-mass regularisation (§12ag):** (1) Zero-mass free DOFs (bearing-top nodes, bent-bottom nodes) cause K_eff singularity at SmartAnalyze's micro-step sizes — the mass term `1/(β·Δt²)·M` vanishes where M=0, leaving only K_t which is ill-conditioned. (2) Fix: `_ensure_minimum_mass(1e-6)` assigns a fictitious mass (0.00003% of deck mass) to all DOFs — regularises K_eff without affecting dynamics. (3) SmartAnalyze goes from 0→648/1200 steps with the fix; manual Newton loop at dt=0.001 still needed for 100% coverage. (4) Toggleable `USE_SMARTANALYZE` flag keeps both modes in a single `model.py`. Source: padgett_jamie SmartAnalyze variant (3D MSSS bridge, BandGeneral, gravity ramp). |
+| 2026-06-29 | 1.30.0 | **3D MSSS bridge conversion — gravity-as-ramp, BandGeneral solver, manual Newton loop (§12af):** (1) Static LoadControl cannot converge past ~40% gravity for stiffness-contrast bridge models — fix: apply ALL gravity as a transient ramp (0→100% over 2s, GM zero-padded). (2) UmfPack & SparseGEN fail to factor K_eff (return "numeric analysis returns 1" / SuperLU Error 1) — BandGeneral (LAPACK dgbsv) works reliably. (3) SmartAnalyze adaptive sub-stepping hits singular K_eff at Δt≈6e-7s — manual Newton loop at fixed dt=0.001s with NewtonLineSearch fallback converges 22000/22000 steps. (4) Full-gravity eigen periods (T1=2.69s, T2=1.74s) are ~20% shorter than partial-gravity (T1=3.41s). Source: padgett_jamie model conversion (Nielson 2005, Padgett 2007). |
 | 2026-06-26 | 1.29.0 | **9_4_QuadUP site response — base bubble-node fixity, plastic-gravity solver, post-shake divergence (§12ae):** (1) The 9-node `9_4_QuadUP` element's base **edge-mid ("bubble") node** must share the base UY fixity (`fix(n_bot, 0, 1)`, the notebook's `ops.fix(2, 0, 1)`) — left free it bows ~6 mm downward and the elastic→plastic PDMY02 transition diverges (Norm R ~6.6e5). This is easy to miss when rewriting the notebook's interleaved node tags into a clean grid mesh. (2) Plastic gravity (stage 1) needs **KrylovNewton + dt=1.0** — the notebook's `analyze(40, 500)` diverges under OpenSeesPy because Newton cycles at Norm~0.005 near the PDMY02 yield surface; KrylovNewton's secant acceleration escapes it. (3) Post-shake (PostShake=1) **diverges at dt≥0.01** (Norm R → ~1e11 → NaN); only dt=0.005 is stable, making a full 100 s consolidation ~16000 steps — so post-shake must be bounded/best-effort and `odb.save_response()` of the dynamic results must happen BEFORE post-shake. (4) opstool does not capture the u-p pore-pressure DOF into the `pressure` field (all-zeros) for 9_4_QuadUP/quadUP — verify physics via the σ₂₂ contour instead. Source: misty_effective stress site resp (9-node coupled u-p, 3-layer PDMY02, Lysmer dashpot). |
 | 2026-06-26 | 1.28.0 | **ODB path ordering & single-Gauss-point stress projection (§12ac, §12ad):** (1) `opst.post.set_odb_path()` MUST be called BEFORE `CreateODB` — calling it after silently misroutes response data to the default `.opstool.output/` (repo root, gitignored), leaving `output/RespStepData-1.odb` empty. Silent failure: model runs clean, only post-processing reveals data unreachable. (2) `StressesAtNodes` reads all-zeros for single-Gauss-point elements (quadUP, reduced-integration quads) — opstool's Gauss→node projection supports only quad(4,4)/(9,9)/(8,9), not (4,1); the projection returns None and falls back to zero-fill. The Gauss-point `Stresses` are valid. Fix: use `resp_type="Stresses"` (averaged per element) not `StressesAtNodes`; read pore pressure from nodal `pressure` not σ₃₃. Verified σ₂₂ −308 to −4 kPa (correct vertical stress profile), σ₁₂ peak 63 kPa. (3) §12ab §4 corrected — its example recommended the broken `StressesAtNodes`. Source: pedroArduino_freefield stress contour debugging. |
 | 2026-06-26 | 1.27.0 | **SSPquadUP correct signature & cross-element-type conversion hazards (§12ab):** (1) SSPquadUP has matTag BEFORE thick (opposite of quadUP) plus two extra args: e0 (initial void ratio per layer) and press (reference pressure 1.5e-6 kPa) — both REQUIRED at element level, not just in material. (2) Three different u-p element types exist for the same physics (SSPquadUP/quadUP/9_4_QuadUP) with distinct signatures — never copy arg lists across element types; identify source element first. (3) PostShake=1 parameter MUST be set on all PDMY02 elements after dynamic phase to activate post-shaking consolidation — missing it means no excess PWP dissipation. (4) 1D site response models with 1-column mesh + equalDOF produce deformed shapes that look like "one line" — this is correct; use plot_unstruct_responses for stress contour diagnostics instead. Source: pedroArduino_freefield SSPquadUP correction (1D PDMY02 soil column, 3-layer, Lysmer dashpot). |

@@ -182,6 +182,9 @@ gm_dt   = 0.005                 # ground-motion time step [s] (synthetic record)
 gm_npts = 4000                  # number of synthetic points (20 s at dt=gm_dt)
 grav_ramp_dur = 2.0             # gravity ramp duration [s] (transient ramp 0→100%)
 odb_every_n = 5                 # throttle ODB in transient
+USE_SMARTANALYZE = False        # True: SmartAnalyze + fictitious-mass regularization
+                                # False: manual Newton loop (proven, full coverage)
+MIN_MASS = 1.0e-6               # fictitious mass for zero-mass DOF regularization [N·s²/mm]
 
 # Ground motion directory / file (synthetic Ricker wavelet if empty)
 gm_dir    = Path(__file__).parent / "ground_motions"
@@ -803,6 +806,22 @@ def define_masses() -> None:
             ops.mass(n_top, fndm, fndm, fndm, fndm, fndm, fndm)
 
 
+def _ensure_minimum_mass(min_mass: float = MIN_MASS) -> None:
+    """Assign a tiny fictitious mass to every free DOF that has zero mass.
+
+    This prevents SmartAnalyze from encountering a singular K_eff when it
+    reduces the time step to micro-second levels for convergence (§12ag).
+    The fictitious mass (~1e-6 N·s²/mm) is ~0.00003% of the deck mass
+    (≈3 N·s²/mm) — negligible for global dynamics but critical for
+    regularising K_eff = 1/(β·Δt²)·M + K at Δt → 0.
+    """
+    for tag in ops.getNodeTags():
+        masses = [ops.nodeMass(tag, dof) for dof in range(1, 7)]
+        if any(m < min_mass for m in masses):
+            patched = [max(m, min_mass) for m in masses]
+            ops.mass(tag, *patched)
+
+
 # ── 9. ELEMENTS ──────────────────────────────────────────────────────────────────
 def define_elements() -> None:
     """Define geom transfers, beam integrations, and all elements.
@@ -1281,16 +1300,15 @@ def run_eigen(n_modes: int = 2) -> list:
 
 def run_dynamic(odb: "opst.post.CreateODB", dt: float, npts: int,
                 odb_every_n: int = 5) -> None:
-    """Run transient dynamic analysis with manual KrylovNewton loop.
+    """Run transient dynamic analysis with SmartAnalyze or manual Newton loop.
 
-    SmartAnalyze's adaptive sub-stepping produces matrix-factorisation failures
-    for this model (the stiffness contrast between rigid links, fiber columns,
-    and nonlinear bearings creates near-zero effective-stiffness modes at very
-    small step sizes). A manual loop with KrylovNewton at a fixed dt=0.001s
-    converges and matches the Tcl source's manual while-loop strategy.
+    Two modes controlled by ``USE_SMARTANALYZE`` module flag:
 
-    This is a documented exception to the SmartAnalyze mandate per §3c/§10
-    (SmartAnalyze is incompatible with this model's numerical characteristics).
+    * **SmartAnalyze** (default): requires ``_ensure_minimum_mass()`` to have been
+      called so every free DOF has a tiny mass, preventing K_eff singularity at
+      micro-step sizes.
+    * **Manual Newton loop** (fallback): fixed dt=0.001s with NewtonLineSearch
+      fallback. Used when SmartAnalyze's adaptive sub-stepping cannot converge.
 
     Rayleigh coefficients are computed from the first 2 eigenvalues (t_analysis_eq2.tcl).
     """
@@ -1304,42 +1322,67 @@ def run_dynamic(odb: "opst.post.CreateODB", dt: float, npts: int,
     ops.constraints("Transformation")
     ops.numberer("RCM")
     ops.system("BandGeneral")
-    ops.integrator("Newmark", 0.5, 0.25)
-    ops.test("NormDispIncr", 1.0e-3, 200, 3)
-    ops.algorithm("Newton")
-    ops.analysis("Transient")
 
-    t_current = 0.0
-    step_count = 0
-    dt_analysis = 0.001  # fixed step matching Tcl source (§3c exception)
-    steps_per_gm = max(1, int(round(dt / dt_analysis)))
-    total_analysis_steps = npts * steps_per_gm
+    if USE_SMARTANALYZE:
+        ops.integrator("Newmark", 0.5, 0.25)
 
-    for i in range(total_analysis_steps):
-        ok = ops.analyze(1, dt_analysis)
-        if ok != 0:
-            # Fallback: try NewtonLineSearch with relaxed tolerance
-            ops.test("NormDispIncr", 1.0e-2, 100, 3)
-            ops.algorithm("NewtonLineSearch")
+        analysis = opst.anlys.SmartAnalyze(
+            analysis_type="Transient",
+            tryAlterAlgoTypes=True,
+            algoTypes=[50, 40, 10, 20, 30],
+            tryAddTestTimes=True,
+            testIterTimesMore=[50, 100],
+            relaxation=0.5,
+            minStep=1.0e-6,
+        )
+        segs = analysis.transient_split(npts)
+        t_current = 0.0
+        step_count = 0
+        for i, _ in enumerate(segs):
+            ok = analysis.TransientAnalyze(dt)
+            if ok < 0:
+                print(f"  Dynamic analysis failed at t = {t_current:.3f} s "
+                      f"(step {i})")
+                break
+            t_current += dt
+            step_count += 1
+            if i % odb_every_n == 0:
+                odb.fetch_response_step()
+        analysis.close()
+        print(f"  Completed {step_count} steps (t_final = {t_current:.3f} s)")
+    else:
+        ops.integrator("Newmark", 0.5, 0.25)
+        ops.test("NormDispIncr", 1.0e-3, 200, 3)
+        ops.algorithm("Newton")
+        ops.analysis("Transient")
+
+        t_current = 0.0
+        step_count = 0
+        dt_analysis = 0.001
+        steps_per_gm = max(1, int(round(dt / dt_analysis)))
+        total_analysis_steps = npts * steps_per_gm
+
+        for i in range(total_analysis_steps):
             ok = ops.analyze(1, dt_analysis)
-            # Restore tighter settings for next step
-            ops.test("NormDispIncr", 1.0e-3, 200, 3)
-            ops.algorithm("Newton")
-        if ok != 0:
-            print(f"  Dynamic analysis failed at t = {t_current:.3f} s "
-                  f"(analysis step {i})")
-            break
-        t_current += dt_analysis
-        step_count += 1
-        # Throttle ODB to GM-step cadence
-        if i % max(1, steps_per_gm * odb_every_n) == 0:
+            if ok != 0:
+                ops.test("NormDispIncr", 1.0e-2, 100, 3)
+                ops.algorithm("NewtonLineSearch")
+                ok = ops.analyze(1, dt_analysis)
+                ops.test("NormDispIncr", 1.0e-3, 200, 3)
+                ops.algorithm("Newton")
+            if ok != 0:
+                print(f"  Dynamic analysis failed at t = {t_current:.3f} s "
+                      f"(analysis step {i})")
+                break
+            t_current += dt_analysis
+            step_count += 1
+            if i % max(1, steps_per_gm * odb_every_n) == 0:
+                odb.fetch_response_step()
+
+        if step_count > 0 and step_count % max(1, steps_per_gm * odb_every_n) != 0:
             odb.fetch_response_step()
 
-    # Collect remaining steps
-    if step_count > 0 and step_count % max(1, steps_per_gm * odb_every_n) != 0:
-        odb.fetch_response_step()
-
-    print(f"  Completed {step_count} steps (t_final = {t_current:.3f} s)")
+        print(f"  Completed {step_count} steps (t_final = {t_current:.3f} s)")
 
 
 def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
@@ -1353,6 +1396,8 @@ def run_analysis(output_dir: Path) -> "opst.post.CreateODB":
     define_nodes()
     define_boundary_conditions()
     define_masses()
+    if USE_SMARTANALYZE:
+        _ensure_minimum_mass()
     vis_nodes(output_dir)
     define_elements()
     vis_model(output_dir)
