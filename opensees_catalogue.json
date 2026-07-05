@@ -754,5 +754,26 @@
     "Suggested Model citation": "McGann, C. & Arduino, P. - University of Washington, GiD UWquad2D problem type (2010); Boulanger & Ziotopoulou PM4Sand (v3.1).",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from tcl_ref/loose/*/final_model.tcl (18 cases). Mesh .dat files are GiD-generated and case-specific; ground motion is shared. Units retained as kN-m-kPa-sec (coupled u-p; converting PM4Sand constants and fluid bulk/permeability to N-mm would destroy conditioning - see pedroArduino_freefield precedent and AGENT.md 12j). Two openseespy substitutions: Mumps->ProfileSPD, manual subStepAnalyze->SmartAnalyze. The medium and very_loose soil-set variants exist in tcl_ref/ but are not yet converted (they differ only in the loose-sand PM4Sand Dr/G0/kDr/mDr constants). Select case via: python model.py <case_name>."
+  },
+  {
+    "UniqueID": "GutierrezSotoMariantonieta",
+    "URL": "https://sotostructures.com/research/publications/",
+    "num_models": "1",
+    "purpose": "3D non-linear dynamic analysis of a 6-story self-centering post-tensioned steel braced frame with controlled-rocking bays and replaceable fuse assemblies under scaled Kobe ground motion.",
+    "Description of Building Structural System": "6-story steel special braced frame, 5 bays x 4 column lines in plan (bay widths 6m x 6m, story height 4m). Two column lines are rocking bays: post-tensioned (PT) strands anchor the frame to the foundation and a SelfCentering gap + Steel01 fuse provide energy dissipation and re-centering. Remaining bays are conventional steel braced frame. Floor nodal mass 24000 kg.",
+    "Description of Model": "3D (ndm=3, ndf=6) OpenSeesPy model with 282 nodes and 650 elements: 610 elasticBeamColumn (columns, beams, braces, struts), 8 truss (PT strands), 16 twoNodeLink (base vertical-reaction springs), 16 zeroLength (fuse pins). 2 PDelta transforms. Materials: ElasticPP+Parallel PT strands (201-203), ENT base (301), SelfCentering+Steel01 fuses (401, 414). 5% Rayleigh damping modes 1+3. Single-step elastic gravity then 2500-step Newmark transient (dt=0.01) under scaled Kobe Y-direction UniformExcitation (0.69g, dt=0.02).",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel (elastic beam-column + PT strands + SelfCentering fuses)",
+    "Lateral system": "Self-centering steel braced frame with controlled rocking",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Dynamic - Kobe ground motion (UniformExcitation, Y-dir)",
+    "Earthquake records": "kobe.txt - 1250 pts @ dt=0.02 s, scaled x0.69g",
+    "Opensees Version": "Standard OpenSeesPy",
+    "model generator": "STKO (source is 13-file STKO build sequence)",
+    "file format": ".py",
+    "Suggested Model citation": "Gutierrez-Soto, M. et al. - DREAM Structures Lab.",
+    "Links to Papers / Design Reports": "https://sotostructures.com/research/publications/ — related 17WCEE papers on controlled-rocking steel braced frames.",
+    "Notes": "Converted from tcl_ref/01..13-*.py (STKO build sequence). Source was body of a parameter-sweep; driver defining Section_Mat (12 cross-sections), Strand_Area, Fuse_Yield was NOT provided. Representative AISC W-section values used as placeholders (clearly marked in model.py §3 ASSUMED PARAMETERS). Mesh/BCs/masses/loads extracted from source into model_data.json. Units converted SI->N-mm-MPa per AGENT.md §12j. All text recorders migrated to opst.post.CreateODB (key nodes 604/2011/2051, key elements 6011/6051 + columns/beams per original recorder list). Per §12i UniformExcitation defined AFTER gravity. Outer sweep counters (n, ni, Analysis_number) dropped — single config runs."
   }
 ]
