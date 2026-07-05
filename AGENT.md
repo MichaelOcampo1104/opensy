@@ -3481,12 +3481,115 @@ This keeps a single `model.py` that supports both modes. Users developing the mo
 - **Fictitious mass should be ≤ 1e-6 for bridge models** (as a fraction of the smallest real mass). For smaller models, scale proportionally.
 - **For the manual Newton loop fallback**, use `dt_analysis = 0.001` with `steps_per_gm = round(gm_dt / dt_analysis)` — this gives 5× sub-stepping for `gm_dt=0.005`, matching the Tcl source's approach.
 
+### §12ah — PM4Sand `FirstCall` Routing & Mixed-ndf Fictitious-Mass Scoping (v1.32.0)
+
+Source: `RathjeEllen` — 2D coupled u-p effective-stress site response with PM4Sand liquefaction (18-case parametric sweep, GiD `UWquad2D` Tcl → OpenSeesPy).
+
+#### 1. PM4Sand `FirstCall` Requires the Trailing Material Tag — as a String
+
+The Tcl source's elastic→plastic gravity transition is:
+```tcl
+updateMaterialStage -material 1 -stage 1
+setParameter -value 0 -ele $eleTag FirstCall $matTag
+```
+
+PM4Sand's `FirstCall` parameter is **mandatory**: it triggers the material's internal initialization, which reads the gravity stress state and populates stress-dependent secondary parameters (`Ado`, `z_max`, `h0`, `c_dr`, `c_kaf`, …). Without it, those parameters stay at their sentinels and the first plastic computation **divides by zero**, producing `Vector::operator/(double fact) - divide-by-zero error` → NaN residuals → `analyze` returns `-3`.
+
+The OpenSeesPy form (verified against the [official PM4Sand cyclic-simple-shear example](https://openseespydoc.readthedocs.io/en/latest/src/pm4sand_cyc_cal.html), line 191):
+```python
+ops.setParameter("-val", 0, "-ele", ele_tag, "FirstCall", "<matTag_as_STRING>")
+```
+
+Two failure modes when this is wrong:
+- **Passing the matTag as an int** → `"Invalid String Input!"` (openseespy stringifies trailing positional args but rejects a bare int in the parameter-name slot).
+- **Dropping the matTag entirely** → the call succeeds silently, but PM4Sand's initialization never fires → NaN on the first plastic step.
+
+> **Correction to §12ab point 3:** the §12ab PostShake lesson ("drop the trailing tag") applies **only to PDMY02's `PostShake` parameter**, where the trailing integer is unused. It does **not** generalize to PM4Sand's `FirstCall`, where the trailing matTag is the routing key. When in doubt, match the Tcl source's trailing args exactly.
+
+#### 2. Plastic-Gravity Solver for PM4Sand: KrylovNewton + dt=1.0
+
+PM4Sand's tangent near the elastic→plastic yield surface defeats plain Newton-Raphson — it cycles at Norm just above tol or, with FirstCall mis-fired, hits a divide-by-zero producing NaN. The fix is identical to the §12ae recipe for PDMY02:
+
+```python
+ops.algorithm("KrylovNewton")
+ops.test("NormDispIncr", 1.0e-4, 50, 1)
+ops.analyze(10, 1.0)   # plastic gravity: 10 steps × dt=1s
+```
+
+KrylovNewton's secant acceleration escapes the yield-surface cycle. Elastic gravity stays Newton (it always converges).
+
+#### 3. Fictitious-Mass Helper Must Be Scoped to a Single ndf
+
+The §12ag `_ensure_minimum_mass()` helper iterated `ops.getNodeTags()`. In a coupled u-p soil model with a Lysmer dashpot, the soil nodes are ndf=3 (ux, uy, pwp) but the dashpot nodes are ndf=2 (ux, uy), built in a sub-builder. Calling `ops.mass(tag, m1, m2, m3)` on a 2-DOF dashpot node raises `Node::setMass - incompatible matrices`.
+
+Fix: pass the soil-node tag set explicitly and only patch those:
+```python
+def _ensure_minimum_mass(soil_node_tags, min_mass=1.0e-9):
+    for tag in soil_node_tags:           # ndf=3 soil nodes only
+        masses = [ops.nodeMass(tag, dof) for dof in (1, 2, 3)]
+        if any(m < min_mass for m in masses):
+            ops.mass(tag, *[max(m, min_mass) for m in masses])
+```
+
+General rule: **whenever a model mixes ndf** (soil+structure, fluid+solid, dashpot+frame), every helper that touches node DOFs must be scoped to one ndf group. Iterate by tag-set, not by `ops.getNodeTags()`.
+
+#### 4. `ops.analysis("Transient")` Is Required After `wipeAnalysis()` for Manual Loops
+
+`run_analysis` calls `ops.wipeAnalysis()` between gravity and dynamic. This clears the analysis object. The SmartAnalyze path works because SmartAnalyze instantiates its own analysis internally — but a manual `ops.analyze(1, dt)` loop requires the analysis object to be reconstructed first:
+
+```python
+ops.constraints("Penalty", 1.0e15, 1.0e15)
+ops.test(...)
+ops.algorithm("Newton")
+ops.numberer("RCM")
+ops.system("ProfileSPD")
+ops.integrator("Newmark", 0.5, 0.25)
+ops.analysis("Transient")               # ← REQUIRED after wipeAnalysis()
+ops.rayleigh(A0, A1, 0.0, 0.0)
+```
+
+Without it: `"WARNING No Analysis type has been specified"` followed by `opensees.OpenSeesError` on the first `ops.analyze()` call.
+
+#### 5. ODB Slimming for Large Transient Soil Models
+
+For a 10,050-element SSPquadUP / 16,505-step model, the dominant runtime cost was `fetch_response_step()` querying all elements for stress/strain — and per §12ad those results were **silently all-zeros** anyway (SSPquadUP's single Gauss point isn't supported by opstool's projection). Disable the wasted work:
+
+```python
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    save_nodal_resp=True,
+    save_plane_resp=False,              # all-zeros for SSPquadUP; pure overhead
+    compute_mechanical_measures=False,
+)
+```
+
+Combined with `ODB_EVERY_N = 200` (≈82 ODB samples over 16,500 steps — well under the ≤500 target) and a manual Newton loop at the CFL-limited dt=0.001, the dynamic phase runs in a tractable time. PM4Sand's constitutive evaluation on 10,000+ elements is genuinely expensive (per-step tangent is ~5–10× PDMY02) — there is no algorithmic shortcut for that; the optimizations above remove only the *wasted* work.
+
+#### 6. Per-Case Parametric Mesh via .dat Files
+
+When the source Tcl is a GiD-generated parametric sweep (many cases, identical materials/analysis, different meshes), do NOT try to re-derive the mesh in Python. The GiD mesh is irregular (free-field column at finite distance, non-uniform X spacing) and not reproducible from a formula. Instead:
+
+- Copy the 4 GiD `.dat` files per case (`nodeInfo`, `elementInfo`, `nodeFixitiesInfo`, `nodeEqualDOFInfo`) into `cases/<case>/`.
+- Extract the few per-case tags that live only in the Tcl (dashpot element/nodes, load node, base master, motion dt/nsteps) into a `case_meta.json` via a throwaway extractor.
+- A single parametric `model.py` reads `cases/<case>/` at build time, selected via `python model.py <case>`.
+
+This avoids 18 near-duplicate Python files while staying byte-faithful to each source mesh.
+
+#### Detection / Rules
+
+- **PM4Sand elastic→plastic NaN** → check `FirstCall` is being set with the trailing matTag **as a string**; check plastic gravity uses KrylovNewton + dt=1.
+- **"Invalid String Input!" from setParameter** → a trailing int was passed where a string token is expected; pass it as `str(mat_tag)` (or read it raw from the Tcl line via `line.split()[6]`, which is already a string).
+- **`Node::setMass - incompatible matrices`** → a mixed-ndf model called the mass helper on a node of the wrong ndf; scope the helper to one tag-set.
+- **`WARNING No Analysis type has been specified` after a manual `ops.analyze()`** → missing `ops.analysis("Transient")` after `wipeAnalysis()`.
+- **Large transient soil model "running but slow"** → check `save_plane_resp`/`compute_mechanical_measures` on single-Gauss-point elements (§12ad); they're all-zeros and pure overhead.
+
 ---
 
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-05 | 1.32.0 | **PM4Sand FirstCall routing & mixed-ndf fictitious-mass scoping (§12ah):** (1) PM4Sand's `FirstCall` parameter is mandatory at the elastic→plastic transition (triggers internal init that reads gravity stress state and populates stress-dependent secondary params); without it the first plastic step divides by zero → NaN residuals. OpenSeesPy requires the trailing matTag **as a string**: `ops.setParameter("-val", 0, "-ele", ele, "FirstCall", "<matTag_str>")`. Passing it as int → "Invalid String Input!"; dropping it → silent NaN. Correction to §12ab point 3: the PostShake "drop the trailing tag" rule applies only to PDMY02's PostShake, not PM4Sand's FirstCall. (2) Plastic gravity needs KrylovNewton + dt=1.0 (same as §12ae PDMY02 recipe — PM4Sand's yield-surface tangent defeats plain Newton). (3) The §12ag `_ensure_minimum_mass()` helper must be scoped to a single ndf when the model mixes ndf (soil ndf=3 + dashpot ndf=2 here); calling `ops.mass(tag, m1, m2, m3)` on a 2-DOF node raises "incompatible matrices". (4) `ops.analysis("Transient")` is required after `wipeAnalysis()` for manual `ops.analyze()` loops — SmartAnalyze instantiates its own analysis internally, manual loops do not. Without it: "WARNING No Analysis type has been specified". (5) For 10k+ element / 16k+ step SSPquadUP models, disabling `save_plane_resp`/`compute_mechanical_measures` removes pure overhead (all-zeros per §12ad anyway); ODB every 200th step + manual Newton loop at CFL-limited dt=0.001 keeps the dynamic phase tractable. PM4Sand constitutive evaluation is genuinely expensive (per-step tangent ~5–10× PDMY02) — there's no algorithmic shortcut for that. Source: RathjeEllen conversion (18-case GiD UWquad2D parametric sweep, PM4Sand + SSPquadUP + Lysmer dashpot). |
 | 2026-06-29 | 1.31.0 | **SmartAnalyze compatibility via fictitious-mass regularisation (§12ag):** (1) Zero-mass free DOFs (bearing-top nodes, bent-bottom nodes) cause K_eff singularity at SmartAnalyze's micro-step sizes — the mass term `1/(β·Δt²)·M` vanishes where M=0, leaving only K_t which is ill-conditioned. (2) Fix: `_ensure_minimum_mass(1e-6)` assigns a fictitious mass (0.00003% of deck mass) to all DOFs — regularises K_eff without affecting dynamics. (3) SmartAnalyze goes from 0→648/1200 steps with the fix; manual Newton loop at dt=0.001 still needed for 100% coverage. (4) Toggleable `USE_SMARTANALYZE` flag keeps both modes in a single `model.py`. Source: padgett_jamie SmartAnalyze variant (3D MSSS bridge, BandGeneral, gravity ramp). |
 | 2026-06-29 | 1.30.0 | **3D MSSS bridge conversion — gravity-as-ramp, BandGeneral solver, manual Newton loop (§12af):** (1) Static LoadControl cannot converge past ~40% gravity for stiffness-contrast bridge models — fix: apply ALL gravity as a transient ramp (0→100% over 2s, GM zero-padded). (2) UmfPack & SparseGEN fail to factor K_eff (return "numeric analysis returns 1" / SuperLU Error 1) — BandGeneral (LAPACK dgbsv) works reliably. (3) SmartAnalyze adaptive sub-stepping hits singular K_eff at Δt≈6e-7s — manual Newton loop at fixed dt=0.001s with NewtonLineSearch fallback converges 22000/22000 steps. (4) Full-gravity eigen periods (T1=2.69s, T2=1.74s) are ~20% shorter than partial-gravity (T1=3.41s). Source: padgett_jamie model conversion (Nielson 2005, Padgett 2007). |
 | 2026-06-26 | 1.29.0 | **9_4_QuadUP site response — base bubble-node fixity, plastic-gravity solver, post-shake divergence (§12ae):** (1) The 9-node `9_4_QuadUP` element's base **edge-mid ("bubble") node** must share the base UY fixity (`fix(n_bot, 0, 1)`, the notebook's `ops.fix(2, 0, 1)`) — left free it bows ~6 mm downward and the elastic→plastic PDMY02 transition diverges (Norm R ~6.6e5). This is easy to miss when rewriting the notebook's interleaved node tags into a clean grid mesh. (2) Plastic gravity (stage 1) needs **KrylovNewton + dt=1.0** — the notebook's `analyze(40, 500)` diverges under OpenSeesPy because Newton cycles at Norm~0.005 near the PDMY02 yield surface; KrylovNewton's secant acceleration escapes it. (3) Post-shake (PostShake=1) **diverges at dt≥0.01** (Norm R → ~1e11 → NaN); only dt=0.005 is stable, making a full 100 s consolidation ~16000 steps — so post-shake must be bounded/best-effort and `odb.save_response()` of the dynamic results must happen BEFORE post-shake. (4) opstool does not capture the u-p pore-pressure DOF into the `pressure` field (all-zeros) for 9_4_QuadUP/quadUP — verify physics via the σ₂₂ contour instead. Source: misty_effective stress site resp (9-node coupled u-p, 3-layer PDMY02, Lysmer dashpot). |

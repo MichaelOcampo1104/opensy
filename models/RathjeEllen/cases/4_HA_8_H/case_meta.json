@@ -1,0 +1,18 @@
+{
+  "case": "4_HA_8_H",
+  "load_node": 13552,
+  "base_master_node": 13552,
+  "dashpot_element": 13256,
+  "dashpot_node_fixed": 13652,
+  "dashpot_node_free": 13653,
+  "dashpot_material": 5,
+  "base_area": 1000300.0,
+  "dashpot_coeff": 1750.0,
+  "motion_dt": 0.004999999999999893,
+  "motion_npts": 3301,
+  "analysis_dt": 0.001,
+  "gravity_steps_elastic": 10,
+  "gravity_dt_elastic": 500.0,
+  "gravity_steps_plastic": 10,
+  "gravity_dt_plastic": 1.0
+}
