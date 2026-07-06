@@ -3585,10 +3585,63 @@ This avoids 18 near-duplicate Python files while staying byte-faithful to each s
 
 ---
 
+### §12ai — Truss Tags in `frame_tags` Crash opstool's Basic-Force Extractor (v1.33.0)
+
+Source: `GutierrezSotoMariantonieta` — 3D self-centering post-tensioned steel braced frame (STKO 13-file build → Python), where PT strands are modelled as `truss` elements.
+
+#### 1. A truss returns a length-1 basic force; opstool assumes length 6
+
+`opstool.post._get_response._get_beam_basic_resp()` builds the 6-component basic-force vector (`N, MZ1, MZ2, MY1, MY2, T`) for every tag in `frame_tags`. It special-cases response lengths **0** (fill `[0.0]*6`) and **3** (a 2D beam → pad to 6). Any other length falls through to the sign-flip block, which indexes `resp[1]`:
+
+```python
+resp = ops.eleResponse(ele_tag, "basicForces")   # truss → [N], length 1
+if len(resp) == 0:        resp = [0.0]*6      # no
+elif len(resp) == 3:      resp = [...]         # no
+resp = [resp[0], -resp[1], ...]                # ← IndexError: list index out of range
+```
+
+A `truss` element legitimately returns only `[N]` (axial force) — it carries no moments. So passing any truss tag to `frame_tags` raises `IndexError: list index out of range` inside `CreateODB` / `FrameRespStepData`, **before any analysis step is collected** — the ODB constructor calls `_set_resp()` at init.
+
+#### 2. Symptom and fix
+
+**Symptom:** `CreateODB(…, frame_tags=[…])` crashes at construction with the traceback bottoming in `_get_beam_basic_resp` → `resp = […, -resp[1], …]` → `IndexError: list index out of range`. The model is fully built (mesh prints, materials define), but no analysis runs.
+
+**Fix:** Keep truss tags out of `frame_tags`. Trusses are axial-only and don't fit the beam-column basic-force schema. If PT/axial force time histories are needed, record them directly:
+
+```python
+# frame_tags = beam-columns only — NO truss tags
+key_frames = [1001, 1002, …]               # elasticBeamColumn tags
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=True,
+    frame_tags=key_frames,                 # beam-columns only
+    # save_truss_resp=True + truss_tags=[6011, 6051] is safe if truss data is wanted
+)
+# PT axial force, on demand:
+# ops.eleResponse(6011, "basicForces")  → [N]
+```
+
+`save_truss_resp=True` with `truss_tags=[…]` uses opstool's dedicated truss-response path (length-1 aware) and is the correct channel for axial-force data — never `frame_tags`.
+
+#### 3. Cross-reference: `node_tags` filtering still breaks deformed plots (§12u)
+
+The same model hit a second, non-fatal opstool quirk after the truss fix: passing `node_tags=[604, 2011, 2051]` to `CreateODB` records displacements for only those 3 nodes, but `plot_nodal_responses(defo_scale=True)` tries to deform all 282 mesh nodes → `operands could not be broadcast together with shapes (3,3) (282,3)`. This is the §12u failure mode restated for the STKO-converted 3D frame: **omit `node_tags` (pass `None`) when the ODB will feed a deformed-shape plot of the full mesh.** The two fixes are independent — the truss bug is fatal-at-init, the node_tags filter is non-fatal-at-postprocess.
+
+#### Detection / Rules
+
+- **`IndexError: list index out of range` at `resp[1]` inside `_get_beam_basic_resp`** → a non-beam element (truss, or any element whose `basicForces` response is not length 0/3/6/12) is in `frame_tags`. Grep the model's element definitions for the tags in `frame_tags` and remove the truss/link/zeroLength tags.
+- **`IndexError` traceback originates in `CreateODB.__init__` / `_set_resp`** (not inside an analysis loop) → the crash is at ODB construction, i.e. a tag-list problem, not a convergence or step problem.
+- **`operands could not be broadcast together with shapes (N,N) (M,N)` from `plot_nodal_responses`** where N ≪ M → `node_tags` was filtered (§12u); set `node_tags=None` for full-mesh deformed plots.
+- **Rule:** `frame_tags` accepts **beam-column elements only** (`elasticBeamColumn`, `forceBeamColumn`, `dispBeamColumn`, `elasticTimoshenkoBeam`, …). Axial-only elements (`truss`, `corotTruss`) use `truss_tags`; link/spring elements (`twoNodeLink`, `zeroLength`) use `link_tags`.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-06 | 1.33.0 | **Truss tags in `frame_tags` crash opstool's basic-force extractor (§12ai):** A `truss` element's `basicForces` response is length 1 (`[N]`); `opstool.post._get_response._get_beam_basic_resp()` only special-cases lengths 0 and 3, so any truss tag passed to `CreateODB(frame_tags=[…])` slips through to the sign-flip block and raises `IndexError: list index out of range` at `resp[1]` — at ODB construction, before any step is collected. Fix: keep `frame_tags` beam-column-only; truss axial forces use the dedicated `save_truss_resp=True` + `truss_tags=[…]` path (length-1 aware). Cross-ref §12u restated for 3D STKO frame: `node_tags=[…]` filtering still breaks `plot_nodal_responses(defo_scale=True)` deformed plots (`shapes (3,3) (282,3)` broadcast error) — omit `node_tags` (pass `None`) when the ODB feeds a full-mesh deformed plot. Source: GutierrezSotoMariantonieta conversion (3D self-centering PT steel braced frame, STKO 13-file build). |
 | 2026-07-05 | 1.32.0 | **PM4Sand FirstCall routing & mixed-ndf fictitious-mass scoping (§12ah):** (1) PM4Sand's `FirstCall` parameter is mandatory at the elastic→plastic transition (triggers internal init that reads gravity stress state and populates stress-dependent secondary params); without it the first plastic step divides by zero → NaN residuals. OpenSeesPy requires the trailing matTag **as a string**: `ops.setParameter("-val", 0, "-ele", ele, "FirstCall", "<matTag_str>")`. Passing it as int → "Invalid String Input!"; dropping it → silent NaN. Correction to §12ab point 3: the PostShake "drop the trailing tag" rule applies only to PDMY02's PostShake, not PM4Sand's FirstCall. (2) Plastic gravity needs KrylovNewton + dt=1.0 (same as §12ae PDMY02 recipe — PM4Sand's yield-surface tangent defeats plain Newton). (3) The §12ag `_ensure_minimum_mass()` helper must be scoped to a single ndf when the model mixes ndf (soil ndf=3 + dashpot ndf=2 here); calling `ops.mass(tag, m1, m2, m3)` on a 2-DOF node raises "incompatible matrices". (4) `ops.analysis("Transient")` is required after `wipeAnalysis()` for manual `ops.analyze()` loops — SmartAnalyze instantiates its own analysis internally, manual loops do not. Without it: "WARNING No Analysis type has been specified". (5) For 10k+ element / 16k+ step SSPquadUP models, disabling `save_plane_resp`/`compute_mechanical_measures` removes pure overhead (all-zeros per §12ad anyway); ODB every 200th step + manual Newton loop at CFL-limited dt=0.001 keeps the dynamic phase tractable. PM4Sand constitutive evaluation is genuinely expensive (per-step tangent ~5–10× PDMY02) — there's no algorithmic shortcut for that. Source: RathjeEllen conversion (18-case GiD UWquad2D parametric sweep, PM4Sand + SSPquadUP + Lysmer dashpot). |
 | 2026-06-29 | 1.31.0 | **SmartAnalyze compatibility via fictitious-mass regularisation (§12ag):** (1) Zero-mass free DOFs (bearing-top nodes, bent-bottom nodes) cause K_eff singularity at SmartAnalyze's micro-step sizes — the mass term `1/(β·Δt²)·M` vanishes where M=0, leaving only K_t which is ill-conditioned. (2) Fix: `_ensure_minimum_mass(1e-6)` assigns a fictitious mass (0.00003% of deck mass) to all DOFs — regularises K_eff without affecting dynamics. (3) SmartAnalyze goes from 0→648/1200 steps with the fix; manual Newton loop at dt=0.001 still needed for 100% coverage. (4) Toggleable `USE_SMARTANALYZE` flag keeps both modes in a single `model.py`. Source: padgett_jamie SmartAnalyze variant (3D MSSS bridge, BandGeneral, gravity ramp). |
 | 2026-06-29 | 1.30.0 | **3D MSSS bridge conversion — gravity-as-ramp, BandGeneral solver, manual Newton loop (§12af):** (1) Static LoadControl cannot converge past ~40% gravity for stiffness-contrast bridge models — fix: apply ALL gravity as a transient ramp (0→100% over 2s, GM zero-padded). (2) UmfPack & SparseGEN fail to factor K_eff (return "numeric analysis returns 1" / SuperLU Error 1) — BandGeneral (LAPACK dgbsv) works reliably. (3) SmartAnalyze adaptive sub-stepping hits singular K_eff at Δt≈6e-7s — manual Newton loop at fixed dt=0.001s with NewtonLineSearch fallback converges 22000/22000 steps. (4) Full-gravity eigen periods (T1=2.69s, T2=1.74s) are ~20% shorter than partial-gravity (T1=3.41s). Source: padgett_jamie model conversion (Nielson 2005, Padgett 2007). |

@@ -272,19 +272,24 @@ def create_odb(odb_tag: int, output_dir: Path) -> "opst.post.CreateODB":
     elements originally recorded for localForce time histories.
     """
     opst.post.set_odb_path(str(output_dir))
-    # Originally-recorded nodes & elements (source 12-Recorders.py)
-    key_nodes = [604, 2011, 2051]
-    key_frames = [6011, 6051,                # PT strands
-                  1001, 1002, 1004, 1021, 1022, 1024,    # columns
+    # Originally-recorded elements (source 12-Recorders.py).
+    # NOTE: PT strands 6011/6051 are truss elements and are intentionally
+    # excluded from frame_tags — opstool's frame-response extractor assumes
+    # a 6-component basic-force vector (N, MZ1, MZ2, MY1, MY2, T); a truss
+    # returns only [N] and triggers IndexError in _get_beam_basic_resp.
+    # PT axial force can be recorded separately via ops.eleResponse if needed.
+    key_frames = [1001, 1002, 1004, 1021, 1022, 1024,    # columns
                   1201, 1202, 1204, 1221, 1222, 1224,
                   1401, 1402, 1404, 1421, 1422, 1424,
-                  3101, 3102, 3104]          # beams
+                  3101, 3102, 3104]                       # beams
+    # node_tags=None records all 282 nodes so deformed-shape plots can
+    # render the full structure (not just the 3 key nodes).
     odb = opst.post.CreateODB(
         odb_tag=odb_tag,
         model_update=False,
         save_nodal_resp=True,
         save_frame_resp=True,
-        node_tags=key_nodes,
+        node_tags=None,
         frame_tags=key_frames,
     )
     odb.save_model_data()
