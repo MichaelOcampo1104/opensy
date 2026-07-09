@@ -3635,12 +3635,212 @@ The same model hit a second, non-fatal opstool quirk after the truss fix: passin
 - **`operands could not be broadcast together with shapes (N,N) (M,N)` from `plot_nodal_responses`** where N ≪ M → `node_tags` was filtered (§12u); set `node_tags=None` for full-mesh deformed plots.
 - **Rule:** `frame_tags` accepts **beam-column elements only** (`elasticBeamColumn`, `forceBeamColumn`, `dispBeamColumn`, `elasticTimoshenkoBeam`, …). Axial-only elements (`truss`, `corotTruss`) use `truss_tags`; link/spring elements (`twoNodeLink`, `zeroLength`) use `link_tags`.
 
+### §12aj — Chevron CBF Pushover: Recovery-Ladder Load-Factor Spam Is Not Step-0 Failure; EnergyIncr+Newton Stalls in the Brace-Buckling Transition (v1.34.0)
+
+Source: `BradleyCameron_R3` — 3-story chevron concentrically braced steel frame (Sizemore 2017 framework / Bradley et al. 2021, DesignSafe PRJ-2957), conformant re-conversion of the non-conformant `bradley2021_Building_system`. 2D, 877 nodes, 916 elements (dispBeamColumn fiber W/HSS sections + elasticBeamColumn + truss + zeroLength weld/gusset springs + zeroLengthSection angle fuses), 260 uniaxial materials, IMKBilin beam hinges. Pushover via the source's `B-AdvanceAnalysis` recovery ladder (4 tols × 3 step-factors × 8 algorithms) ported as a manual `ops.analyze(1)` loop.
+
+#### 1. A pushover that "fails on step 0" but writes 51 curve points is converging fine — then stalling
+
+**Symptom (misleading):** the run log ends with:
+```
+=== Pushover (monotonic) ===
+  Target 1/1: drift=10.00% (roof ±1371.6 mm)
+  Damping: T1=0.985s T2=0.388s T3=0.269s ...
+    convergence failure — stopping.
+  -> pushover_curve.csv (51 points)
+```
+sandwiched between hundreds of `DisplacementControl::newStep(void) - failed in solver` / `domain at load factor 10.6–12.1` / `Umfpackgenlinsolver::solve` warnings. The first instinct is "pushover fails at step 0 with an absurd load factor of ~12" → suspect the §12z lateral-pattern-frozen-at-λ=0 bug.
+
+**Reality:** the `state.history` list (which feeds `pushover_curve.csv`) is only appended **after** a converged step in `_advance_step`, and the early-failure return path skips the append. So 51 CSV points = **51 pushover steps genuinely converged** (drift 0.002% → 0.15%, base shear 0.7 → 145.7 kip). Step **52** then fails, and the load-factor-10+ warnings are the **recovery ladder firing on that failing 52nd step** — the DisplacementControl integrator, hunting for a step that converges, drives the load factor up as it fails. They are a *symptom of the stall*, not evidence of step-0 failure.
+
+**Diagnostic protocol (do this before blaming loadConst):**
+1. `wc -l pushover_curve.csv` — if it has many points (not 0/1), the pushover ran for a while before failing. The number of points = number of converged steps.
+2. Cross-check `len(state.history)` against the `step_count` in the run log.
+3. Only if the CSV is empty AND the first log line after `=== Pushover ===` is the failure should you suspect §12z pattern freezing. A non-empty CSV rules it out.
+4. Confirm the §12z ordering regardless: `define_pushover_loads()` must be called **after** `run_gravity()` (after `loadConst`). This model already did that correctly.
+
+#### 2. The real cause: `EnergyIncr` @ 1e-8 + Newton is too tight for fiber-section brace buckling
+
+The curve dies at **0.15% roof drift** with base shear **still rising monotonically** (no `Vb>0` collapse sign-flip) and **zero weld fractures** (no `WF`/`WR` events). This is the **elastic-to-brace-buckling transition** — the regime where fiber-section `dispBeamColumn` braces (Steel02 composites + corotational transform) begin to soften and the global tangent becomes ill-conditioned. The baseline `test("EnergyIncr", 1e-8, 200)` + `algorithm("Newton")` cannot track it; even the full 4×3×8 recovery grid (tolerances down to 1e-5, step-shrink down to dx/100, all 8 algorithms) fails to converge step 52.
+
+This is the **same fiber-section tangent-ill-conditioning class of problem documented in §12x point 8 and §12z point 3/5** — restated here for a steel CBF (the §12x/§12z sources were RC frames). The fix is the §12z-3/§12z-5 recipe:
+
+```python
+# SmartAnalyze kwargs (preferred, §12z corrected):
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    testType="NormDispIncr",      # ← was EnergyIncr
+    testTol=1.0e-5,               # ← was 1e-8
+    testIterTimes=200,
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30],   # KrylovNewton primary
+    tryLooseTestTol=True,
+    looseTestTolTo=1.0e-4,
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+)
+```
+For this model's documented SmartAnalyze **exception** (§3c/§12p: the source's custom `B-AdvanceAnalysis` recovery ladder + recursive `B-RemoveWeld` element-removal are not exposed by SmartAnalyze), apply the same tuning to the manual loop: baseline `test("NormDispIncr", 1.0e-5, 200)` + `algorithm("KrylovNewton")`, and if element-level `dispBeamColumn update` failures appear past ~1%, shrink `PUSHOVER_DX` from 0.02 in (§12z-4).
+
+**Rule of thumb:** if a pushover CSV ends with base shear still monotonically increasing (no sign flip) and no fracture/removal events fired, the stall is a **solver-tuning limit in the softening transition**, not a modeling error. Verify the model is sound (eigen period, mass, load pattern — see point 4) before tuning the solver.
+
+#### 3. `ops.rayleigh()` global is a documented simplification — the source uses per-region damping
+
+The source (`B-Regions.tcl`) applies Rayleigh damping via two `region -rayleigh` calls: stiffness-proportional `a1_mod` on ~400 elastic beam-column elements (region 1, `betaKcomm` slot), mass-proportional `a0` on the 3 mass nodes (region 2). The R3 model collapses both into a single global `ops.rayleigh(a0, 0.0, 0.0, a1_mod)`. The eigen periods match (T1=0.907s pre-damping → 0.985s damped), so the simplification is numerically faithful for this model. But: global `ops.rayleigh` applies `a1_mod` to **all** elements including the zeroLength weld/gusset springs and zeroLengthSection fuses, which the source excludes. For models where spring/element damping materially changes the result, port the per-region calls exactly (`ops.region(tag, "-ele", *eles, "-rayleigh", a0, betaK, betaKinit, betaKcomm)`).
+
+#### 4. Validation checklist that confirms "the model is correct, only the solver stalls"
+
+Before tuning the solver, confirm these (all verified PASS for BradleyCameron_R3):
+- **Data extraction vs source Tcl:** weld_eles `[846,858,870,882,894,906]`, ebc_eles `[845,857,869,881,893,905]`, capacities `[267.3,237.6,207.9,267.3,237.6,207.9]` kip, weld_mat `[8,7,6,5,4,3,2,1]` — exact match to `B-WeldInfo.tcl`.
+- **Eigen period:** pre-gravity T1 ≈ 0.9s for a 3-story ~13.7 m CBF — physically reasonable.
+- **Lateral mass:** on DOF1 (UX), total 7.92 kip·s²/in = 3061 kip seismic weight — correct for a 3-story frame; mass on DOF2/3 is the 1e-9 numerical-stub value, not a mis-scale.
+- **ELFP load pattern:** sum of `lat1+lat2+lat3` × 2 column lines = 196.1 kip at LF=1.0 — matches ASCE 7-10 source.
+- **§12z ordering:** `define_pushover_loads()` after `run_gravity()` — correct.
+- **Gravity:** reaches lf=1.00 via the documented two-phase fiber-section workaround (§12x); `loadConst` applied.
+
+#### Detection / Rules
+
+- **`pushover_curve.csv` has N>1 points but the log shows `convergence failure` + load-factor >10 warnings** → the pushover ran N steps then stalled in a softening transition; the load-factor spam is the recovery ladder on the failing step, NOT step-0 failure. Do NOT chase §12z/§12i pattern-freezing.
+- **CSV ends with base shear monotonic (no sign flip) and zero `WF`/`WR`/fracture events** → solver-tuning limit, not a modeling error. Apply §12z-3/5 (`NormDispIncr` + `KrylovNewton` + relaxed tol).
+- **`grep -c "    WF\|    WR" run.log` == 0** on a CBF pushover that dies before ~2% drift → weld/EBF removal logic never engaged; the curve never reached brace-fracture demand. The stall is purely numerical.
+- **Rule:** for fiber-section steel CBF/BRBF pushovers, default the solver to `NormDispIncr` @ 1e-5 + `KrylovNewton` primary (§12z-3/5). `EnergyIncr` @ 1e-8 + Newton is appropriate only for purely elastic or mildly nonlinear phases.
+- **Rule:** a non-empty `state.history`/CSV is the authoritative evidence that pushover steps converged — trust it over the wall of solver warnings, which accumulate from the failing step's recovery attempts.
+
+### §12ak — equalDOF + zeroLength Hinge Architecture: Base Shear Lives at the Column-Base Node, Not the Fixed Node; Penalty Reads Zero, Transformation Stalls (v1.35.0)
+
+Source: `Bessette` — 3D fixed-base RC1 structure pushover (JP3 Parametric Study, Caroline Bessette 2024). 18 nodes, 13 elasticBeamColumn + 4 zeroLength IMK springs, gravity + monotonic DisplacementControl pushover to 10% drift.
+
+#### 1. Concentrated-plasticity hinge topology (equalDOF + zeroLength on RZ only)
+
+The source models each rotational hinge as a **zeroLength between two coincident nodes**, with 6 materials on 6 DOFs — stiff elastic on DOFs 1-5 (UX,UY,UZ,RX,RY = rigid) and the IMK hinge on DOF 6 (RZ only). The two coincident nodes are additionally tied by `equalDOF(master, slave, 1, 2, 3)` so they share translations. At a column base this looks like:
+
+```
+fixed node 5000001 ──zeroLength(600001)── column-base node 3000001 ── column ...
+   (fix 1 1 1 1 1 1)        │                  (equalDOF 5000001→3000001 UX UY UZ)
+                     mat: stiff,stiff,stiff,
+                          stiff, IMK, stiff
+                     dir:   1     2    3
+                              4    5    6
+```
+
+Because `equalDOF` makes 5000001 the translation master, the **translational stiffness and shear flow through the column into node 3000001**, not into the fixed node. The zeroLength between them carries **only the RZ moment** (the IMK hinge). Verified: `nodeReaction(5000001, 1) ≈ 3.5e-31` (zero) while `nodeReaction(3000001, 1) = -13770 N` (the full column shear) — and `eleForce(600001) = [0,0,0,0,-29.4e6,0, ...]` (pure RY moment, no translation).
+
+#### 2. The base-shear bug: reading reactions at the fixed node gives zero
+
+**Symptom:** the pushover converges all 400 steps to 10% drift with correct displacements, but the capacity curve (`pushover_curve.csv`) is all zeros — `nodeReaction(NODE_BASE, 1)` returns ~3e-31 at every step.
+
+**Root cause:** `base_shear = sum(nodeReaction at fixed nodes)` is wrong for this topology. The fixed node's translational DOFs carry no reaction because the equalDOF constraint diverted the shear to the column-base node.
+
+**Fix:** read base shear from the **column-base nodes** (the nodes directly above the zeroLength springs), not from the fully-fixed nodes:
+
+```python
+# WRONG — fixed node translational reaction ≈ 0 under equalDOF+zeroLength-on-RZ
+def _base_shear():
+    return ops.nodeReaction(NODE_BASE_L, 1) + ops.nodeReaction(NODE_BASE_R, 1)
+
+# CORRECT — column-base node carries the shear (equalDOF diverted it here)
+def _base_shear():
+    return ops.nodeReaction(3000001, 1) + ops.nodeReaction(3000002, 1)
+```
+
+**Diagnostic protocol:** if a pushover converges with correct displacements but `nodeReaction` at the "base" returns ~0, dump the full reaction vector at several nodes:
+```python
+ops.reactions()
+for n in [fixed_node, column_base_node, roof_node, ...]:
+    print(n, ops.nodeReaction(n))
+```
+The shear will appear at whichever node the column's translational stiffness lands on. For a direct-fixity column it's the fixed node; for an equalDOF+zeroLength hinge it's the node just above the spring.
+
+#### 3. Penalty vs Transformation: reactions are fine in both, but Transformation stalls the pushover
+
+A minimal cantilever test shows **both** `constraints("Penalty",1e15,1e15)` and `constraints("Transformation")` return correct `nodeReaction` at a directly-fixed node. So Penalty is NOT inherently broken for reactions — the §2 zero-reaction is purely the equalDOF topology, not the constraint type.
+
+However, switching the *pushover* from Penalty to Transformation (to "fix" the imagined reaction bug) **broke convergence**: Transformation stalled at 1.69% drift (67 steps) where Penalty converged the full 400 steps to 10%. The equalDOF + zeroLength + elasticBeamColumn combination is better-conditioned under Penalty (which regularises via stiff springs) than Transformation (which eliminates DOFs and can singularise the zeroLength-only rotation DOF). 
+
+**Rule:** for concentrated-plasticity models (zeroLength hinges + equalDOF), prefer `constraints("Penalty", 1e15, 1e15)` for *both* gravity and pushover. Do NOT switch to Transformation expecting better reactions — it will likely stall. To get correct base shear, fix the **node you read from** (§2), not the constraint type.
+
+#### 4. `ops.reactions()` must be called before `nodeReaction` inside a SmartAnalyze loop
+
+SmartAnalyze's `StaticAnalyze`/`TransientAnalyze` advance the solution but do **not** automatically compute the reaction vector. Reading `nodeReaction` without a preceding `ops.reactions()` returns the value from the last time reactions were computed (often stale or zero). Insert `ops.reactions()` immediately before the `nodeReaction`/`nodeDisp` reads in the per-step tracking loop:
+
+```python
+for seg in segs:
+    ok = analysis.StaticAnalyze(node=ctrl, dof=dof, seg=seg)
+    if ok < 0: break
+    odb.fetch_response_step()
+    ops.reactions()                       # ← populate reactions BEFORE reading
+    history.append((drift, _base_shear()))
+```
+
+(ODB-based reaction collection via `save_nodal_resp=True` does not need this — `fetch_response_step` handles it. Only manual in-loop `nodeReaction` calls require the explicit `ops.reactions()`.)
+
+#### Detection / Rules
+
+- **Converged pushover with all-zero base shear in the CSV** → the reaction is being read from the wrong node (fixed node under equalDOF+zeroLength-on-RZ topology). Dump `nodeReaction` across nodes to find where the shear actually lands.
+- **`nodeReaction(fixed_node) ≈ 1e-31` but `eleForce(spring)` shows a large moment** → confirmed equalDOF-on-translation + zeroLength-on-rotation topology; read base shear from the node above the spring.
+- **Transformation pushover stalls early where Penalty converged** → the equalDOF+zeroLength topology is better-conditioned under Penalty; revert to Penalty and fix the read node instead.
+- **`nodeReaction` returns stale/zero right after `StaticAnalyze`** → insert `ops.reactions()` before the read; SmartAnalyze does not compute reactions automatically.
+- **Rule:** for concentrated-plasticity hinge models, use `constraints("Penalty", 1e15, 1e15)` for the full analysis and read base shear from the column-base nodes (above the zeroLength springs), with `ops.reactions()` called before each in-loop `nodeReaction`.
+
+### §12al — Imperial→N-mm Mass Conversion: Do NOT Re-Multiply P[N]/g by kip/inch; Rank-Deficient Mass Defeats ARPACK Eigen (v1.36.0)
+
+Source: `VividConcrete` — 3D circular RC bridge column, fiber-section `forceBeamColumn` + `zeroLengthSection` bar-slip, gravity → Rayleigh damping → seismic time-history (Zhong, Stanford 2017). 3 nodes, ~26 materials, imperial source (in, kip, ksi).
+
+#### 1. The double-conversion mass trap: a 4448× too-heavy mass → T1 off by 80×
+
+**Symptom:** after converting an imperial column model to N-mm-MPa, the eigen analysis returns T1 ≈ 56 s for a 7.3 m column that should be ~0.7 s — and the ARPACK subspace solver fails with `ArpackSolver::Error with _saupd info = -9999 / Could not build an Arnoldi factorization`. The static lateral stiffness checks out correct (hand-calc k ≈ 19000 N/mm matches the model's 16950 N/mm), so the model is not a mechanism — the mass is wrong.
+
+**Root cause:** the source defines mass as `-P/g` where P is an axial load and g is gravity. After converting **P to Newtons** (`P_GRAVITY = -522 * kip` → Newtons) and the **length to mm**, the mass is already in N·s²/mm after dividing by g[mm/s²]:
+
+```python
+# WRONG — double-converts (P is already in Newtons, not kip)
+P_GRAVITY = -522.0 * kip               # already Newtons
+mx = -P_GRAVITY / G_INCH * kip / inch  # ÷386.089 × 175.13 → 1,052,267 N·s²/mm
+# nodeMass returns 1,053,226 — 4448× too heavy → T1 = 56.6 s
+
+# CORRECT — P[N] ÷ g[mm/s²] = N·s²/mm directly, no extra factor
+g_mm = G_INCH * inch                   # 386.089 in/s² → 9806.65 mm/s²
+mx = -P_GRAVITY / g_mm                 # → 236.77 N·s²/mm → T1 = 0.849 s ✓
+```
+
+The error multiplies by `kip/inch` (175.13) a second time. Because force was *already* converted to Newtons, the resulting mass is too large by the kip→N factor (4448). This is the mirror image of the §12j `kg` trap: there the issue is `kg` being defined as 1.0 (= tonne); here it's applying a force conversion factor twice to a quantity that was already converted.
+
+**Detection:** T1 off by ~4000-5000× (the kip factor) AND/OR `nodeMass(node, dof)` returning ~1e6 for a node that should be ~200 → a mass double-conversion. Cross-check: `T_expected = 2π·√(m/k)` with hand-calc k from `3EI/L³`.
+
+**Rule:** when the source computes mass from a force (`m = P/g`), convert P to Newtons and g to mm/s² **once each** — the quotient is N·s²/mm directly. Never multiply by `kip/inch` or `kg` afterward. For mass given directly in imperial units (kip·s²/in), multiply by `kip/inch` (= 175.13) — but for mass *derived* from an already-converted force, do not.
+
+#### 2. Rank-deficient mass matrix defeats the ARPACK subspace eigen solver
+
+**Symptom:** `ops.eigen(3)` raises `OpenSeesError` / prints `ArpackSolver::Error with _saupd info = -9999 / Could not build an Arnoldi factorization / IPARAM(5) - the size of the current Arnoldi factorization is 3`.
+
+**Root cause:** the column carries mass on only ONE node (node 3) and only on 2 DOFs (UX + a small RY inertia). The mass matrix M is rank-2, so the generalized eigen problem `Kφ = ω²Mφ` has ~zero eigenvalues that the ARPACK Lanczos iteration cannot resolve — the Arnoldi factorization collapses at size 3.
+
+**Fix:** use `-fullGenLapack` (the source's choice). This **deviates from §12h-2** (which prefers the default subspace solver for *stiffness-contrast* models) — but the issue here is mass rank, not stiffness contrast. `fullGenLapack` factorizes M⁻¹K directly (full Lapack `dsygv`) and returns the modes reliably even for rank-deficient M:
+
+```python
+# CORRECT for rank-deficient mass models
+lam = ops.eigen("-fullGenLapack", N_EIGEN)
+# returns 3 modes; the high-frequency ones are mass-rank artifacts but the
+# low modes (the ones Rayleigh damping uses) are physical.
+```
+
+**Caveat:** with rank-deficient M, the higher modes are mass-rank artifacts (e.g. T3 ≈ 0.0005 s). Rayleigh damping fits ζ on modes 1 & 3 per Chopra — if mode 3 is spurious, prefer fitting on modes 1 & 2, or add a small regularizing mass to other DOFs so M is full-rank.
+
+**Detection / Rules:**
+- **T1 off by ~4000× AND ARPACK Arnoldi failure together** → mass double-conversion (§1). Fix the mass first; the eigen may then work with the default solver.
+- **`ArpackSolver::Error info = -9999` with correct stiffness (static k matches hand-calc)** → rank-deficient mass matrix; switch to `ops.eigen("-fullGenLapack", N)` (deviation from §12h-2, justified for mass-rank not stiffness-contrast).
+- **Mass defined as `P/g` with P already in Newtons** → do NOT multiply by `kip/inch`; `P[N]/g[mm/s²]` is the mass in N·s²/mm directly.
+- **Rule:** verify `nodeMass(node, dof)` after `define_nodes()` against a hand calc (`m = P/g`) before running eigen — a 4448× discrepancy is the double-conversion signature.
+
 ---
 
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-09 | 1.36.0 | **Imperial→N-mm mass double-conversion trap + rank-deficient-mass ARPACK eigen failure (§12al):** (1) When the source computes mass as `m = P/g` and P is converted to Newtons, dividing by g[mm/s²] already gives N·s²/mm — multiplying again by `kip/inch` (175.13) double-converts to a 4448× too-heavy mass → T1 = 56 s instead of 0.85 s. Detection: T1 off by ~4000× (the kip factor). Fix: `m = P_GRAVITY[N] / (G_INCH*inch)` with no extra factor. (2) A rank-deficient mass matrix (mass on only 1 node / 2 DOFs) defeats the ARPACK subspace eigen solver (`ArpackSolver::Error info = -9999 / Could not build an Arnoldi factorization`); static lateral stiffness is correct so it's not a mechanism. Fix: `ops.eigen("-fullGenLapack", N)` — deviates from §12h-2 (which addresses stiffness contrast, not mass rank); fullGenLapack factorizes M⁻¹K directly and resolves rank-deficient M. (3) Verified VividConcrete: T1 56.6s→0.849s after mass fix; dynamic 2490/2490 Northridge steps converge. Source: VividConcrete conversion (3D circular RC column, fiber forceBeamColumn + zeroLengthSection bar-slip, Zhong Stanford 2017). |
+| 2026-07-09 | 1.35.0 | **equalDOF + zeroLength hinge topology — base shear at column-base node not fixed node; Penalty vs Transformation (§12ak):** (1) Concentrated-plasticity hinges modelled as zeroLength between coincident nodes (stiff mats on DOFs 1-5 rigid, IMK hinge on DOF 6 RZ) plus `equalDOF(master, slave, 1,2,3)` divert the translational shear to the column-base node, NOT the fixed node — `nodeReaction(fixed_node,1) ≈ 3e-31` while `nodeReaction(column_base,1)` carries the full shear; `eleForce(spring)` shows pure moment only. (2) Fix: read base shear from the column-base nodes (above the springs), not the fixed nodes; a converged pushover with all-zero CSV base shear means the wrong node is being read. (3) Switching the pushover from `constraints("Penalty",1e15,1e15)` to `Transformation` (expecting better reactions) STALLS at 1.69% drift where Penalty converged 400 steps to 10% — the equalDOF+zeroLength topology is better-conditioned under Penalty; both return correct reactions at a directly-fixed node in a minimal test, so Penalty is not the bug. (4) `ops.reactions()` must be called before in-loop `nodeReaction` — SmartAnalyze's StaticAnalyze does not compute reactions automatically. Rule: for zeroLength-hinge models use Penalty throughout and read base shear from the node above the spring, with `ops.reactions()` before each read. Source: Bessette conversion (3D fixed-base RC1 pushover, JP3 study, 13 elasticBeamColumn + 4 zeroLength IMK springs). |
+| 2026-07-09 | 1.34.0 | **Chevron CBF pushover — recovery-ladder load-factor spam vs step-0 failure; EnergyIncr+Newton stalls in brace-buckling transition (§12aj):** (1) A pushover whose run log is dominated by `DisplacementControl::newStep - failed in solver` / `domain at load factor ~10-12` warnings, yet writes N>1 points to `pushover_curve.csv`, is NOT failing at step 0 — it converged N steps then stalled; the load-factor spam is the recovery ladder firing on the failing (N+1)th step, not evidence of §12z pattern-freezing. `state.history`/CSV is appended only after a converged step, so its length is the authoritative converged-step count. (2) For `BradleyCameron_R3` (3-story chevron CBF, dispBeamColumn fiber braces + IMKBilin hinges + zeroLength weld springs), the curve dies at 0.15% roof drift with base shear still monotonically rising and zero weld fractures — the elastic-to-brace-buckling transition, same fiber-section tangent-ill-conditioning class as §12x/§12z (RC sources). Fix: §12z-3/5 recipe — `NormDispIncr` @ 1e-5 + `KrylovNewton` primary + `tryLooseTestTol`; shrink `PUSHOVER_DX` if element-level `dispBeamColumn update` failures appear past ~1%. (3) `ops.rayleigh()` global is a documented simplification of the source's two per-`region -rayleigh` calls; eigen periods match (T1 0.907→0.985s) so faithful here, but port per-region calls exactly when spring/element damping matters. (4) Validation checklist confirming "model correct, only solver stalls": data extraction exact vs `B-WeldInfo.tcl`, T1≈0.9s physical, mass on DOF1 = 3061 kip, ELFP 196 kip @ LF=1.0, §12z ordering correct, gravity lf=1.00. Source: BradleyCameron_R3 verification (conformant re-conversion of bradley2021_Building_system, Sizemore 2017 / Bradley et al. 2021 DesignSafe PRJ-2957). |
 | 2026-07-06 | 1.33.0 | **Truss tags in `frame_tags` crash opstool's basic-force extractor (§12ai):** A `truss` element's `basicForces` response is length 1 (`[N]`); `opstool.post._get_response._get_beam_basic_resp()` only special-cases lengths 0 and 3, so any truss tag passed to `CreateODB(frame_tags=[…])` slips through to the sign-flip block and raises `IndexError: list index out of range` at `resp[1]` — at ODB construction, before any step is collected. Fix: keep `frame_tags` beam-column-only; truss axial forces use the dedicated `save_truss_resp=True` + `truss_tags=[…]` path (length-1 aware). Cross-ref §12u restated for 3D STKO frame: `node_tags=[…]` filtering still breaks `plot_nodal_responses(defo_scale=True)` deformed plots (`shapes (3,3) (282,3)` broadcast error) — omit `node_tags` (pass `None`) when the ODB feeds a full-mesh deformed plot. Source: GutierrezSotoMariantonieta conversion (3D self-centering PT steel braced frame, STKO 13-file build). |
 | 2026-07-05 | 1.32.0 | **PM4Sand FirstCall routing & mixed-ndf fictitious-mass scoping (§12ah):** (1) PM4Sand's `FirstCall` parameter is mandatory at the elastic→plastic transition (triggers internal init that reads gravity stress state and populates stress-dependent secondary params); without it the first plastic step divides by zero → NaN residuals. OpenSeesPy requires the trailing matTag **as a string**: `ops.setParameter("-val", 0, "-ele", ele, "FirstCall", "<matTag_str>")`. Passing it as int → "Invalid String Input!"; dropping it → silent NaN. Correction to §12ab point 3: the PostShake "drop the trailing tag" rule applies only to PDMY02's PostShake, not PM4Sand's FirstCall. (2) Plastic gravity needs KrylovNewton + dt=1.0 (same as §12ae PDMY02 recipe — PM4Sand's yield-surface tangent defeats plain Newton). (3) The §12ag `_ensure_minimum_mass()` helper must be scoped to a single ndf when the model mixes ndf (soil ndf=3 + dashpot ndf=2 here); calling `ops.mass(tag, m1, m2, m3)` on a 2-DOF node raises "incompatible matrices". (4) `ops.analysis("Transient")` is required after `wipeAnalysis()` for manual `ops.analyze()` loops — SmartAnalyze instantiates its own analysis internally, manual loops do not. Without it: "WARNING No Analysis type has been specified". (5) For 10k+ element / 16k+ step SSPquadUP models, disabling `save_plane_resp`/`compute_mechanical_measures` removes pure overhead (all-zeros per §12ad anyway); ODB every 200th step + manual Newton loop at CFL-limited dt=0.001 keeps the dynamic phase tractable. PM4Sand constitutive evaluation is genuinely expensive (per-step tangent ~5–10× PDMY02) — there's no algorithmic shortcut for that. Source: RathjeEllen conversion (18-case GiD UWquad2D parametric sweep, PM4Sand + SSPquadUP + Lysmer dashpot). |
 | 2026-06-29 | 1.31.0 | **SmartAnalyze compatibility via fictitious-mass regularisation (§12ag):** (1) Zero-mass free DOFs (bearing-top nodes, bent-bottom nodes) cause K_eff singularity at SmartAnalyze's micro-step sizes — the mass term `1/(β·Δt²)·M` vanishes where M=0, leaving only K_t which is ill-conditioned. (2) Fix: `_ensure_minimum_mass(1e-6)` assigns a fictitious mass (0.00003% of deck mass) to all DOFs — regularises K_eff without affecting dynamics. (3) SmartAnalyze goes from 0→648/1200 steps with the fix; manual Newton loop at dt=0.001 still needed for 100% coverage. (4) Toggleable `USE_SMARTANALYZE` flag keeps both modes in a single `model.py`. Source: padgett_jamie SmartAnalyze variant (3D MSSS bridge, BandGeneral, gravity ramp). |
