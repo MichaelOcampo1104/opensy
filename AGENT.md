@@ -450,6 +450,7 @@ Additional optional checkpoints (add as needed):
 |---|---|---|---|
 | **V5 — Deformed (gravity)** | `run_gravity()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_05_defo_gravity.html", odb_tag=1, resp_dof="UY")` | `vis_05_defo_gravity.html` |
 | **V6 — Deformed (lateral)** | `run_pushover()` / `run_dynamic()` + `odb.save_response()` | `vis_defo(output_dir, filename="vis_06_defo_lateral.html", odb_tag=1, resp_dof="UX")` | `vis_06_defo_lateral.html` |
+| **V6 — Step slider** | `odb.save_response()` in `post_process` | `vis_slider(output_dir, filename="vis_06_slider.html", odb_tag=1, resp_dof="UX")` | `vis_06_slider.html` |
 
 ### `standards/vis_utils.py` (canonical wrapper)
 
@@ -3834,10 +3835,128 @@ lam = ops.eigen("-fullGenLapack", N_EIGEN)
 
 ---
 
+### §12am — Long Cyclic Protocols: Manual Fixed-Increment Fallback Chains Stall Mid-Protocol; Use `opst.anlys.SmartAnalyze` + `vis_defo` for the Peak Plot (v1.37.0)
+
+Source: `VividConcrete_RCconc_full_subassembly` — 3D square RC column subassembly, fiber-section `forceBeamColumn` (6 Gauss-Lobatto IPs, per-IP confined/unconfined `Concrete02` + `ReinforcingSteel`/`DuctileFracture` + `Hysteretic` shear) with two `zeroLengthSection` bar-slip springs (`Bond_SP01`), gravity → displacement-controlled cyclic over a **22 455-point** experimental protocol (Zhong, Stanford 2017). 4 nodes, ~60 materials, imperial source (in, kip, ksi).
+
+#### 1. The fixed-increment fallback chain: a faithful 1:1 port of the source's `RunStaticLoading.tcl` STALLS mid-protocol
+
+**Symptom:** the cyclic run (port of `RunStaticLoading.tcl`, `LoadType=CyclicStep`) converges cleanly to step ~14 528 (~1.6% drift, 44 mm) then stops — every fallback in the source's manual chain (Newton → Newton `-initial` → `ModifiedNewton` → `ModifiedNewton -initial` → `Broyden 20` → `NewtonLineSearch 0.8 100`) fails on step 14 529. This is far short of the 6.23 in (5.8% drift, 158 mm) protocol peak — a real ductile RC column should sustain much higher drift.
+
+**Root cause:** these fallbacks all retry the **same full increment** with a different algorithm. On a hard unloading step the fiber section's tangent is ill-conditioned over the *whole* increment, so no single full-size step converges — but a *sub-divided* increment does. The source Tcl would hit the same wall in an equivalent OpenSees build; this is a single-step numerical stall during unloading, **not genuine collapse**: the same step fails even with `DuctileFracture` removed (in fact it fails *earlier*, at ~step 13 475, with `ForceBeamColumn3d::update() - section failed in setTrial`).
+
+**Fix:** drive the cyclic with `opst.anlys.SmartAnalyze` (the repo convention — `elkady2019`, `padgett_jamie`), which layers adaptive sub-stepping (`relaxation`, `minStep`) on top of the alternate-algorithm retries:
+
+```python
+analysis = opst.anlys.SmartAnalyze(
+    analysis_type="Static",
+    tryAlterAlgoTypes=True,
+    algoTypes=[40, 10, 20, 30, 50, 60],   # Newton, Newton -initial,
+    #     Newton -initialThenCurrent, Newton -Secant, NewtonLineSearch,
+    #     NewtonLineSearch -type Bisection
+    tryAddTestTimes=True,
+    testIterTimesMore=[50, 100],
+    relaxation=0.5,
+    minStep=1.0e-3,
+)
+```
+
+**Protocol preservation — feed one target increment at a time:** SmartAnalyze's `static_split` sub-divides *within* a single target. To keep the recorder at **one row per experimental target** (so `disp.out`/`force.out` align 1:1 with the 22 455-pt protocol — essential for hysteresis plotting), iterate over the load history and hand SmartAnalyze one increment per target:
+
+```python
+current_disp = 0.0
+for i, target in enumerate(load_history):
+    incr = target - current_disp
+    segs = analysis.static_split([incr], maxStep=abs(incr))
+    for seg in segs:
+        rc = analysis.StaticAnalyze(node=NODE_CTRL, dof=2, seg=seg)
+        if rc < 0:
+            break          # genuine failure — stop, report the step
+    else:
+        current_disp = target
+        continue
+    break                   # break outer loop on inner failure
+```
+
+**Validation:** the previously-failing step now passes (verified by driving to step 14 528 then handing step 14 529 to SmartAnalyze — `PASSED`); the full run completes 22 455/22 455 steps, peak drift ±158 mm (protocol max), base shear ±13.25 kip (vs the stalled ~4.6 kip), 44 force sign-changes → proper energy-dissipating loops.
+
+**Detection / Rules:**
+- **Cyclic run stalls at a fraction of the protocol peak, every manual fallback failing on the same step, with column drift still well below expected capacity** → fixed-increment retry exhaustion on a hard unloading step, not collapse. Switch to `SmartAnalyze` with `relaxation`/`minStep`.
+- **Confirm not-physical before tuning:** re-run with the suspect damage material (e.g. `DuctileFracture`) removed; if it still stalls (or stalls earlier) the cause is fiber-section tangent ill-conditioning at that increment, not the fracture trigger.
+- **Preserve protocol granularity:** feed SmartAnalyze one target increment at a time via `static_split([incr], maxStep=abs(incr))`, NOT the whole history as one protocol — otherwise the recorder loses 1:1 alignment with the experimental targets.
+- **Cross-ref §12v / §12z / §12aj:** the same fiber-section tangent-ill-conditioning class (softening `dispBeamColumn`/`forceBeamColumn` fiber sections) that defeats Newton in pushover; for cyclic the cure is adaptive sub-stepping (SmartAnalyze) rather than the single-fiber-softening algorithm recipe.
+
+#### 2. `plot_nodal_responses(defo_scale=True)` in `post_process` — peak-deformed plot silently missing
+
+**Symptom:** after a long cyclic run, `output/vis_05_peak_deformed.html` is absent (only `vis_01..04` exist), but `post_process` reports nothing — the failure is swallowed by a bare `except Exception`.
+
+**Root cause:** `post_process` called `opst.vis.plotly.plot_nodal_responses(..., defo_scale=True)` directly. While `defo_scale=True` is technically accepted (auto-scale), the call bypassed the repo's `vis_defo` helper (`standards/vis_utils.py`), which exists precisely to encapsulate the correct `absMax`-step + numeric-scale kwargs. The wrapped `try/except` hid the real error.
+
+**Fix:** use the repo helper with a numeric scale:
+
+```python
+from vis_utils import vis_defo          # already imported alongside vis_nodes etc.
+vis_defo(output_dir, filename="vis_05_peak_deformed.html",
+         odb_tag=ODB_TAG, resp_dof="UY", resp_type="disp", scale=10.0)
+```
+
+`vis_defo` reads the ODB's `absMax` step by default, so it captures the peak-deformed shape. **Rule:** never call `opst.vis.plotly.*` directly from a `model.py` — go through the `vis_utils` wrappers (`vis_nodes`/`vis_model`/`vis_loads`/`vis_pre_analysis`/`vis_defo`/`vis_anim`). Cross-ref §12u/§12ai: the same `plot_nodal_responses` path is where `node_tags=`/`defo_scale=` break deformed plots.
+
+#### 3. `openseespywin` Python-3.8 gate — the right env is the conda `opensy` env
+
+The pure-Python `openseespy` Windows backend (`openseespywin`) `raise RuntimeError('Python version 3.8 is needed for Windows')` on any interpreter ≠ 3.8 — so `python model.py` with the system Python (3.14) fails at import even though `openseespy` is pip-installed. The repo's runnable interpreter is the **`opensy` conda env** (`C:/Users/micha/miniconda3/envs/opensy/python.exe`, Python 3.12.12), which has working `openseespy` + `opstool`. **Rule:** run all Windows models with the `opensy` env interpreter; do not trust "syntax-checked only, not executed" caveats from sessions that lacked a working env — re-validate end-to-end once the env exists.
+
+---
+
+### §12an — 3D Frame-Wall Building: rigidDiaphragm + Transformation Constraints, Per-Story/Per-IP Section Tag Scheme, corotTruss ODB Scoping (v1.38.0)
+
+Source: `VividCond_UCSD_full_fivestory` — 5-story RC building (Zhong, Stanford/UCSD 2017–2019): two 2-bay perimeter moment frames + 2 planar shear walls + diagonal `corotTruss` braces + rigid floor diaphragms. 54 nodes, 72 elements, ~120 per-IP sections, ~150 materials, imperial source (in, kip, ksi).
+
+#### 1. `rigidDiaphragm` needs `Transformation` (not `Plain`) constraints — for both gravity and dynamic
+
+**Symptom:** with `constraints("Plain")`, gravity either fails to converge or the diaphragm-coupled DOFs drift; `constraints Transformation` is required wherever `rigidDiaphragm` (a multi-point constraint) is used.
+
+**Rule:** any model with `rigidDiaphragm`/`equalDOF`/MP constraints must use `constraints("Transformation")` for **both** the gravity (LoadControl) phase and the dynamic (Newmark) phase. `Plain` cannot distribute MP-constraint reactions. This is consistent with §12x-6 (STKO MP models → Transformation); the exception (Penalty, §12ak) is only for zeroLength-hinge concentrated-plasticity models, not rigid-diaphragm buildings.
+
+#### 2. Per-story × per-IP tag scheme — make every helper take an *absolute* tag, not `(story, relative)`
+
+**Symptom:** `MapOfTaggedObjects::addComponent - not adding as one with similar tag exists, tag: 201` — a material tag collides on the second story.
+
+**Root cause:** a helper `_df(story, tag, ...)` was called as `_df(s, 201, ...)` intending the *story-relative* DF tag, but the helper used `tag` directly (201) instead of `s*1000 + 201` — so story 0 wrote tag 201 and story 1 tried to write the same 201. The helper's `story` parameter was dead.
+
+**Fix:** helpers that define tagged objects must take the **absolute** tag as computed by the caller — drop the dead `story` param. The source's tag scheme is `story*1000 + <group>` where group encodes the material/section kind:
+- concrete: `story*1000 + ip*10 + {1 col/wall-cover, 2 beam-cover, 4 col/wall-core, 5 beam-core}`
+- steel/DF/Bond: `story*1000 + {101..105}` (Steel02), `{201..205}` (DF), `{301..305}` (Bond_SP01)
+- sections: `story*1000 + {100,200,300,400} + ip` (beam/col/wall/slab)
+
+**Rule:** when porting a Tcl `for {set story_id ...}` loop that builds `expr $story_id*1000+...` tags, compute the absolute tag in Python *before* passing to any helper; never let a helper reconstruct it from a story index unless the helper signature genuinely needs both. Verify with a build smoke-test that reaches the second story.
+
+#### 3. `corotTruss` braces must use `truss_tags`, not `frame_tags`, in the ODB
+
+**Symptom (pre-empted, §12ai):** `CreateODB(frame_tags=[...])` that includes `corotTruss` element tags raises `IndexError: list index out of range` at ODB construction — a truss's `basicForces` is length-1 (`[N]`) but opstool's beam-force extractor only special-cases lengths 0 and 3.
+
+**Fix:** for this model `save_frame_resp=False` (nodal responses suffice for deformed plots + roof drift). If frame forces are needed later, keep `frame_tags` beam-column-only and add `save_truss_resp=True` + `truss_tags=[...]` for the braces. Cross-ref §12ai.
+
+#### 4. Triaxial-GM source with no base_motions in repo — single-component NR94 substitute (established pattern)
+
+The source `RunTests.tcl` loops over 13 triaxial (X/Y/Z) base motions (`./base_motions/`, not in the repo). The repo's only GM file is the single-component `NR94cnp.txt` (Northridge-1994, dt=0.01 s, ~2495 pts, g-units). Following the established VividConcrete/elkady2019 pattern: load NR94 as a single `UniformExcitation` in direction 1 (X) for end-to-end validation, and make `run_dynamic()` generic (`GM_FILE`/`GM_DT`/`GM_NPTS`/`GM_DIR` params) so real triaxial records drop in when sourced. **Rule:** GM defined *after* `loadConst` (§12i). Validation: T1=0.577 s (physical for a 5-story RC wall-frame), 2495/2495 steps converge, roof drift −172 mm (0.94%), peak inter-story drift 1.39%.
+
+#### 5. Confined-concrete `ke` varies by source — port the *exact* formula, don't reuse another model's
+
+This source's `CreateConcreteMaterial.tcl` uses a **rectangular** confinement factor `ke = ke1·ke2·ke3/(1−rou_cc)` with `ke1 = 1 − n·wi²/(6·b·d)`, `ke2 = 1 − 0.5·s/b`, `ke3 = 1 − 0.5·s/d` — *different* from the simpler `(nl−2)/nl·(1−s/b)` used in the VividConcrete column models. **Rule:** when a repo has multiple Zhong-framework sources, do not assume the concrete helper is shared — read each source's `CreateConcreteMaterial.tcl` and port its `ke` expression verbatim. The two formulas give different `fpc`/`epsc0` and reusing the wrong one silently biases the section capacity.
+
+#### 6. Step-slider deformed shape — added `vis_slider()` to `standards/vis_utils.py`
+
+The repo had `vis_defo` (V5 peak) and `vis_anim` (V7 animation) wrappers but **no slider wrapper** — the reference `VividConcrete/model.py` called `plot_nodal_responses(slides=True)` directly, bypassing `vis_utils` (the §12am anti-pattern). Added **`vis_slider(output_dir, filename="vis_06_slider.html", odb_tag=1, resp_dof="UX", resp_type="disp", scale=10.0)`** to `standards/vis_utils.py` (between `vis_defo` and `vis_anim`), wrapping `plot_nodal_responses(slides=True, defo_scale=scale, ...)`. It produces a self-contained HTML with a draggable slider — one frame per collected ODB step, so the user can scrub the deformation evolution. Wired into both `VividCond_UCSD_full_fivestory` and `VividConcrete_RCconc_full_subassembly` `post_process()`. **Rule:** the slider needs ODB frames to have been collected during the analysis (throttled by `ODB_EVERY_N`); with `ODB_EVERY_N=10` over a ~2500-step run the slider has ~250 frames, which is plenty. Note: generating it from an already-saved ODB requires `opst.post.set_odb_path(str(output_dir))` to be active before the call (the ODB is read back from disk in `post_process`).
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-10 | 1.38.0 | **3D frame-wall building — rigidDiaphragm needs Transformation; per-story/per-IP tag scheme must pass absolute tags; corotTruss ODB scoping; triaxial-GM-with-no-repo-files substitute (§12an):** (1) Any model with rigidDiaphragm/equalDOF/MP constraints requires `constraints("Transformation")` for BOTH gravity and dynamic — `Plain` cannot distribute MP-constraint reactions (consistent with §12x-6; Penalty §12ak is only for zeroLength-hinge models). (2) A helper `_df(story, tag, ...)` called as `_df(s, 201, ...)` collides tags across stories because the helper used the relative `tag` (201) directly instead of `s*1000+201`, and the `story` param was dead — `MapOfTaggedObjects::addComponent - not adding as one with similar tag exists`. Fix: helpers take the ABSOLUTE tag computed by the caller; source scheme is `story*1000+{group}`. (3) corotTruss braces need `truss_tags`/`save_trust_resp` in the ODB, not `frame_tags` (§12ai); for this model `save_frame_resp=False`. (4) Source runs 13 triaxial base_motions NOT in repo → single-component NR94cnp.txt X-dir validation substitute (VividConcrete/elkady2019 pattern), run_dynamic() generic via GM_FILE/GM_DT/GM_NPTS/GM_DIR; GM after loadConst (§12i). (5) This source's rectangular confinement `ke=ke1·ke2·ke3/(1-rou_cc)` differs from the VividConcrete column models' `(nl-2)/nl*(1-s/b)` — port each source's CreateConcreteMaterial.tcl ke verbatim, don't reuse another model's. Validation: gravity lf=1.00, T1=0.577s T2=0.512s T3=0.163s (physical 5-story RC wall-frame), dynamic 2495/2495 steps converge, roof X-drift -172 mm (0.94%), peak inter-story drift 1.39% (story 2), 6 vis HTMLs incl. step slider. Source: VividCond_UCSD_full_fivestory conversion (5-story RC frame-wall building, 2 perimeter frames + 2 walls + corotTruss braces + rigid diaphragms, Zhong Stanford/UCSD 2017-2019). |
+| 2026-07-10 | 1.37.0 | **Long cyclic protocols — fixed-increment fallback chain stalls mid-protocol; SmartAnalyze sub-stepping + vis_defo for the peak plot (§12am):** (1) A faithful 1:1 port of the source `RunStaticLoading.tcl` manual fallback chain (Newton→Newton -initial→ModifiedNewton→ModifiedNewton -initial→Broyden→NewtonLineSearch) STALLS mid-protocol at step ~14529 (~1.6% drift, 44 mm) of a 22455-pt cyclic protocol — every fallback retries the SAME full increment with a different algorithm, but on a hard unloading step the fiber-section tangent is ill-conditioned over the whole increment so no single full-size step converges. NOT collapse: the same step fails even earlier (~step 13475) with DuctileFracture removed (`ForceBeamColumn3d::update() - section failed in setTrial`). Fix: `opst.anlys.SmartAnalyze` (repo convention, elkady2019/padgett_jamie) with `relaxation=0.5`, `minStep=1e-3`, `algoTypes=[40,10,20,30,50,60]`; feed ONE target increment at a time via `static_split([incr], maxStep=abs(incr))` so recorders keep 1:1 alignment with the experimental protocol. (2) `vis_05_peak_deformed.html` was silently missing because `post_process` called `plot_nodal_responses(defo_scale=True)` directly under a bare `try/except`; fixed via the repo `vis_defo` helper (numeric scale, absMax step). (3) `openseespywin` gates on Python 3.8 — the runnable interpreter is the conda `opensy` env (3.12.12). Validation: cyclic 22455/22455 steps (was 14528), peak drift ±158 mm = 6.23 in / 5.8% (was stalled at 44 mm), base shear ±13.25 kip (was ~4.6 kip), 44 force sign-changes → proper loops, 5 vis HTMLs. Source: VividConcrete_RCconc_full_subassembly conversion (3D square RC column, fiber forceBeamColumn + 2 zeroLengthSection bar-slip, Zhong Stanford 2017). |
 | 2026-07-09 | 1.36.0 | **Imperial→N-mm mass double-conversion trap + rank-deficient-mass ARPACK eigen failure (§12al):** (1) When the source computes mass as `m = P/g` and P is converted to Newtons, dividing by g[mm/s²] already gives N·s²/mm — multiplying again by `kip/inch` (175.13) double-converts to a 4448× too-heavy mass → T1 = 56 s instead of 0.85 s. Detection: T1 off by ~4000× (the kip factor). Fix: `m = P_GRAVITY[N] / (G_INCH*inch)` with no extra factor. (2) A rank-deficient mass matrix (mass on only 1 node / 2 DOFs) defeats the ARPACK subspace eigen solver (`ArpackSolver::Error info = -9999 / Could not build an Arnoldi factorization`); static lateral stiffness is correct so it's not a mechanism. Fix: `ops.eigen("-fullGenLapack", N)` — deviates from §12h-2 (which addresses stiffness contrast, not mass rank); fullGenLapack factorizes M⁻¹K directly and resolves rank-deficient M. (3) Verified VividConcrete: T1 56.6s→0.849s after mass fix; dynamic 2490/2490 Northridge steps converge. Source: VividConcrete conversion (3D circular RC column, fiber forceBeamColumn + zeroLengthSection bar-slip, Zhong Stanford 2017). |
 | 2026-07-09 | 1.35.0 | **equalDOF + zeroLength hinge topology — base shear at column-base node not fixed node; Penalty vs Transformation (§12ak):** (1) Concentrated-plasticity hinges modelled as zeroLength between coincident nodes (stiff mats on DOFs 1-5 rigid, IMK hinge on DOF 6 RZ) plus `equalDOF(master, slave, 1,2,3)` divert the translational shear to the column-base node, NOT the fixed node — `nodeReaction(fixed_node,1) ≈ 3e-31` while `nodeReaction(column_base,1)` carries the full shear; `eleForce(spring)` shows pure moment only. (2) Fix: read base shear from the column-base nodes (above the springs), not the fixed nodes; a converged pushover with all-zero CSV base shear means the wrong node is being read. (3) Switching the pushover from `constraints("Penalty",1e15,1e15)` to `Transformation` (expecting better reactions) STALLS at 1.69% drift where Penalty converged 400 steps to 10% — the equalDOF+zeroLength topology is better-conditioned under Penalty; both return correct reactions at a directly-fixed node in a minimal test, so Penalty is not the bug. (4) `ops.reactions()` must be called before in-loop `nodeReaction` — SmartAnalyze's StaticAnalyze does not compute reactions automatically. Rule: for zeroLength-hinge models use Penalty throughout and read base shear from the node above the spring, with `ops.reactions()` before each read. Source: Bessette conversion (3D fixed-base RC1 pushover, JP3 study, 13 elasticBeamColumn + 4 zeroLength IMK springs). |
 | 2026-07-09 | 1.34.0 | **Chevron CBF pushover — recovery-ladder load-factor spam vs step-0 failure; EnergyIncr+Newton stalls in brace-buckling transition (§12aj):** (1) A pushover whose run log is dominated by `DisplacementControl::newStep - failed in solver` / `domain at load factor ~10-12` warnings, yet writes N>1 points to `pushover_curve.csv`, is NOT failing at step 0 — it converged N steps then stalled; the load-factor spam is the recovery ladder firing on the failing (N+1)th step, not evidence of §12z pattern-freezing. `state.history`/CSV is appended only after a converged step, so its length is the authoritative converged-step count. (2) For `BradleyCameron_R3` (3-story chevron CBF, dispBeamColumn fiber braces + IMKBilin hinges + zeroLength weld springs), the curve dies at 0.15% roof drift with base shear still monotonically rising and zero weld fractures — the elastic-to-brace-buckling transition, same fiber-section tangent-ill-conditioning class as §12x/§12z (RC sources). Fix: §12z-3/5 recipe — `NormDispIncr` @ 1e-5 + `KrylovNewton` primary + `tryLooseTestTol`; shrink `PUSHOVER_DX` if element-level `dispBeamColumn update` failures appear past ~1%. (3) `ops.rayleigh()` global is a documented simplification of the source's two per-`region -rayleigh` calls; eigen periods match (T1 0.907→0.985s) so faithful here, but port per-region calls exactly when spring/element damping matters. (4) Validation checklist confirming "model correct, only solver stalls": data extraction exact vs `B-WeldInfo.tcl`, T1≈0.9s physical, mass on DOF1 = 3061 kip, ELFP 196 kip @ LF=1.0, §12z ordering correct, gravity lf=1.00. Source: BradleyCameron_R3 verification (conformant re-conversion of bradley2021_Building_system, Sizemore 2017 / Bradley et al. 2021 DesignSafe PRJ-2957). |

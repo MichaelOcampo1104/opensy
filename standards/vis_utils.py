@@ -108,6 +108,42 @@ def vis_defo(
     fig.write_html(str(output_dir / filename))
 
 
+def vis_slider(
+    output_dir: Path,
+    filename: str = "vis_06_slider.html",
+    odb_tag: int = 1,
+    resp_dof: str | None = None,
+    resp_type: str = "disp",
+    scale: float = 10.0,
+) -> None:
+    """V6 — Step-slider deformed shape (one frame per collected ODB step).
+
+    Renders a Plotly figure with a slider so the user can scrub through the
+    collected analysis steps (peak and envelope are great, but a slider shows
+    the *evolution* of the deformation). Uses ``plot_nodal_responses(slides=True)``.
+
+    Args:
+        output_dir: Directory where the HTML file is written.
+        filename: Output HTML filename.
+        odb_tag: ODB tag to read responses from.
+        resp_dof: DOF component for colour scale (e.g. ``"UX"``).
+                  If None, colours by total displacement magnitude.
+        resp_type: Response type — ``"disp"``, ``"vel"``, ``"accel"``, etc.
+        scale: Deformation scale factor.
+    """
+    if _headless():
+        return
+
+    fig = opst.vis.plotly.plot_nodal_responses(
+        odb_tag=odb_tag,
+        slides=True,
+        defo_scale=scale,
+        resp_type=resp_type,
+        resp_dof=resp_dof,
+    )
+    fig.write_html(str(output_dir / filename))
+
+
 def vis_anim(
     output_dir: Path,
     filename: str = "vis_07_animation.html",
