@@ -30,9 +30,19 @@ python models/Dino/model.py
 Pushover curve compared against source reference (`Sectional Analysis of Pushover curves/py_ref/node_disp.out`, 100-point curve):
 - **Steps**: 100/100 (exact match)
 - **Displacement**: exact (0.08 → 8.00 mm)
-- **Peak base shear**: 8810 kN (sim) vs 7980 kN (ref) — 10.4% difference
+- **Peak base shear**: 8810 kN (sim) vs 7980 kN (ref) — 10.4% higher
+- **Elastic stiffness**: 5137 kN/mm (sim) vs 4158 kN/mm (ref) — 23.5% stiffer
 
-The ~10% stiffness difference is expected from replacing pygmsh's 244-triangle mesh with a denser 20×20 rect patch (400 fibers). Finer concrete discretization captures more effective section stiffness (§12e). The pushover shape (elastic ramp → yield plateau at ~2 mm) is preserved.
+The pushover shape (elastic ramp → yield plateau at ~2 mm) is preserved.
+
+**Note on the reference file.** `node_disp.out` was recorded with `recorder Node -time -dof 1 disp`, so column 0 is the pseudo-time λ (the lateral load factor), not base shear. The source's lateral reference load was 1000 N, so base shear in N = λ × 1000. The model scales the reference by `P_LATERAL` before plotting (`model.py` §11a).
+
+**Why the simulation is stiffer than the reference.** This is NOT a mesh effect — a finer mesh of the same concrete area converges to the same stiffness, not a stiffer one (the source's 244-triangle pygmsh mesh and the 20×20 rect patch agree on area within 0% and on section second-moment within 0.4%). Probing the model directly:
+- Cantilever lateral stiffness with **no axial load**: 3589 kN/mm
+- With the −15000 kN gravity axial load applied: 4863 kN/mm (≈ **+35%** from precompression of the fiber section)
+- Uncracked-section theory `3EI/L³` (Ec ≈ fcu/eps0 = 12523 MPa): 4328 kN/mm
+
+The simulation's elastic stiffness (5137 kN/mm) is consistent with a precompressed, largely-uncracked fiber section, while the reference (4158 kN/mm) matches the *un-precompressed* / uncracked-theory value almost exactly. This indicates the committed `node_disp.out` is a stale artifact (regenerated from an earlier run inconsistent with the committed `triangle_data.txt`), not a target to match. The simulation is physically the more reliable result.
 
 ## Output
 

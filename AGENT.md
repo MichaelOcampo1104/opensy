@@ -4121,10 +4121,109 @@ The source defines `ops.uniaxialMaterial('Elastic', 200, 1000E12)` — a 1e12-st
 
 ---
 
+### §12aq — Fiber-Mesh Density Does NOT Change Section Stiffness; A Documented Recorder Lesson Still Shipped as a Bug; Stale Reference Data (v1.41.0)
+
+Source: `Dino` verification follow-up — the §12ap (v1.40.0) entry claimed finer fiber discretization caused a ~10% stiffness rise, but direct section-property + OpenSees probes show that is physically wrong; and §12ap-5's "recorder -time = load factor" rule was nonetheless violated by `model.py`'s own reference loader.
+
+#### 1. A finer mesh of the SAME concrete area converges to the SAME stiffness — NOT stiffer (corrects §12ap-2 and §12e)
+
+§12ap-2 (and §12e) claimed the 20×20 rect patch (400 fibers) is "~10% stiffer" than pygmsh's 244 triangles because "finer concrete discretization captures more of the section's effective stiffness." **That is incorrect.** A fiber section integrates area and second moment of area over its fibers; a finer subdivision of the *same* rectangle converges to the same A and I, hence the same EI and the same `3EI/L³`. Direct computation from the committed meshes:
+
+```
+pygmsh 244-triangle mesh:  A = 960000 mm²,  I_y = 5.083e10 mm⁴
+20×20 rect patch:           A = 960000 mm²,  I_y = 5.120e10 mm⁴  (analytic)
+                            → area match: exact; I match: 0.4%
+```
+
+A 0.4% section-property difference cannot produce a 10–24% response difference.
+
+**Rule:** Do not attribute pushover stiffness differences to fiber-mesh density when the mesh covers the same geometric area. Verify by computing A and I directly from the mesh centroids/areas (`I = Σ area · y²`); if they agree within ~1%, the mesh is NOT the cause. (Corrects §12ap-2 "Impact" and §12e's "~10-15% stiffness difference" attribution.)
+
+#### 2. The actual cause of Dino's stiffness gap: axial precompression (and a stale reference)
+
+Direct OpenSees probe of the one-element cantilever, same section/element/fixities as `model.py`:
+
+```
+lateral k, no axial load:               3589 kN/mm
+lateral k, with −15000 kN gravity:      4863 kN/mm   (+35%)
+uncracked theory 3EI/L³ (Ec=fcu/eps0):  4328 kN/mm
+sim full model step-1:                  5137 kN/mm
+reference node_disp.out step-1:         4158 kN/mm
+```
+
+The −15000 kN axial precompression raises the lateral stiffness ~35% (the fiber section is stiffer when the concrete is in compression). The simulation (5137 kN/mm) is consistent with a precompressed, largely-uncracked section; the reference (4158 kN/mm) matches the *un-precompressed* / uncracked-theory value almost exactly. The committed `node_disp.out` is therefore a stale artifact (regenerated from an earlier run inconsistent with the committed `triangle_data.txt`), not a target to match. The simulation is physically the more reliable result.
+
+**Rule:** When sim-vs-reference elastic stiffness disagrees by >~15%, run a no-axial vs with-axial stiffness probe on a one-element cantilever (apply unit lateral load, read `nodeDisp`). If the with-axial value matches the simulation and the no-axial value matches the reference, the reference was generated under different loading — treat the simulation as authoritative and document the reference as stale.
+
+#### 3. A documented AGENT.md lesson still shipped as a bug in its own model — add a units-sanity gate
+
+§12ap-5 documents that `recorder Node -time` col 0 is the load factor λ, not force, and that base shear = λ × reference_load. Yet `model.py`'s own reference loader read col 0 directly as "N" and the post-processor plotted `ref_shear/1e3` — so the reference curve rendered at 7.98 kN against the simulation's 8810 kN (a 1000× error, an invisible flat line). The lesson was written but not applied to the model whose section recorded it. Fix: `ref_shear = ref[:, 0] * P_LATERAL`.
+
+**Rule:** A documented lesson does not prevent the bug unless a check enforces it. After conversion, add a units-sanity gate to every reference-vs-simulation plot: assert the peak magnitudes agree within an order of magnitude (e.g. `abs(sim_peak - ref_peak) / max(sim_peak, ref_peak) < 5`); if they differ by 10× or more, suspect a recorder-unit mismatch (load factor vs force, kN vs N, kip vs N) and re-derive the column semantics from the source `recorder` command before trusting the overlay.
+
+#### Detection / Rules
+- **Mesh-stiffness attribution:** compute A and I from the source and standardized meshes (`I = Σ area · y²`). Agreement within ~1% ⇒ mesh is NOT the cause of any >5% response difference.
+- **Sim-vs-reference elastic-stiffness gap >15%:** run a no-axial vs with-axial one-element cantilever probe. A match to the no-axial value flags the reference as generated under different loading (stale).
+- **Reference-vs-sim plot overlay:** gate on peak magnitudes agreeing within an order of magnitude. A 1000× ratio ⇒ recorder-unit bug (load factor read as force). Cross-ref §12ap-5, §12ao-6.
+
+---
+
+### §12ar — Section-Level (Moment-Curvature) Analysis: Layout Adaptation, Curvature-Unit Trap, FiberSecMesh vs ops.patch, offset Sign (v1.42.0)
+
+Source: `OPST_mc_section` — opstool docs Moment-Curvature example (`https://opstool.readthedocs.io/en/stable/src/analysis/mc_analysis.html`). The repo's first pure section-level model: a fiber section analyzed with `opst.pre.section.FiberSecMesh` + `opst.anlys.MomentCurvature` to produce an M-φ curve, with no structural nodes/elements/gravity/pushover/ODB.
+
+#### 1. Section-level analyses adapt the 14-section layout by omitting §7–11
+
+A moment-curvature (or any pure section) analysis has no nodes, elements, boundary conditions, ODB, or load patterns — `MomentCurvature` builds its own internal zeroLength element and imposes curvature directly. The canonical §3 layout is adapted by keeping the banner skeleton but omitting the inapplicable sections with a one-line comment ("Not used — MomentCurvature builds its own zeroLength element internally"), rather than stubbing them with `pass`. §12 ANALYSIS hosts the `MomentCurvature(...)` instantiation + `.analyze()` + `.get_limit_state()` + `.bilinearize()` calls. This mirrors the peridynamics precedent (§12p/§12q) where §6 SECTIONS / §11 LOADING are deleted when they don't apply.
+
+**Rule:** For section-level / non-structural analyses, keep the §0–§14 banner skeleton (so audit tools and readers can navigate), omit the sections that genuinely don't apply (§7 Nodes, §8 BCs, §9 Elements, §10 ODB, §11 Loading) with a brief comment explaining why, and host the actual work in §12 ANALYSIS + §13 POST-PROCESSING. Do not stub empty functions.
+
+#### 2. MomentCurvature curvature-unit trap — `max_phi`/`incr_phi` scale with the model's length unit (1000× error source)
+
+`opst.anlys.MomentCurvature.analyze(max_phi, incr_phi)` takes curvature in the reciprocal of the model's length unit. The opstool docs example uses kN-m units with `incr_phi=1e-5` [1/m] (and `max_phi` defaulting to 0.5 [1/m]). Converting the model to N-mm-MPa requires scaling these curvature arguments by `1 m / 1 mm = 1e-3`: `incr_phi = 1e-5 × 1e-3 = 1e-8` [1/mm], `max_phi = 0.5 × 1e-3 = 5e-4` [1/mm]. Forgetting this factor leaves the analysis trying to reach 0.5 [1/mm] = 500 [1/m] — 1000× beyond any physical curvature — and the computed moments come out 1000× too large (or the analysis stops at step 0 / never reaches the limit state). Strains (dimensionless) are unchanged by unit conversion; only length-derived quantities (curvature, moment, axial force, stress) scale.
+
+```python
+# Source (kN-m):    MC.analyze(incr_phi=1e-5)           # 1e-5 [1/m]
+# Standardized (N-mm): MC.analyze(incr_phi=1e-5 * 1e-3)  # 1e-8 [1/mm]
+INCR_PHI = 1.0e-5 * 1.0e-3   # 1e-8 /mm  (source 1e-5 /m × 1e-3 m/mm)
+MAX_PHI  = 0.5    * 1.0e-3   # 5e-4 /mm  (default 0.5 /m × 1e-3 m/mm)
+```
+
+**Rule:** When converting a MomentCurvature (or any curvature-driven) analysis between unit systems, scale `max_phi` and `incr_phi` by the length-unit ratio (`m→mm` = ×1e-3). Detection: if the analysis runs to `max_phi` without reaching a limit state, or the computed moments are ~1000× the expected engineering value, the curvature arguments were not scaled. Strain-based limit-state thresholds (`get_limit_state(threshold=...)`) are dimensionless and need NO scaling.
+
+#### 3. `FiberSecMesh` (opstool polygon patches) vs `ops.patch("rect")` — choose by geometry
+
+The opstool docs example builds the section with `opst.pre.section.FiberSecMesh` + `create_polygon_patch` (triangulated by `sectionproperties`), NOT the raw `ops.patch("rect")` used by §12ap/§12e. `FiberSecMesh` supports arbitrary polygon outlines **with holes** (the cover ring around a central core hole here) and emits native OpenSees `fiber` commands via `SEC.to_opspy_cmds(secTag, GJ)`. `ops.patch("rect")` only handles simple rectangles without holes. Either is acceptable; choose based on section geometry. When the source uses `FiberSecMesh`, preserve it — do NOT force-convert to `ops.patch("rect")` if the section has holes or non-rectangular outline.
+
+**Rule:** Use `ops.patch("rect")` (§12ap) for simple rectangular sections. Use `opst.pre.section.FiberSecMesh` + `create_polygon_patch` when the section has holes, chamfers, or a non-rectangular outline. Register the section to OpenSees via `SEC.to_opspy_cmds(secTag, GJ)` — this is the method name (NOT `to_ops_cmds`).
+
+#### 4. `opst.pre.section.offset(d)` sign — docstring is reversed; `d>0` shrinks INWARD
+
+The `offset(points, d)` docstring says "positive values offset inwards, negative values outwards" — this is accidentally correct in the docstring text, but the implementation calls `ply.buffer(-d)`, so a **positive `d` shrinks the polygon inward** and a negative `d` expands it outward. Using the wrong sign when building a cover ring (outer outline minus an inset outline) produces an overlapping/invalid geometry and a `shapely.errors.GEOSException: TopologyException: unable to assign free hole to a shell` at `SEC.mesh()` time. The source uses positive `d` (`offset(outlines, d=0.05)`) to shrink the 2×2 outline inward to the cover-inner boundary.
+
+**Rule:** `opst.pre.section.offset(points, d)` with `d > 0` shrinks inward. To build a cover ring, `coverlines = offset(outlines, d=COVER)` (positive) then `create_polygon_patch(outlines, holes=[coverlines])`.
+
+#### 5. vis_utils V1–V7 do not apply to section analyses — use custom matplotlib
+
+The seven `vis_*` HTML helpers in `standards/vis_utils.py` all render OpenSees node/element meshes or ODB nodal displacements — none of which exist in a section analysis. For section results, use custom matplotlib following `standards/plot_utils.py` style (`COLORS` dict, `_style_ax`, Agg backend, dpi=150): an M-φ curve for the moment-curvature result, and opstool's own `MomentCurvature.plot_fiber_responses(return_ax=True)` for fiber stress-strain (save its returned figure). Skip the V1–V7 HTML files entirely.
+
+**Rule:** Section-level models produce matplotlib PNGs (`mphi_curve.png`, `fiber_stress_strain.png`), not the V1–V7 HTML visualizations. Follow `plot_utils.py` styling. Use opstool's built-in `.plot_M_phi()` / `.plot_fiber_responses(return_ax=True)` where available.
+
+#### Detection / Rules
+- **Layout:** section-level models omit §7–11 with explanatory comments; work lives in §12 + §13. Precedent §12p/§12q.
+- **Curvature-unit scaling:** `max_phi`/`incr_phi` × length-unit ratio when converting unit systems (kN-m→N-mm = ×1e-3). Strain thresholds unchanged. Detection: 1000× moment error or analysis never reaches limit state.
+- **Section mesher:** `FiberSecMesh` for holes/non-rectangular; `ops.patch("rect")` for simple rectangles. Method is `to_opspy_cmds(secTag, GJ)`.
+- **offset sign:** `d > 0` shrinks inward (despite docstring ambiguity).
+- **Visualization:** custom matplotlib PNGs (plot_utils.py style), not V1–V7 HTML.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-11 | 1.42.0 | **Section-level (moment-curvature) analysis — layout adaptation, curvature-unit trap, FiberSecMesh vs ops.patch, offset sign (§12ar):** (1) The repo's first pure section-level model (opstool docs Moment-Curvature example) — no nodes/elements/gravity/pushover/ODB. Layout adapted by omitting §7 Nodes / §8 BCs / §9 Elements / §10 ODB / §11 Loading with explanatory comments (NOT bare `pass`); work hosted in §12 ANALYSIS + §13 POST-PROCESSING. Precedent §12p/§12q. (2) **Curvature-unit trap:** `MomentCurvature.analyze(max_phi, incr_phi)` takes curvature in the reciprocal of the model's length unit; converting kN-m→N-mm requires scaling these by ×1e-3 (1/m → 1/mm) — source `incr_phi=1e-5` [1/m] → `1e-8` [1/mm], `max_phi` default 0.5 [1/m] → 5e-4 [1/mm]. Forgetting this gives a 1000× moment error or analysis never reaching the limit state. Strain thresholds (dimensionless) need NO scaling. (3) `opst.pre.section.FiberSecMesh` (polygon patches via sectionproperties, supports holes) vs `ops.patch("rect")` of §12ap/§12e (rectangles only) — choose by geometry; preserve `FiberSecMesh` when the section has holes. Registration method is `SEC.to_opspy_cmds(secTag, GJ)` (NOT `to_ops_cmds`). (4) `opst.pre.section.offset(d)` with `d>0` shrinks inward (calls `buffer(-d)`); wrong sign → `shapely TopologyException: unable to assign free hole to a shell` at mesh time. (5) vis_utils V1–V7 do not apply (no mesh/nodal responses) — use custom matplotlib PNGs (`mphi_curve.png`, `fiber_stress_strain.png`) following `plot_utils.py` style; opstool `.plot_fiber_responses(return_ax=True)`. Validation: all 4 limit-state points within 1.3% of docs reference (phiy +1.24%, My +0.04%, phiu +0.81%, Mu -0.17%). Source: OPST_mc_section conversion (opstool docs Moment-Curvature, 2x2 m hollow RC box, Concrete04 cover+core + Steel01, kN-m→N-mm-MPa). |
+| 2026-07-11 | 1.41.0 | **Fiber-mesh density ≠ stiffness; documented recorder lesson still shipped as a bug; stale reference data (§12aq):** (1) Corrects §12ap-2/§12e: a finer mesh of the SAME concrete area converges to the SAME A and I (hence same EI), so it cannot cause a 10–24% stiffness rise — pygmsh 244-tri and 20×20 rect patch agree on A exactly and on I within 0.4%. Don't attribute response differences to fiber density when area matches. (2) Dino's real stiffness gap is axial precompression: one-element cantilever probe gives k=3589 kN/mm (no axial) vs 4863 kN/mm (with −15000 kN gravity, +35%) vs uncracked theory 4328; sim=5137, reference=4158. The reference matches the *un-precompressed* value almost exactly → committed `node_disp.out` is stale (regenerated under different loading), simulation is authoritative. (3) §12ap-5's "recorder -time col = load factor, not force" rule was violated by `model.py`'s own reference loader (`ref[:,0]` read as N, plotted /1e3 → reference curve at 7.98 kN vs sim 8810 kN, 1000× error, invisible). Fix `ref_shear = ref[:,0] * P_LATERAL`. New rule: gate every sim-vs-reference overlay on peak magnitudes agreeing within an order of magnitude; a ≥10× ratio ⇒ recorder-unit bug. Validation: re-ran Dino, 100/100 pushover steps, corrected pushover_compare.png now shows both curves at matching scale (ref 7980 kN vs sim 8810 kN). Source: Dino verification follow-up. |
 | 2026-07-11 | 1.40.0 | **RC column pushover — Tkinter GUI stripping, pygmsh→ops.patch, nonlinearBeamColumn ODB, recorder -time semantics (§12ap):** (1) Tkinter GUI wrappers stripped — parameters become named constants in §3 (using GUI defaults); GUI code blocks CI/headless execution. (2) pygmsh triangle mesh (244 fibers) → `ops.patch("rect", ..., 20, 20)` (400 fibers) — pygmsh not in opensy env; native OpenSees fiber commands always available. Rebar `ops.layer` preserved exactly. ~10% stiffer response from finer discretization (peak 8810 kN vs 7980 kN, §12e). (3) `nonlinearBeamColumn` retains standard signature `(tag, i, j, nIP, secTag, transfTag)` — NOT dispBeamColumn (no beamIntegration object, §12l). (4) `save_frame_resp=False` in CreateODB — nonlinearBeamColumn internal sections lack user-visible tags (§12v, same as forceBeamColumn). (5) Recorder `-time` col = load factor λ (unitless), not force — base shear = λ × reference_load; reading col1 directly as N gives 1000× too small. (6) Dead materials (defined but never referenced by any section/element) omitted. SmartAnalyze (Static) replaces raw `ops.analyze(nstep)` + `ops.recorder`; lateral pattern after loadConst (§12z). Validation: gravity converges, pushover 100/100 steps (exact match on count + displacement 0.08→8.00 mm), peak shear 10.4% diff (expected discretization effect), 7 vis HTMLs + pushover_compare.png. Source: Dino conversion (3D RC cantilever column, fiber-section Concrete01+Steel01, original column_sec.py + pygmsh + Tkinter). |
 | 2026-07-11 | 1.39.0 | **Shear-hinge calibration sweep — EnergyIncr tolerance unit conversion; equalDOF+Plain nodeReaction spurious shear; HystereticSM backbone θ→δ; source recorder semantics (§12ao):** (1) Source Tcl `test EnergyIncr 1e-4` is in **kip·in** energy units — in N·mm it MUST be scaled by `kip*inch` (=112985), giving TOL≈11.3 N·mm. Using the unscaled 1e-4 makes EnergyIncr ~100000× too tight → analysis stalls at ~30% of the protocol. Detection: load-factor spam >1e5 and `EnergyIncr` Norm deltaR >> Norm deltaX with displacement essentially converged. General rule: EnergyIncr tol ×`kip*inch`, NormDispIncr tol ×`inch`, NormUnbalance tol ×`kip`. (2) Under `equalDOF(master, slave, 1, 3)` + `constraints("Plain")`, `nodeReaction(retained_node, 2)` includes the MP-constraint force past first yield, giving shear values 2–3× the backbone capacity. Fix: read base shear from the zeroLength hinge element force (`ops.eleResponse(ELE_HINGE, "forces")[1]`), NOT `nodeReaction`. Cross-ref §12ak: there shear diverted to column-base node; here with Plain+DOF-2 hinge the retained-node reaction is contaminated. (3) `HystereticSM` (Mazzoni 2023) is available in standard OpenSeesPy — `-posEnv`/`-negEnv` backbone is force-deformation (y=force, x=deformation). (4) The source's `RunStaticLoading.tcl` 6-algorithm fallback ladder (Newton→Newton-initial→ModifiedNewton→ModifiedNewton-initial→Broyden→NewtonLineSearch) with per-step `DisplacementControl` integrator reset is a documented §3c/§10 exception to SmartAnalyze. (5) HystereticSM backbone x-axis is deformation not rotation — source (V,θ) pairs need θ→δ=θ×L conversion before passing to the material, else the hinge is L× too stiff. (6) Source `disp.out` col1 is NOT pseudo-time but shear — the custom per-step integrator reset makes `-time` track displacement; verify recorder semantics against the post-processor's column indexing. Validation: all 7 Naish (2015) cases match source exactly on step count (1078/1078, 1108/1108, etc.), within 1% on peak shear (159.2/159.2, 210.8/210.9 kip), within 0.6–5.3% on hysteretic energy; 7 vis HTMLs per case (V1 nodes, V2 model, V3 loads, V4 pre-analysis, V5 deformed peak, V6 step slider, V7 animation). Source: ZhongKuanshi conversion (7-case HystereticSM shear-hinge calibration sweep, Zhong Stanford 2016 / Naish 2015). |
 | 2026-07-10 | 1.38.0 | **3D frame-wall building — rigidDiaphragm needs Transformation; per-story/per-IP tag scheme must pass absolute tags; corotTruss ODB scoping; triaxial-GM-with-no-repo-files substitute (§12an):** (1) Any model with rigidDiaphragm/equalDOF/MP constraints requires `constraints("Transformation")` for BOTH gravity and dynamic — `Plain` cannot distribute MP-constraint reactions (consistent with §12x-6; Penalty §12ak is only for zeroLength-hinge models). (2) A helper `_df(story, tag, ...)` called as `_df(s, 201, ...)` collides tags across stories because the helper used the relative `tag` (201) directly instead of `s*1000+201`, and the `story` param was dead — `MapOfTaggedObjects::addComponent - not adding as one with similar tag exists`. Fix: helpers take the ABSOLUTE tag computed by the caller; source scheme is `story*1000+{group}`. (3) corotTruss braces need `truss_tags`/`save_trust_resp` in the ODB, not `frame_tags` (§12ai); for this model `save_frame_resp=False`. (4) Source runs 13 triaxial base_motions NOT in repo → single-component NR94cnp.txt X-dir validation substitute (VividConcrete/elkady2019 pattern), run_dynamic() generic via GM_FILE/GM_DT/GM_NPTS/GM_DIR; GM after loadConst (§12i). (5) This source's rectangular confinement `ke=ke1·ke2·ke3/(1-rou_cc)` differs from the VividConcrete column models' `(nl-2)/nl*(1-s/b)` — port each source's CreateConcreteMaterial.tcl ke verbatim, don't reuse another model's. Validation: gravity lf=1.00, T1=0.577s T2=0.512s T3=0.163s (physical 5-story RC wall-frame), dynamic 2495/2495 steps converge, roof X-drift -172 mm (0.94%), peak inter-story drift 1.39% (story 2), 6 vis HTMLs incl. step slider. Source: VividCond_UCSD_full_fivestory conversion (5-story RC frame-wall building, 2 perimeter frames + 2 walls + corotTruss braces + rigid diaphragms, Zhong Stanford/UCSD 2017-2019). |

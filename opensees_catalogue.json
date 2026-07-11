@@ -943,5 +943,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Original source: models/Dino/Sectional Analysis of Pushover curves/py_ref/column_sec.py (Tkinter GUI + pygmsh mesh + OpenSeesPy). Pre-generated reference outputs: node_disp.out (100-pt pushover), triangle_data.txt (244 fiber centroids).",
     "Notes": "Converted from column_sec.py. GUI STRIPPING: the Tkinter GUI is removed — parameters are named constants in Section 3 (using the GUI default values). pygmsh -> ops.patch('rect'): pygmsh is not in the opensy env; the standard repo approach (native OpenSees fiber commands) replaces it with a 20x20 rect patch (400 fibers vs source's 244 triangles). Rebar layers (ops.layer) preserved exactly. nonlinearBeamColumn retains its standard signature (tag, i, j, nIP, secTag, transfTag) — NOT dispBeamColumn (§12l). save_frame_resp=False in CreateODB — nonlinearBeamColumn internal sections lack user-visible tags (§12v). Dead Elastic material tag 200 omitted. SmartAnalyze (Static) replaces the source's raw ops.analyze(nstep) + ops.recorder — ODB + fetch_response_step instead. Lateral pattern defined after loadConst (§12z). VERIFICATION: pushover 100/100 steps converge (exact match on step count + displacement 0.08->8.00 mm), peak base shear 8810 kN (sim) vs 7980 kN (ref) — 10.4% difference expected from finer fiber discretization (400 vs 244, §12e). 7 vis HTMLs + pushover_compare.png. Run with: C:/Users/micha/miniconda3/envs/opensy/python.exe models/Dino/model.py"
+  },
+  {
+    "UniqueID": "OPST_mc_section",
+    "URL": "https://opstool.readthedocs.io/en/stable/src/analysis/mc_analysis.html",
+    "num_models": "1",
+    "purpose": "Moment-curvature analysis of a 2x2 m hollow RC box section via opstool FiberSecMesh + MomentCurvature — the repo's first pure section-level analysis (no structural mesh).",
+    "Description of Building Structural System": "Square hollow RC box section, 2000x2000 mm outer, 50 mm cover, 1000x1000 mm central core hole. Cover concrete fc=32.4 MPa (Concrete04), confined core fc=40.6 MPa (Concrete04, ecu=-0.0144), Steel01 rebar fy=300 MPa, 20 mm dia @ 100 mm perimeter. Constant axial compression -20 MN.",
+    "Description of Model": "Section-level analysis (no nodes/elements/gravity/pushover/ODB). Fiber section built with opstool opst.pre.section.FiberSecMesh (polygon patches with holes, triangulated via sectionproperties) and registered to OpenSees via to_opspy_cmds. opst.anlys.MomentCurvature imposes monotonic curvature about local-y (internal zeroLength element) under constant axial force. Limit states: yield = steel reaches 2e-3 strain; ultimate = core concrete crushing at ecu=-0.0144. Bilinearised via equal-energy (bilinearize). Source kN-m converted to N-mm-MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "NA (section analysis)",
+    "Material": "RC (fiber-section: Concrete04 cover+core + Steel01 rebar)",
+    "Lateral system": "NA (section analysis)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Monotonic moment-curvature (curvature-imposed)",
+    "Earthquake records": "NA (static section analysis)",
+    "Opensees Version": "Standard OpenSeesPy (opensy conda env, Python 3.12.12)",
+    "model generator": "NA (manual conversion of opstool docs example)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "opstool docs — Moment Curvature Analysis of Section (https://opstool.readthedocs.io/en/stable/src/analysis/mc_analysis.html). Verbatim source at models/OPST_mc_section/py_ref/mc_analysis_source.py (kN-m units).",
+    "Notes": "Converted from the opstool docs Moment-Curvature example. UNIT CONVERSION (kN-m -> N-mm-MPa): stresses xkPa (1 kN/m^2 = 1 kPa = 1e-3 MPa), geometry xm (1 m = 1000 mm), moments via kN*m (1 kN.m = 1e6 N.mm), axial force xkN. CURVATURE-UNIT TRAP (§12ar): MomentCurvature.analyze(max_phi, incr_phi) takes curvature in the model's length unit — source incr_phi=1e-5 [1/m] becomes 1e-8 [1/mm] in N-mm (x1e-3); max_phi default 0.5 [1/m] -> 5e-4 [1/mm]. A 1000x error stops analysis at step 0 or gives moments 1000x off. Strains (dimensionless) unchanged. SECTION-LEVEL LAYOUT ADAPTATION: §7 Nodes / §8 BCs / §9 Elements / §10 ODB / §11 Loading omitted (MomentCurvature builds its own internal zeroLength element; no nodal ODB responses) — precedent §12p/§12q. FiberSecMesh (opstool polygon patches, supports cover outline + central hole) vs ops.patch('rect') of §12ap/§12e (rectangles without holes). offset() sign: d>0 shrinks inward (docstring reversed). VISUALISATION: standard V1-V7 HTML stages do not apply (no mesh/nodal responses); custom matplotlib plots follow standards/plot_utils.py style. VERIFICATION: all 4 limit-state points within 1.3% of docs reference (phiy +1.24%, My +0.04%, phiu +0.81%, Mu -0.17%). Outputs: mphi_curve.png, fiber_stress_strain.png. Run with: C:/Users/micha/miniconda3/envs/opensy/python.exe models/OPST_mc_section/model.py"
   }
 ]

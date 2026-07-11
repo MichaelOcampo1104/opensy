@@ -362,8 +362,12 @@ def run_analysis(output_dir: Path) -> tuple["opst.post.CreateODB", dict]:
         / "py_ref" / "node_disp.out"
     if ref_path.exists():
         ref = np.loadtxt(str(ref_path))
-        ref_shear = ref[:, 0]     # N (load factor × 1000 N reference)
-        ref_disp = ref[:, 1]      # mm
+        # node_disp.out was recorded with `recorder Node -time -dof 1 disp`, so
+        # col 0 is the pseudo-time λ (= lateral load factor for the Plain pattern),
+        # NOT base shear.  The source used a 1000 N reference load, so base shear
+        # in N = λ × 1000.  Col 1 is the top UX displacement in mm.
+        ref_shear = ref[:, 0] * P_LATERAL     # N  (λ × 1000 N reference load)
+        ref_disp = ref[:, 1]                  # mm
     else:
         ref_shear = np.array([])
         ref_disp = np.array([])
