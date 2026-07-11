@@ -4218,10 +4218,81 @@ The seven `vis_*` HTML helpers in `standards/vis_utils.py` all render OpenSees n
 
 ---
 
+### §12as — First Shell-Element Model: ShellNLDKGQ + PlateFiber, Coordinate-Keyed Mesh Generation for Composite Sections, SmartAnalyze for Post-Buckling, Deep Nesting Path Depth (v1.43.0)
+
+Source: `Dino_Buckling` — axial-compression buckling of a thin-walled steel I-section cantilever column built from 1200 ShellNLDKGQ elements (original `co.tcl`). The repo's first shell-element model.
+
+#### 1. Shell-section recipe: ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section
+
+A shell element (`ShellNLDKGQ`, `ShellMITC4`, `ASDShellQ4`) needs a *plate section*, not a fiber section. The standard chain is: `nDMaterial("ElasticIsotropic", matTag, E, nu)` → `nDMaterial("PlateFiber", plateMatTag, matTag)` (wraps the 3D material into a plane-stress plate form) → `section("PlateFiber", secTag, plateMatTag, thickness)`. The element takes the section tag directly: `element("ShellNLDKGQ", tag, n1, n2, n3, n4, secTag)`. This is the only shell recipe tested in the repo; there is no `section_library.py` helper for it.
+
+**Rule:** For shell elements, build the three-stage material chain (ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section) and pass the section tag to the element. Do NOT try to use a `Fiber` section or `ops.patch` with shell elements — those are for beam-column fiber sections only.
+
+#### 2. Coordinate-keyed mesh generation — walls MUST share corner nodes by coordinate
+
+When a section is built from multiple shell walls (an I-section's 3 walls, a box's 4 walls), the walls MUST share corner nodes where they meet, or the section acts as disconnected plates and cannot buckle/deflect compositely. A naive ring generator that appends each wall's nodes to a list produces *duplicate* corner nodes (each wall creates its own node at the shared coordinate) → the walls are disjoint → the column is far too stiff and never buckles.
+
+The fix: key nodes by their `(x, y)` coordinate so a second wall visiting an existing coordinate reuses the same tag. In Python:
+
+```python
+rings = {}
+tag = 0
+for kz in range(N_SEG_H + 1):
+    z = (H_COL / N_SEG_H) * kz
+    ring = {}                                  # {(x,y): tag}
+    for wall in walls:                         # walls = [top_flange, web, bot_flange]
+        for (x, y) in wall:
+            key = (round(x, 6), round(y, 6))
+            if key not in ring:
+                tag += 1
+                ops.node(tag, x, y, z)
+                ring[key] = tag
+    rings[kz] = ring
+```
+
+Element connectivity then looks up tags by coordinate key, guaranteeing shared walls resolve to shared nodes.
+
+**Rule:** For multi-wall shell sections, generate nodes via a coordinate-keyed dict (not a flat list) so T-junction/L-junction corners are shared. Detection: if a multi-wall column never buckles and its axial stiffness is ~10× the theoretical EA/L, the walls are likely disjoint (each carrying load independently).
+
+#### 3. SmartAnalyze is required for post-buckling — a manual DisplacementControl loop overshoots the limit point
+
+For this steel shell column, a manual `ops.analyze(1)` DisplacementControl loop (source-style) climbs monotonically to 5000+ kN without snapping through the buckling limit point — the fixed 0.5 mm increment is too large to track the post-buckling softening, so the solver steps past the limit point into a stiffened post-buckled branch. `opst.anlys.SmartAnalyze` (with `relaxation=0.5`, `minStep=1e-2`, `tryLooseTestTol=True`, `looseTestTolTo=1e-3`, algorithm ladder `[40,10,20,30]`) sub-steps through the limit point and correctly captures the ~527 kN peak (matching the Euler cantilever Pcr = 542 kN). This is the §12z SmartAnalyze recipe applied to shell buckling.
+
+**Rule:** For buckling/post-buckling analysis, use SmartAnalyze (not a manual fixed-increment loop) — the fixed increment overshoots the limit point. Settings: `NormDispIncr` @ 1e-4, KrylovNewton primary, `relaxation=0.5`, `minStep=1e-2`, `tryLooseTestTol`. Cross-ref §12z, §12aj.
+
+#### 4. `save_shell_resp=True` — repo's first shell ODB; Penalty+UmfPack works for shells
+
+CreateODB for shell models: `save_shell_resp=True`, `save_frame_resp=False`, `save_truss_resp=False` (shells have no frame/truss responses; disabling avoids silent memory growth per §12u-2). Omit `node_tags` (§12u — breaks `plot_nodal_responses` deformed plots). The source's `constraints("Penalty", 1e20, 1e20)` + `system("UmfPack")` worked for this 1200-shell model — unlike the §12af stiffness-contrast failure (bridge models). Shell models do not inherently trigger the UmfPack pivot failure; test Penalty+UmfPack first, switch to Transformation+BandGeneral only if it fails.
+
+**Rule:** Shell ODB uses `save_shell_resp=True` (not `save_frame_resp`). Penalty+UmfPack is a valid starting point for shell models; the §12af UmfPack failure is stiffness-contrast-specific, not shell-specific.
+
+#### 5. Deep nesting (models/Dino/<analysis-name>/) needs `parents[3]` for standards/
+
+Models nested under `models/<Family>/<AnalysisName>/` (two levels under `models/`) are one level deeper than the canonical `models/<UniqueID>/` layout. The standards-import line `sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))` points to `models/` (wrong); it must be `parents[3]` (the repo root). Use a fallback to be robust to future relocation:
+
+```python
+_STANDARDS = Path(__file__).parents[3] / "standards"
+if not _STANDARDS.exists():
+    _STANDARDS = Path(__file__).parents[2] / "standards"
+sys.path.insert(0, str(_STANDARDS))
+```
+
+**Rule:** For models nested deeper than `models/<UniqueID>/`, adjust the `parents[]` depth for the standards import. Verify by checking `_STANDARDS.exists()`.
+
+#### Detection / Rules
+- **Shell section:** ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section; pass secTag to element.
+- **Multi-wall mesh:** coordinate-keyed node generation (`{(x,y): tag}`); flat-list generation produces disjoint walls → no buckling, ~10× stiffness. Detection: column never buckles, stiffness ≫ EA/L.
+- **Post-buckling solver:** SmartAnalyze (not manual fixed-increment loop) — fixed increment overshoots the limit point. §12z settings.
+- **Shell ODB:** `save_shell_resp=True`; omit `node_tags`. Penalty+UmfPack works for shells (§12af failure is stiffness-contrast-specific).
+- **Deep nesting:** `parents[3]` for `models/<Family>/<Analysis>/`; use `.exists()` fallback.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-11 | 1.43.0 | **First shell-element model — ShellNLDKGQ + PlateFiber section, coordinate-keyed mesh generation for composite sections, SmartAnalyze for post-buckling, deep-nesting path depth (§12as):** (1) Shell-section recipe: ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section (20 mm thick); element takes secTag directly. No `section_library.py` helper for shells. (2) **Coordinate-keyed mesh generation:** multi-wall sections (I-section's 3 walls) MUST share corner nodes by (x,y) coordinate — a flat-list ring generator produces *duplicate* corner nodes → disjoint walls → column never buckles, ~10× too stiff. Fix: key nodes as `{(x,y): tag}` so revisited coordinates reuse the tag. Detection: column doesn't buckle + stiffness ≫ EA/L. (3) **SmartAnalyze required for post-buckling:** a manual fixed-increment DisplacementControl loop (source-style) overshoots the limit point and climbs to 5000+ kN; SmartAnalyze (relaxation=0.5, minStep=1e-2, tryLooseTestTol, algoTypes=[40,10,20,30]) sub-steps through the limit point → 527 kN peak matching Euler cantilever Pcr=542 kN. §12z recipe applied to shell buckling. (4) `save_shell_resp=True` (repo's first shell ODB), `save_frame_resp=False`; omit `node_tags` (§12u). Penalty(1e20,1e20)+UmfPack works for shells — the §12af UmfPack failure is stiffness-contrast-specific, not shell-specific. (5) Deep nesting (`models/Dino/<analysis-name>/`) needs `parents[3]` for standards (not `parents[2]`); use `.exists()` fallback. Validation: 100/100 buckling steps, peak 526.6 kN (sim) vs ~630 kN (ref) — 16% diff; sim peak matches weak-axis cantilever Euler Pcr=542 kN. 7 vis HTMLs + buckling_compare.png + buckling_curve.csv. Source: Dino_Buckling conversion (3D steel I-section cantilever, 1200 ShellNLDKGQ, original co.tcl Tcl, axial-compression buckling). |
 | 2026-07-11 | 1.42.0 | **Section-level (moment-curvature) analysis — layout adaptation, curvature-unit trap, FiberSecMesh vs ops.patch, offset sign (§12ar):** (1) The repo's first pure section-level model (opstool docs Moment-Curvature example) — no nodes/elements/gravity/pushover/ODB. Layout adapted by omitting §7 Nodes / §8 BCs / §9 Elements / §10 ODB / §11 Loading with explanatory comments (NOT bare `pass`); work hosted in §12 ANALYSIS + §13 POST-PROCESSING. Precedent §12p/§12q. (2) **Curvature-unit trap:** `MomentCurvature.analyze(max_phi, incr_phi)` takes curvature in the reciprocal of the model's length unit; converting kN-m→N-mm requires scaling these by ×1e-3 (1/m → 1/mm) — source `incr_phi=1e-5` [1/m] → `1e-8` [1/mm], `max_phi` default 0.5 [1/m] → 5e-4 [1/mm]. Forgetting this gives a 1000× moment error or analysis never reaching the limit state. Strain thresholds (dimensionless) need NO scaling. (3) `opst.pre.section.FiberSecMesh` (polygon patches via sectionproperties, supports holes) vs `ops.patch("rect")` of §12ap/§12e (rectangles only) — choose by geometry; preserve `FiberSecMesh` when the section has holes. Registration method is `SEC.to_opspy_cmds(secTag, GJ)` (NOT `to_ops_cmds`). (4) `opst.pre.section.offset(d)` with `d>0` shrinks inward (calls `buffer(-d)`); wrong sign → `shapely TopologyException: unable to assign free hole to a shell` at mesh time. (5) vis_utils V1–V7 do not apply (no mesh/nodal responses) — use custom matplotlib PNGs (`mphi_curve.png`, `fiber_stress_strain.png`) following `plot_utils.py` style; opstool `.plot_fiber_responses(return_ax=True)`. Validation: all 4 limit-state points within 1.3% of docs reference (phiy +1.24%, My +0.04%, phiu +0.81%, Mu -0.17%). Source: OPST_mc_section conversion (opstool docs Moment-Curvature, 2x2 m hollow RC box, Concrete04 cover+core + Steel01, kN-m→N-mm-MPa). |
 | 2026-07-11 | 1.41.0 | **Fiber-mesh density ≠ stiffness; documented recorder lesson still shipped as a bug; stale reference data (§12aq):** (1) Corrects §12ap-2/§12e: a finer mesh of the SAME concrete area converges to the SAME A and I (hence same EI), so it cannot cause a 10–24% stiffness rise — pygmsh 244-tri and 20×20 rect patch agree on A exactly and on I within 0.4%. Don't attribute response differences to fiber density when area matches. (2) Dino's real stiffness gap is axial precompression: one-element cantilever probe gives k=3589 kN/mm (no axial) vs 4863 kN/mm (with −15000 kN gravity, +35%) vs uncracked theory 4328; sim=5137, reference=4158. The reference matches the *un-precompressed* value almost exactly → committed `node_disp.out` is stale (regenerated under different loading), simulation is authoritative. (3) §12ap-5's "recorder -time col = load factor, not force" rule was violated by `model.py`'s own reference loader (`ref[:,0]` read as N, plotted /1e3 → reference curve at 7.98 kN vs sim 8810 kN, 1000× error, invisible). Fix `ref_shear = ref[:,0] * P_LATERAL`. New rule: gate every sim-vs-reference overlay on peak magnitudes agreeing within an order of magnitude; a ≥10× ratio ⇒ recorder-unit bug. Validation: re-ran Dino, 100/100 pushover steps, corrected pushover_compare.png now shows both curves at matching scale (ref 7980 kN vs sim 8810 kN). Source: Dino verification follow-up. |
 | 2026-07-11 | 1.40.0 | **RC column pushover — Tkinter GUI stripping, pygmsh→ops.patch, nonlinearBeamColumn ODB, recorder -time semantics (§12ap):** (1) Tkinter GUI wrappers stripped — parameters become named constants in §3 (using GUI defaults); GUI code blocks CI/headless execution. (2) pygmsh triangle mesh (244 fibers) → `ops.patch("rect", ..., 20, 20)` (400 fibers) — pygmsh not in opensy env; native OpenSees fiber commands always available. Rebar `ops.layer` preserved exactly. ~10% stiffer response from finer discretization (peak 8810 kN vs 7980 kN, §12e). (3) `nonlinearBeamColumn` retains standard signature `(tag, i, j, nIP, secTag, transfTag)` — NOT dispBeamColumn (no beamIntegration object, §12l). (4) `save_frame_resp=False` in CreateODB — nonlinearBeamColumn internal sections lack user-visible tags (§12v, same as forceBeamColumn). (5) Recorder `-time` col = load factor λ (unitless), not force — base shear = λ × reference_load; reading col1 directly as N gives 1000× too small. (6) Dead materials (defined but never referenced by any section/element) omitted. SmartAnalyze (Static) replaces raw `ops.analyze(nstep)` + `ops.recorder`; lateral pattern after loadConst (§12z). Validation: gravity converges, pushover 100/100 steps (exact match on count + displacement 0.08→8.00 mm), peak shear 10.4% diff (expected discretization effect), 7 vis HTMLs + pushover_compare.png. Source: Dino conversion (3D RC cantilever column, fiber-section Concrete01+Steel01, original column_sec.py + pygmsh + Tkinter). |
