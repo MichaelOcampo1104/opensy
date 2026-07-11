@@ -3951,10 +3951,182 @@ The repo had `vis_defo` (V5 peak) and `vis_anim` (V7 animation) wrappers but **n
 
 ---
 
+### §12ao — EnergyIncr Tolerance Unit Conversion + equalDOF+Plain nodeReaction Spurious Shear (v1.39.0)
+
+Source: `ZhongKuanshi` — 7-case HystereticSM shear-hinge calibration sweep (Zhong Stanford 2016 / Naish 2015), imperial (in, kip, ksi) → N-mm-MPa.
+
+#### 1. `EnergyIncr` Tolerance Is Unit-Dependent — Scale by kip·in → N·mm
+
+The source Tcl uses `test EnergyIncr $Tol $numIter` with `Tol = 1e-4`. This tolerance is in the model's energy units — **kip·in** in the source. When converting to N-mm-MPa, the EnergyIncr norm scales by the energy unit conversion factor:
+
+```
+1 kip·in = 4448.22 N × 25.4 mm = 112,984.8 N·mm
+```
+
+So `Tol = 1e-4` in kip·in becomes `Tol = 1e-4 × 112984.8 ≈ 11.3` N·mm. Using the unscaled `1e-4` makes the tolerance **~100,000× too tight**, causing the analysis to stall at ~30% of the cyclic protocol — every step past first yield fails to converge because the energy norm (which involves force × displacement) is 5 orders of magnitude above 1e-4.
+
+```python
+# BROKEN — tolerance 100000x too tight for N-mm model
+TOL = 1.0e-4  # this was correct for kip-in; in N-mm it's absurdly tight
+
+# CORRECT — scale by energy unit conversion
+LBIN2NMM = kip * inch          # 112,984.8 N·mm per kip·in
+TOL = 1.0e-4 * LBIN2NMM        # ≈ 11.3 N·mm
+```
+
+**Symptom:** Load-factor spam (`domain at load factor > 1e5`) and `EnergyIncr` failures where `Norm deltaX` is tiny (displacement converged) but `EnergyIncr` is 4–6 orders of magnitude above tolerance. The fallback ladder exhausts on every step past ~30% of the protocol.
+
+**Detection:** If a source Tcl with `test EnergyIncr 1e-X` stalls after unit conversion to N-mm, check whether the tolerance was unit-converted. `EnergyIncr` involves `dF · dU` (force × displacement), so it scales by the product of the force and length conversion factors.
+
+**Rule:** When converting `EnergyIncr` tolerance from imperial to N-mm, multiply by `kip * inch` (= 112,985). For `NormDispIncr` (displacement-only norm), multiply by `inch` (= 25.4). For `NormUnbalance` (force-only norm), multiply by `kip` (= 4448.22). **Never** carry over an unscaled tolerance value during unit conversion.
+
+#### 2. `nodeReaction` Under `equalDOF` + `Plain` Constraints Gives Spurious Shear Past Yield
+
+For a shear-hinge subassembly with `equalDOF(master, slave, 1, 3)` + `constraints("Plain")`, reading the base shear via `nodeReaction(fixed_node, dof_2)` returns the **retained-node reaction including the MP-constraint force**. This gives shear values 2–3× the hinge backbone capacity past first yield — physically impossible.
+
+```python
+# BROKEN — reaction includes MP-constraint force, 2-3x too high past yield
+ops.reactions()
+shear = -ops.nodeReaction(NODE_FIX_L, 2)  # → 349 kip when backbone max is 159 kip
+
+# CORRECT — read the zeroLength element's global force directly
+ele_forces = ops.eleResponse(ELE_HINGE, "forces")
+shear = -ele_forces[1]   # global Y component = hinge shear
+```
+
+This differs from §12ak (concentrated plasticity with zeroLength-on-RZ + equalDOF-on-translation): there the shear diverted to the column-base node (read from a different node); here with Plain constraints + a DOF-2-only hinge, the retained-node reaction is contaminated by the constraint enforcement force.
+
+**Symptom:** Hysteresis curve shows shear exceeding the defined backbone capacity (e.g., 349 kip when V4 = 159 kip). The displacement is correct; only the force reading is wrong.
+
+**Rule:** For any model with `equalDOF` + `zeroLength` hinge, read the hinge shear from `ops.eleResponse(hinge_tag, "forces")` (the element's global force vector), not from `nodeReaction` at a constrained node. The element force is the constitutive response; the nodal reaction includes constraint forces that don't represent the physical shear.
+
+#### 3. HystereticSM (Mazzoni 2023) Available in Standard OpenSeesPy
+
+`ops.uniaxialMaterial("HystereticSM", ...)` is available in the standard OpenSeesPy PyPI distribution — no custom build needed. The material defines a multi-point envelope hysteretic law with pinching, damage, and unloading stiffness degradation. The backbone is specified in **force-deformation** space via `-posEnv`/`-negEnv` flags:
+
+```python
+ops.uniaxialMaterial(
+    "HystereticSM", tag,
+    "-posEnv", y1, x1, y2, x2, y3, x3, y4, x4, y5, x5,   # positive backbone (y=force, x=deformation)
+    "-negEnv", y1n, x1n, y2n, x2n, y3n, x3n, y4n, x4n, y5n, x5n,
+    "-pinch", px, py,
+    "-damage", damage1, damage2,
+    "-beta", beta,
+)
+```
+
+When used in a `zeroLength` element on DOF 2, "force" = shear and "deformation" = transverse displacement.
+
+#### 4. Manual Fallback-Ladder Loop as Documented SmartAnalyze Exception
+
+The source's `RunStaticLoading.tcl` uses a per-step `DisplacementControl` integrator reset + a 6-algorithm fallback ladder (Newton → Newton-initial → ModifiedNewton → ModifiedNewton-initial → Broyden → NewtonLineSearch), retrying each failing step with relaxed tolerance (10×Tol, 10×iterations). This fixed-increment retry chain is **not exposed by SmartAnalyze** (which does adaptive sub-stepping within a single target via `relaxation`/`minStep`). For hysteretic materials with severe softening branches (V5 < 0.4×V3), the per-step integrator reset + full ladder is more effective than SmartAnalyze's sub-stepping because it gives the material a fresh tangent at each algorithm switch.
+
+This is a documented exception per §3c/§10: use `ops.analyze(1)` in a manual loop with the fallback ladder when the source's recovery strategy is incompatible with SmartAnalyze.
+
+#### 5. HystereticSM Backbone x-Axis Is Deformation, Not Rotation — Convert θ→δ
+
+The source calibration framework (ShearHingeCalibration.m) defines the HystereticSM backbone in terms of `(V, θ)` pairs — shear force V [kip] and chord rotation θ [rad]. But `HystereticSM` takes **force-deformation** pairs, so the rotation must be converted to a transverse displacement **before** constructing the material:
+
+```python
+# Backbone: y_i = V_i * rpp [kip → N], x_i = theta_i * L [rad × in → in → mm]
+pos_y = [V[i] * rpp * kip for i in range(5)]   # force
+pos_x = [th[i] * (L * inch) for i in range(5)]  # deformation = θ × L
+```
+
+The negative envelope scales the force by `rnp` (negative residual/proportional ratio) but the deformation is symmetric: `x_neg = -theta * L`. Passing the raw rotation values as the x-axis would make the hinge 36× too stiff (for L=36 in) because the deformation would be in radians (~0.01) instead of inches (~0.4).
+
+**Detection:** If the model's initial stiffness is wildly off (period or elastic-shear slope), check whether the HystereticSM x-axis received rotations (rad) instead of displacements (length). The clue: the backbone x-values should be on the order of the member's chord displacement (mm), not rotation (rad).
+
+**Rule:** For shear-hinge calibration models where the source data is in `(V, θ)` space, always convert `θ → δ = θ × L` before passing to `HystereticSM`. The material's x-axis is deformation in the model's length unit, not rotation.
+
+#### 6. Source disp.out Column 1 Is Shear, Not Pseudo-Time — Verify Recorder Semantics
+
+The source Tcl `recorder Node -file disp.out -time -node 4 -dof 2 disp` produces a 2-column file where column 1 is the `-time` flag. In a standard LoadControl/DisplacementControl analysis, `-time` returns the pseudo-time (load factor). But the source's custom `RunStaticLoading` proc resets the `DisplacementControl` integrator at every step, so the pseudo-time tracks the cumulative control-node displacement — NOT the applied load factor.
+
+The MATLAB post-processing script (`ShearHingeCalibration.m`) reads `disp.out` as `(shear, disp)`: `simu.hinge_shear = res(:,1)`. This works because, with the per-step integrator reset, the pseudo-time column coincidentally captures a value that the MATLAB interprets as shear. In reality, the reliable shear source is `shear.out` (`recorder Node -file shear.out -time -node 1 -dof 2 reaction`), where column 2 is the node-1 UY reaction.
+
+**Rule:** When porting a Tcl model whose recorder output feeds a MATLAB/Python post-processor, verify what each column actually represents by cross-referencing the recorder command AND the post-processor's column indexing. Do not assume `-time` means wall-clock or load-factor — with custom integrator management it can track displacement or any other quantity. The safest approach: re-derive the output from `ops.eleResponse` / `ops.nodeReaction` in the Python model, as in point 2 above.
+
+---
+
+### §12ap — Tkinter GUI Stripping, pygmsh → ops.patch, nonlinearBeamColumn ODB Scoping, Recorder -time Semantics (v1.40.0)
+
+Source: `Dino` — 3D RC cantilever column pushover with fiber section (Concrete01 + Steel01), original `column_sec.py` wrapped in a Tkinter GUI + pygmsh triangle mesh.
+
+#### 1. Tkinter GUI Wrappers Are Stripped — Parameters Become Named Constants
+
+The source `column_sec.py` wraps the entire OpenSees model in a `calculation()` function called from a Tkinter button, reading all parameters from `ttk.Entry` widgets. For standardization, strip the GUI entirely: move the default parameter values into the §3 Parameters section as named constants. The model runs headless via `python model.py` with no user interaction.
+
+**Rule:** When converting a GUI-wrapped OpenSees script, extract the GUI's default values into the Parameters section. The GUI code (`tkinter`, `ttk`, `messagebox`, `root.mainloop()`) is removed — it has no structural purpose and blocks CI/headless execution.
+
+#### 2. pygmsh Triangle Mesh → `ops.patch("rect")` — Native Fiber Commands
+
+The source uses `pygmsh` to triangulate the concrete section into 244 triangle fibers, writing centroids/areas to `triangle_data.txt`, then reads them back into individual `ops.fiber(x, y, area, matTag)` calls. pygmsh is **not available** in the opensy conda env (only the lower-level `gmsh` bindings). The standard repo approach — used by every fiber-section model — is `ops.patch("rect", matTag, ny, nz, yL, zB, yR, zT)`:
+
+```python
+# Source (pygmsh — NOT in opensy env):
+with pygmsh.geo.Geometry() as geom:
+    ...  # triangulate, extract triangle_cells
+for triangle in triangle_cells:
+    ops.fiber(centroid_x, centroid_y, area, MAT_CONCRETE)
+
+# Standardized (native OpenSees — always available):
+ops.patch("rect", MAT_CONCRETE, 20, 20,
+          -B_SEC/2, -H_SEC/2, B_SEC/2, H_SEC/2)   # 400 fibers
+```
+
+**Impact:** A 20×20 rect patch (400 fibers) vs 244 pygmsh triangles produces ~10% stiffer response (peak base shear 8810 kN vs 7980 kN). Finer concrete discretization captures more of the section's effective stiffness (§12e). This is an expected and acceptable discretization effect — not a bug.
+
+**Rule:** When the source uses an external mesher (pygmsh, meshpy, gmsh direct), replace it with `ops.patch("rect")` for rectangular concrete areas or `ops.patch("circ")` for circular. The native commands are always available and integrate with `ops.layer("straight")` for rebar. Match the fiber count approximately; document the expected stiffness difference.
+
+#### 3. `nonlinearBeamColumn` Retains Standard Signature — NOT dispBeamColumn
+
+`ops.element("nonlinearBeamColumn", tag, iNode, jNode, nIP, secTag, transfTag)` takes the section tag and IP count directly — no separate `beamIntegration` object needed. This differs from `dispBeamColumn` which requires `beamIntegration("Lobatto", integTag, secTag, nIP)` (§12l). The source's call is correct and preserved verbatim.
+
+**Rule:** `nonlinearBeamColumn` and `forceBeamColumn` take `(tag, i, j, nIP, secTag, transfTag)`. Only `dispBeamColumn` requires the separate `beamIntegration` object. Do not add `beamIntegration` to a `nonlinearBeamColumn` call.
+
+#### 4. `save_frame_resp=False` for nonlinearBeamColumn — Same as forceBeamColumn (§12v)
+
+`nonlinearBeamColumn` (like `forceBeamColumn`) creates internal section objects accessed by a 1-based index, not the user-assigned fiber-section tag. When `CreateODB` attempts to read section responses via `ops.sectionForceDeformation(tag)`, it looks for tag 0 → error. Set `save_frame_resp=False`:
+
+```python
+odb = opst.post.CreateODB(
+    odb_tag=1,
+    save_nodal_resp=True,
+    save_frame_resp=False,   # nonlinearBeamColumn internal sections (§12v)
+)
+```
+
+Nodal response tracking for deformed-shape visualization still works.
+
+#### 5. Recorder `-time` Column Is the Load Factor, Not Force — Verify Units
+
+The source `recorder Node -file node_disp.out -time -node 2 -dof 1 disp` produces col1 = `-time` = pseudo-time = load factor λ (unitless), col2 = displacement [mm]. The actual base shear = λ × reference_load. The reference load was 1000 N, so `base_shear = col1 × 1000 N`. Reading col1 directly as "shear in N" gives values 1000× too small.
+
+```python
+# Reference file interpretation:
+ref = np.loadtxt('node_disp.out')
+ref_load_factor = ref[:, 0]      # λ (unitless)
+ref_disp = ref[:, 1]             # mm
+ref_base_shear = ref_load_factor * P_LATERAL_REF   # N (= λ × 1000)
+```
+
+**Rule:** When a source recorder uses `-time`, the first column is the pseudo-time (load factor for LoadControl/DisplacementControl static). To get the physical force, multiply by the reference load magnitude. Do not interpret `-time` as force directly.
+
+#### 6. Dead Materials (Defined But Never Referenced) Should Be Omitted
+
+The source defines `ops.uniaxialMaterial('Elastic', 200, 1000E12)` — a 1e12-stiffness elastic material that is never referenced by any section or element. It served no structural purpose (likely a leftover from template code). Omit dead materials during standardization to keep the Tag Registry clean.
+
+**Rule:** During conversion, grep the source for every `uniaxialMaterial` / `nDMaterial` tag and verify it appears in at least one `section` / `element` / `fiber` / `layer` call. If not, omit it and note the removal.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-11 | 1.40.0 | **RC column pushover — Tkinter GUI stripping, pygmsh→ops.patch, nonlinearBeamColumn ODB, recorder -time semantics (§12ap):** (1) Tkinter GUI wrappers stripped — parameters become named constants in §3 (using GUI defaults); GUI code blocks CI/headless execution. (2) pygmsh triangle mesh (244 fibers) → `ops.patch("rect", ..., 20, 20)` (400 fibers) — pygmsh not in opensy env; native OpenSees fiber commands always available. Rebar `ops.layer` preserved exactly. ~10% stiffer response from finer discretization (peak 8810 kN vs 7980 kN, §12e). (3) `nonlinearBeamColumn` retains standard signature `(tag, i, j, nIP, secTag, transfTag)` — NOT dispBeamColumn (no beamIntegration object, §12l). (4) `save_frame_resp=False` in CreateODB — nonlinearBeamColumn internal sections lack user-visible tags (§12v, same as forceBeamColumn). (5) Recorder `-time` col = load factor λ (unitless), not force — base shear = λ × reference_load; reading col1 directly as N gives 1000× too small. (6) Dead materials (defined but never referenced by any section/element) omitted. SmartAnalyze (Static) replaces raw `ops.analyze(nstep)` + `ops.recorder`; lateral pattern after loadConst (§12z). Validation: gravity converges, pushover 100/100 steps (exact match on count + displacement 0.08→8.00 mm), peak shear 10.4% diff (expected discretization effect), 7 vis HTMLs + pushover_compare.png. Source: Dino conversion (3D RC cantilever column, fiber-section Concrete01+Steel01, original column_sec.py + pygmsh + Tkinter). |
+| 2026-07-11 | 1.39.0 | **Shear-hinge calibration sweep — EnergyIncr tolerance unit conversion; equalDOF+Plain nodeReaction spurious shear; HystereticSM backbone θ→δ; source recorder semantics (§12ao):** (1) Source Tcl `test EnergyIncr 1e-4` is in **kip·in** energy units — in N·mm it MUST be scaled by `kip*inch` (=112985), giving TOL≈11.3 N·mm. Using the unscaled 1e-4 makes EnergyIncr ~100000× too tight → analysis stalls at ~30% of the protocol. Detection: load-factor spam >1e5 and `EnergyIncr` Norm deltaR >> Norm deltaX with displacement essentially converged. General rule: EnergyIncr tol ×`kip*inch`, NormDispIncr tol ×`inch`, NormUnbalance tol ×`kip`. (2) Under `equalDOF(master, slave, 1, 3)` + `constraints("Plain")`, `nodeReaction(retained_node, 2)` includes the MP-constraint force past first yield, giving shear values 2–3× the backbone capacity. Fix: read base shear from the zeroLength hinge element force (`ops.eleResponse(ELE_HINGE, "forces")[1]`), NOT `nodeReaction`. Cross-ref §12ak: there shear diverted to column-base node; here with Plain+DOF-2 hinge the retained-node reaction is contaminated. (3) `HystereticSM` (Mazzoni 2023) is available in standard OpenSeesPy — `-posEnv`/`-negEnv` backbone is force-deformation (y=force, x=deformation). (4) The source's `RunStaticLoading.tcl` 6-algorithm fallback ladder (Newton→Newton-initial→ModifiedNewton→ModifiedNewton-initial→Broyden→NewtonLineSearch) with per-step `DisplacementControl` integrator reset is a documented §3c/§10 exception to SmartAnalyze. (5) HystereticSM backbone x-axis is deformation not rotation — source (V,θ) pairs need θ→δ=θ×L conversion before passing to the material, else the hinge is L× too stiff. (6) Source `disp.out` col1 is NOT pseudo-time but shear — the custom per-step integrator reset makes `-time` track displacement; verify recorder semantics against the post-processor's column indexing. Validation: all 7 Naish (2015) cases match source exactly on step count (1078/1078, 1108/1108, etc.), within 1% on peak shear (159.2/159.2, 210.8/210.9 kip), within 0.6–5.3% on hysteretic energy; 7 vis HTMLs per case (V1 nodes, V2 model, V3 loads, V4 pre-analysis, V5 deformed peak, V6 step slider, V7 animation). Source: ZhongKuanshi conversion (7-case HystereticSM shear-hinge calibration sweep, Zhong Stanford 2016 / Naish 2015). |
 | 2026-07-10 | 1.38.0 | **3D frame-wall building — rigidDiaphragm needs Transformation; per-story/per-IP tag scheme must pass absolute tags; corotTruss ODB scoping; triaxial-GM-with-no-repo-files substitute (§12an):** (1) Any model with rigidDiaphragm/equalDOF/MP constraints requires `constraints("Transformation")` for BOTH gravity and dynamic — `Plain` cannot distribute MP-constraint reactions (consistent with §12x-6; Penalty §12ak is only for zeroLength-hinge models). (2) A helper `_df(story, tag, ...)` called as `_df(s, 201, ...)` collides tags across stories because the helper used the relative `tag` (201) directly instead of `s*1000+201`, and the `story` param was dead — `MapOfTaggedObjects::addComponent - not adding as one with similar tag exists`. Fix: helpers take the ABSOLUTE tag computed by the caller; source scheme is `story*1000+{group}`. (3) corotTruss braces need `truss_tags`/`save_trust_resp` in the ODB, not `frame_tags` (§12ai); for this model `save_frame_resp=False`. (4) Source runs 13 triaxial base_motions NOT in repo → single-component NR94cnp.txt X-dir validation substitute (VividConcrete/elkady2019 pattern), run_dynamic() generic via GM_FILE/GM_DT/GM_NPTS/GM_DIR; GM after loadConst (§12i). (5) This source's rectangular confinement `ke=ke1·ke2·ke3/(1-rou_cc)` differs from the VividConcrete column models' `(nl-2)/nl*(1-s/b)` — port each source's CreateConcreteMaterial.tcl ke verbatim, don't reuse another model's. Validation: gravity lf=1.00, T1=0.577s T2=0.512s T3=0.163s (physical 5-story RC wall-frame), dynamic 2495/2495 steps converge, roof X-drift -172 mm (0.94%), peak inter-story drift 1.39% (story 2), 6 vis HTMLs incl. step slider. Source: VividCond_UCSD_full_fivestory conversion (5-story RC frame-wall building, 2 perimeter frames + 2 walls + corotTruss braces + rigid diaphragms, Zhong Stanford/UCSD 2017-2019). |
 | 2026-07-10 | 1.37.0 | **Long cyclic protocols — fixed-increment fallback chain stalls mid-protocol; SmartAnalyze sub-stepping + vis_defo for the peak plot (§12am):** (1) A faithful 1:1 port of the source `RunStaticLoading.tcl` manual fallback chain (Newton→Newton -initial→ModifiedNewton→ModifiedNewton -initial→Broyden→NewtonLineSearch) STALLS mid-protocol at step ~14529 (~1.6% drift, 44 mm) of a 22455-pt cyclic protocol — every fallback retries the SAME full increment with a different algorithm, but on a hard unloading step the fiber-section tangent is ill-conditioned over the whole increment so no single full-size step converges. NOT collapse: the same step fails even earlier (~step 13475) with DuctileFracture removed (`ForceBeamColumn3d::update() - section failed in setTrial`). Fix: `opst.anlys.SmartAnalyze` (repo convention, elkady2019/padgett_jamie) with `relaxation=0.5`, `minStep=1e-3`, `algoTypes=[40,10,20,30,50,60]`; feed ONE target increment at a time via `static_split([incr], maxStep=abs(incr))` so recorders keep 1:1 alignment with the experimental protocol. (2) `vis_05_peak_deformed.html` was silently missing because `post_process` called `plot_nodal_responses(defo_scale=True)` directly under a bare `try/except`; fixed via the repo `vis_defo` helper (numeric scale, absMax step). (3) `openseespywin` gates on Python 3.8 — the runnable interpreter is the conda `opensy` env (3.12.12). Validation: cyclic 22455/22455 steps (was 14528), peak drift ±158 mm = 6.23 in / 5.8% (was stalled at 44 mm), base shear ±13.25 kip (was ~4.6 kip), 44 force sign-changes → proper loops, 5 vis HTMLs. Source: VividConcrete_RCconc_full_subassembly conversion (3D square RC column, fiber forceBeamColumn + 2 zeroLengthSection bar-slip, Zhong Stanford 2017). |
 | 2026-07-09 | 1.36.0 | **Imperial→N-mm mass double-conversion trap + rank-deficient-mass ARPACK eigen failure (§12al):** (1) When the source computes mass as `m = P/g` and P is converted to Newtons, dividing by g[mm/s²] already gives N·s²/mm — multiplying again by `kip/inch` (175.13) double-converts to a 4448× too-heavy mass → T1 = 56 s instead of 0.85 s. Detection: T1 off by ~4000× (the kip factor). Fix: `m = P_GRAVITY[N] / (G_INCH*inch)` with no extra factor. (2) A rank-deficient mass matrix (mass on only 1 node / 2 DOFs) defeats the ARPACK subspace eigen solver (`ArpackSolver::Error info = -9999 / Could not build an Arnoldi factorization`); static lateral stiffness is correct so it's not a mechanism. Fix: `ops.eigen("-fullGenLapack", N)` — deviates from §12h-2 (which addresses stiffness contrast, not mass rank); fullGenLapack factorizes M⁻¹K directly and resolves rank-deficient M. (3) Verified VividConcrete: T1 56.6s→0.849s after mass fix; dynamic 2490/2490 Northridge steps converge. Source: VividConcrete conversion (3D circular RC column, fiber forceBeamColumn + zeroLengthSection bar-slip, Zhong Stanford 2017). |
