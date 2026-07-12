@@ -4313,10 +4313,183 @@ Debug script (fixed incr)    Standardized (SmartAnalyze)   Reference
 
 ---
 
+### §12au — Arbitrary (Irregular) Cross-Section Cyclic: Verbatim Fibre Replay, 3D Fibre `-GJ`, `static_split` Cadence (v1.45.0)
+
+Source: `Dino_LowCycle` — low-cycle cyclic analysis of a 3 m RC cantilever column with an irregular (re-entrant) "arbitrary" cross-section (original `co.tcl` + 911-fibre `section_fiber.tcl`). The repo's first irregular-section cyclic model. Validation: **1000/1000 steps, peak shear +1684.9/−2026.4 kN matching `node2.out` to 0.0%, per-point RMS 2.44 kN (~0.12%).**
+
+#### 1. Verbatim fibre replay — do NOT re-mesh an irregular section
+
+The section has re-entrant corners (a top-left appendage + a mid-height notch) meshed into 894 concrete + 17 rebar fibres. Re-meshing (via `FiberSecMesh`/`sectionproperties`) risks both (a) A/I drift vs the source mesh — the §12aq lesson, where finer-vs-coarser of the *same* area converges but a *different* triangulation of an irregular polygon does not — and (b) getting the re-entrant outline wrong (`shapely TopologyException`). The faithful approach: parse the source fibre file at runtime and replay each fibre verbatim via `ops.fiber(y, z, A, matTag)`. This guarantees byte-identical section properties (verified: A_conc = 1 107 833 mm², 17 rebar) and hence a 0.0% response match.
+
+```python
+# section_fiber.tcl line:  "fiber  -511.934  -503.548  1207.39  1"
+pat = re.compile(r"^\s*fiber\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+(\d+)\s*$")
+ops.section("Fiber", SEC, "-GJ", GJ)     # -GJ required (see point 2)
+for (y, z, area, mat) in parsed_fibers:
+    ops.fiber(y, z, area, mat)           # section-local (y, z) = source (x, y)
+```
+
+**Rule:** For irregular / re-entrant / arbitrary cross-sections, replay the source's fibres verbatim (`ops.fiber`); reserve `FiberSecMesh`/`ops.patch` re-meshing for simple regular sections (rectangular, circular). Detection: if a re-meshed section's pushover/cyclic response diverges from the reference for no obvious solver reason, suspect A/I drift from the re-triangulation.
+
+#### 2. 3D `section("Fiber")` REQUIRES `-GJ` in OpenSeesPy (Tcl only warns)
+
+The source Tcl builds the fibre section with no `-GJ` — Tcl merely prints "WARNING torsion not specified" and continues (the `section Aggregator ... T` supplies torsion separately). **OpenSeesPy raises an `OpenSeesError` and stops** at `section("Fiber", 1)` without `-GJ`. The fix: supply a principled GJ computed from the concrete Young's modulus and the fibre polar second moment of area — the value is a formality because the Aggregator's torsion material dominates, but it must be physically defensible (not an arbitrary placeholder). `GJ = G·J` where `G = Ec/(2(1+ν))` and `J = Σ area·(y² + z²)` over the fibres.
+
+**Rule:** A 3D `ops.section("Fiber", tag)` MUST include `-GJ` (or `-torsion matTag`); unlike Tcl, OpenSeesPy errors rather than warns. When the section also has an Aggregator supplying torsion, any reasonable GJ on the inner Fiber section is fine (the Aggregator's torsion material governs). Detection: `OpenSeesError('See stderr output')` at `section("Fiber", ...)` immediately after the call, with the "torsion not specified" warning on stderr.
+
+#### 3. `static_split([cycle_delta], maxStep=|incr|)` — feed the per-cycle DELTA, not cumulative position
+
+For a fixed-increment cyclic protocol with a 1:1 recorder (e.g. this source: 100 steps/cycle × 10 cycles = 1000 rows), SmartAnalyze's `static_split(targets, maxStep)` must be called per cycle with the cycle's **displacement change from the current position** as `targets[0]`, NOT the cumulative absolute destination. `static_split` interprets each target as an increment from the *current* state and splits it into `maxStep`-sized segments:
+
+```python
+# CORRECT — 100 segments/cycle, 1000 total
+for incr in CYCLE_INCR:                              # +0.05,-0.10,...,-0.50 mm/step
+    cycle_delta = incr * N_STEPS_PER_CYCLE           # +5, -10, +15, -20, ... mm
+    segs = analysis.static_split([cycle_delta], maxStep=abs(incr))   # 100 segs
+# WRONG — passing cumulative abs position: cycle 2's "−5.0" yields only 50 segs
+#         (treated as a −5 mm increment from +5, landing at 0, not −5) → 591/1000 steps.
+```
+
+The bug signature: the model "completes" all 10 cycles (🎉 Successfully finished × N) and reaches the final peak displacement, but the converged-step count is far below the expected (e.g. 591/1000) and the per-cycle progress bar shows `1/1` for later cycles instead of `100/100`. This is a *cadence* bug, not a convergence bug — the physics is right (peaks match the reference) but the recorder is under-sampled because the later cycles' large displacements get coalesced into few segments.
+
+**Rule:** When driving a fixed-increment cyclic protocol with `static_split` + `StaticAnalyze` for 1:1 recorder alignment, pass each cycle's displacement **delta** (`incr × N_steps_per_cycle`) as the single target, with `maxStep = |incr|`. Do NOT pass the cumulative absolute displacement. Detection: all cycles "finish" but `len(history) ≪ N_expected`, and per-cycle progress bars show 1 segment instead of N. Cross-ref §12am (the per-increment `static_split([incr], maxStep=abs(incr))` pattern).
+
+#### 4. DisplacementControl recorder `-time` col = lateral load-factor λ; base shear = λ × reference load
+
+The source `recorder Node -file node2.out -time -node 100 -dof 1 disp` writes col 0 = the pseudo-time (lateral pattern load-factor λ) and col 1 = the recorded displacement. Because displacement is *imposed* by DisplacementControl, the validation quantity is the **λ (hence base-shear) column at the forced displacements**, not the displacement column (which is tautologically matched). Base shear = λ × P_LATERAL_REF (the reference lateral load, here 100 kN). This is the §12ap-5 / §12aq-3 rule restated for the cyclic case.
+
+**Rule:** For a DisplacementControl-driven cyclic/pushover model validated against a `-time` recorder, compute base shear as `λ × P_LATERAL_REF` and validate on the λ column (displacement is imposed). Cross-ref §12ap-5.
+
+#### 5. `.xlsx` readable with stdlib alone when `openpyxl`/`pandas.read_excel` unavailable
+
+The `opensy` env has neither `openpyxl` nor `xlrd`/`python-calamine`, so `pandas.read_excel` fails (`Import openpyxl failed`). For a secondary plot sourced from a workbook (here the P-M interaction surface), parse the `.xlsx` (a zip of OOXML) directly with `zipfile` + `xml.etree.ElementTree`: locate the target sheet via `xl/workbook.xml` + `xl/_rels/workbook.xml.rels`, then iterate `sheetN.xml`'s `<row>/<c>/<v>` cells keyed by column letter. Avoids adding a dependency for a non-essential plot. The units of the workbook columns must be verified independently (here the PMM sheet was already in kN/kN·m, not N/N·mm — a naive `÷1e3`/`÷1e6` produced a 1000×/1e6× too-small surface).
+
+**Rule:** When the env lacks `openpyxl` and the xlsx data is simple (numeric cells, no shared strings), read it with `zipfile` + `ElementTree` rather than installing a package — but verify the column units against a known physical quantity (e.g. the gravity demand point must sit inside a P-M surface) before plotting.
+
+#### Detection / Rules
+- **Irregular section:** verbatim fibre replay (`ops.fiber`), not `FiberSecMesh`/`ops.patch` re-meshing. Detection: re-meshed section's response diverges from reference for no solver reason ⇒ A/I drift.
+- **3D Fiber `-GJ`:** mandatory in OpenSeesPy (Tcl only warns). Compute `GJ = G·Σ area·(y²+z²)`; Aggregator torsion governs regardless. Detection: `OpenSeesError` at `section("Fiber",...)`.
+- **`static_split` cyclic cadence:** pass per-cycle delta (`incr×N`), not cumulative abs position, with `maxStep=|incr|`. Detection: all cycles finish but `len(history) ≪ N_expected`; progress bar `1/1` not `100/100`. Cross-ref §12am.
+- **DisplacementControl `-time` col = λ:** base shear = λ × P_LATERAL_REF; validate on the λ column. Cross-ref §12ap-5.
+- **xlsx via stdlib:** `zipfile` + `ElementTree` when `openpyxl` absent; verify column units against a physical check.
+
+---
+
+### §12av — Simplified Lateral MDOF (Pure Eigen): ElasticTimoshenkoBeam Shear-Building Idealization, Mass-Unit Double-Conversion, No-Reference Theory Validation (v1.46.0)
+
+Source: `Dino_MDOF_eigen` — pure eigen/modal analysis of a 12-story uniform lumped-mass shear building (original `co.tcl`, 99 lines, only `eigen 10` + mode-shape recorders, no loads/gravity/analysis step). The repo's first **pure eigen-only** model and first **MDOF shear-building** model. Validation: **all 10 periods match closed-form shear-building theory to 0.0000%** (T1=1.582 s … T10=0.107 s).
+
+#### 1. ElasticTimoshenkoBeam 3D REQUIRES explicit Avy/Avz (11-arg form)
+
+OpenSeesPy's `element("ElasticTimoshenkoBeam", tag, i, j, ...)` in 3D requires the 11-arg form `(tag, iNode, jNode, E, G, A, Jx, Iy, Iz, Avy, Avz, transfTag)` — the 9-arg form without shear areas errors with `"not enough args provided, want: ... $Avy $Avz"`. (Tcl is equally strict; this is not a Tcl-vs-Python divergence like §12au's `-GJ`, but the signature is easy to mis-parse from a space-separated Tcl line where `Avy Avz transfTag` run together.) Cross-ref §12l (dispBeamColumn beamIntegration), §12au (element-signature gotchas).
+
+**Rule:** For 3D `ElasticTimoshenkoBeam`, always supply Avy and Avz explicitly. Detection: `OpenSeesError('See stderr output')` + "not enough args ... $Avy $Avz" at element creation.
+
+#### 2. Shear-building idealization via ElasticTimoshenkoBeam — inflate A/J/Iy/Iz, leave Av finite
+
+A lumped-mass shear building can be built with beam elements by setting A = Jx = Iy = Iz to a huge value (1e20) so axial, torsional, and bending stiffness are effectively rigid (~3.7e9× stiffer than shear), leaving **shear as the only finite flexibility**: `k_story = G · Av / L`. With G=1e5 MPa, Av=3000 mm², L=3000 mm → k = 1e5 N/mm/story. The resulting 12-element vertical chain is a clean 12-DOF discrete shear building (the K matrix is the tridiagonal `[k, 2k, …, 2k] / −k` form). This is a cleaner alternative to zeroLength shear springs + equalDOF for MDOF models where beam visualization is wanted.
+
+**Rule:** For a beam-element shear building, set A=J=Iy=Iz=1e20 (rigid) and a finite Avy=Avz; the story stiffness is then `k = G·Av/L`. Detection: if a Timoshenko-beam building's periods don't match `2√(k/m)·sin(...)`, check whether bending (EI) is leaking into the lateral stiffness — if Iy/Iz isn't inflated enough, the element adds flexural stiffness on top of shear.
+
+#### 3. Mass-unit double-conversion trap (restated for the eigen case) — T off by 1000×
+
+The source's `mass 1 1.00E+002` is the literal number **100 in N·s²/mm** (the mass unit of this N-mm system, which equals 1 tonne — `kg = N·s²/mm` in `units.py`, `tonne = 1000·kg`). Multiplying by `tonne` (writing `M = 100 * tonne`) double-converts to 100 000, making the mass 1000× too large → every period √1000 = 31.6× too long (T1 came out **50.03 s** instead of 1.582 s, still matching "theory" 0.000% because the theory formula used the same wrong m — the bug was self-consistent and invisible until checked against an absolute expectation). This is the §12al / §12b mass-unit rule restated for the eigen-only case: mass numbers from an N-mm source are already in N·s²/mm; do NOT re-multiply by `tonne`/`kg`.
+
+**Rule:** In an N-mm-MPa model, use the source's mass number directly (it is already in N·s²/mm = tonnes); do NOT multiply by `tonne` or `kg` from `units.py`. Detection: T₁ off by ~30–1000× (here 31.6×) with the sim-vs-theory diff still ~0% (the double-conversion is self-consistent). The catch is that a no-reference eigen model validated only against a hand-coded theory formula will PASS while being 30× wrong — so always sanity-check T1 against an engineering expectation (a 12-story building is ~1–2 s, NOT 50 s). Cross-ref §12al.
+
+#### 4. No-reference validation: pure modal model validates against structural theory
+
+When `tcl_ref/` ships no reference output (no `Periods.txt`, no `.out` mode-shape files — common for a teaching/example MDOF source), the validation anchor is the closed-form theory. For a uniform N-DOF shear building: `ω_j = 2·√(k/m)·sin((2j−1)·π/(4N+2))`. Here all 10 modes matched to 0.0000%, confirming both the element idealization (point 2) and the mass scaling (point 3 — after the tonne fix). The §12ar `_pct()` idiom (sim vs reference, flag >~1%) generalizes to sim vs theory.
+
+**Rule:** A pure eigen model with no reference file validates against the appropriate closed-form frequency formula; print per-mode sim-vs-theory and sanity-check T1 against an engineering range (a multi-story building is 0.1–5 s, a flexible long-period structure 5–10 s; 50 s for a 12-story building is a units bug).
+
+#### 5. Layout adaptation for pure-eigen — omit only §11; §12 hosts eigen + save_eigen_data
+
+A pure-eigen model has real nodes/elements/BCs/ODB (unlike §12ar's section-level model, which had none) but no loads/gravity/analysis. The mildest §3 layout adaptation yet: keep §0–§10 (Materials may also be omitted if the elements take E,G as literals — here ElasticTimoshenkoBeam does, so the source's 3 dead Elastic materials are dropped per §12ap-6), **omit only §11 Loading** with a comment, and host `ops.eigen()` + `odb.save_eigen_data(mode_tag=m)` in §12. Mode shapes are visualized via `opst.vis.plotly.plot_eigen_table` / `plot_eigen(subplots=True)` / `plot_eigen_animation` (Guan2020 precedent), reading the ODB; custom matplotlib PNGs (periods bar chart, mode-shape-vs-height) supplement per `plot_utils.py` style.
+
+**Rule:** For a pure-eigen (no-load) model, omit §11 Loading only; keep §7–§10; §12 hosts the eigen call + `save_eigen_data`. Visualize with `opst.vis.plotly.plot_eigen*` (Guan2020) + matplotlib. Cross-ref §12ar (which omits §7–§11 — a stronger adaptation, forced by the absence of any structural mesh).
+
+#### Detection / Rules
+- **ElasticTimoshenkoBeam Avy/Avz:** mandatory in 3D (11-arg form). Detection: "not enough args ... $Avy $Avz" at element creation.
+- **Shear-building via Timoshenko:** A=J=Iy=Iz=1e20 (rigid) + finite Av → k=G·Av/L. Detection: periods don't match shear-building theory ⇒ bending stiffness leaking in (inflate Iy/Iz).
+- **Mass double-conversion:** source mass number is already N·s²/mm; do NOT ×`tonne`. Detection: T1 off ~30–1000× but sim-vs-theory still ~0% (self-consistent bug); sanity-check T1 against engineering range (12-story ≈ 1–2 s, NOT 50 s). §12al.
+- **No-reference validation:** closed-form theory `ω_j = 2√(k/m)·sin((2j−1)π/(4N+2))` for a uniform shear building; here 0.0000% all 10 modes.
+- **Pure-eigen layout:** omit §11 only; keep §7–§10; §12 hosts eigen + save_eigen_data. plot_eigen* (Guan2020) + matplotlib. Cross-ref §12ar.
+
+---
+
+### §12aw — Nonlinear RC Layered-Shell Wall: PlaneStressUserMaterial→PlateFromPlaneStress, Steel02→PlateRebar, `section LayeredShell`, ShellDKGQ, Softening-Solver Mismatch Is Directional (v1.47.0)
+
+Source: `Dino_LayeredShell_wall` — elastoplastic pushover of a 1.5 m × 6.0 m × 0.2 m RC shear wall, meshed 6×10 into 50 ShellDKGQ quad shells over a 6-layer `LayeredShell` section (original `co.tcl`). The repo's first **nonlinear-shell** model (§12as was an elastic-shell buckling model; §12au/§12z were nonlinear fibres). Validation: **200/200 pushover steps** converged; elastic stiffness matches the reference to **1.8%** (0–2.4 mm drift); post-cracking branch diverges (sim peak 205.6 kN vs ref 148.6 kN, 27.7%) — a §12at-class solver mismatch (see point 5, and notably the *inverse* of §12at's buckling case).
+
+#### 1. Nonlinear RC layered-shell recipe — the PlaneStress + PlateRebar material chain
+
+Unlike §12as's elastic-shell chain (`ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section`), a nonlinear RC layered shell builds a 3-deep material wrapper per layer type. **Concrete:** `PlaneStressUserMaterial` (7-param smeared RC: fpc, fpt, then 5 strain stops) → `PlateFromPlaneStress` (adds a linear out-of-plane shear modulus `G_out` so the 2D plane-stress concrete can carry transverse shear in a plate). **Rebar:** `Steel02` (uniaxial) → `PlateRebar` (orients the 1D steel at a given angle within the layer plane — 90° for vertical rebar, 0° for horizontal). Then `section("LayeredShell", tag, nLayers, mat1 t1 mat2 t2 ...)` stacks layers from the −z face to the +z face.
+
+```python
+# Concrete: PlaneStressUserMaterial (7-param) -> PlateFromPlaneStress (+G_out)
+ops.nDMaterial("PlaneStressUserMaterial", 2, 40, 7, fpc, fpt, -6.13, -2e-3, -5e-2, 1e-3, 5e-2)
+ops.nDMaterial("PlateFromPlaneStress", 4, 2, 12.77e9)        # wraps mat 2 + out-of-plane G
+# Rebar: Steel02 -> PlateRebar (angle in the layer plane)
+ops.uniaxialMaterial("Steel02", 5, 582., 205000., 0.0033, 14, 0.925, 0.15)   # vertical
+ops.nDMaterial("PlateRebar", 7, 5, 90)
+# Section: 6-layer sandwich (rebar / conc / conc / rebar, symmetric)
+ops.section("LayeredShell", 701, 6, 8,0.8, 7,0.8, 4,100, 4,100, 7,0.8, 8,0.8)
+```
+
+**Rule:** For a nonlinear RC shell, the material chain is `PlaneStressUserMaterial → PlateFromPlaneStress` (concrete) and `Steel02 → PlateRebar` (rebar), assembled by `section("LayeredShell", ...)` which the shell element (ShellDKGQ / ShellNLDKGQ) takes directly as its section tag. No `PlateFiber`/`section("PlateFiber")` indirection — that's the elastic-shell path (§12as). Layer order is −z face → +z face; a symmetric rebar/conc/conc/rebar sandwich is the standard RC-wall layout.
+
+#### 2. `PlaneStressUserMaterial` arg-order trap — the 7 params are NOT `(fpc, fpt, E, …)`; pass them verbatim
+
+The 7 trailing params of `PlaneStressUserMaterial` are `(fpc, fpt, epstu, epscu0, epucu, …)` in a smeared-RC convention (peak compressive/tensile strength then *strain* stops) — NOT the `(E, ν, fy, …)` of `ElasticIsotropic`/`J2Plasticity`. The third arg here is `-6.13` (a strain stop, negative for compression), which a naive reader would parse as a Young's modulus sign error. Reinterpreting or "tidying" these args silently corrupts the stress-strain law. **Pass the 7 params verbatim from the source** with a comment flagging the convention, as §12ap (concrete `ops.patch`) and §12au (verbatim fibre replay) do for their verbatim quantities.
+
+**Rule:** `PlaneStressUserMaterial`'s 7 params are strength-then-strain-stops in a smeared-RC convention; do NOT reinterpret them as elastic constants. Detection: if the wall's elastic stiffness is wildly off (≫/≪ reference) in the pre-cracking range, suspect a mis-parsed arg; if only the post-cracking branch differs (elastic range fine), the args are correct and the gap is solver-side (point 5).
+
+#### 3. Gravity phase — manual `LoadControl` loop + `loadConst` BEFORE the lateral pattern
+
+The source does gravity (axial UZ load at the top edge, `analyze 10`) then `loadConst` (freezes the gravity load at λ=1) then defines the lateral pattern and runs the pushover. SmartAnalyze forces `DisplacementControl`, so the gravity `LoadControl` phase is a **manual `ops.analyze(1)` loop** (the §3c permitted exception, cross-ref §12z-2), and the lateral pattern MUST be defined **after** `loadConst` — a DisplacementControl pattern frozen at λ=0 yields an infinite load factor at step 0 (§12z-1). `loadConst("-time", 0.0)` resets the pseudo-time so the pushover λ starts from 0.
+
+```python
+# Phase 1: gravity (LoadControl, manual loop) THEN loadConst
+ops.integrator("LoadControl", 1.0/N_GRAV_STEPS)
+for _ in range(N_GRAV_STEPS): ops.analyze(1)
+ops.loadConst("-time", 0.0); ops.wipeAnalysis()
+# Phase 2: lateral pattern AFTER loadConst, then DisplacementControl pushover
+define_lateral_loads()    # §12z-1: must follow loadConst
+```
+
+**Rule:** For a gravity-then-pushover RC model, run gravity as a manual `LoadControl` loop, call `loadConst("-time", 0.0)`, `wipeAnalysis()`, THEN define the lateral pattern and run the DisplacementControl pushover. Defining the lateral pattern before `loadConst` makes the first pushover step carry infinite lateral force. Cross-ref §12z-1/§12z-2.
+
+#### 4. `ShellDKGQ` takes the `LayeredShell` section tag directly; per-increment `static_split` cadence
+
+`ShellDKGQ` (discrete-Kirchhoff + Generalized-Quadrilateral, 4-node) — like `ShellNLDKGQ` (§12as) — takes the section tag as its last arg with **no** `"-nlGeo"`/thickness flag. The pushover uses the §12as-3 SmartAnalyze recipe (relaxation=0.5, minStep, algorithm fallback, loose-tol recovery), but here each 0.1 mm increment is fed via `static_split([incr], maxStep=incr)` so the recorder stays 1:1 with the 200-step reference (the §12am per-increment cadence, not §12au's per-cycle cadence).
+
+**Rule:** ShellDKGQ / ShellNLDKGQ take the LayeredShell (or any) section tag directly as the element's last arg. For a fixed-increment pushover with a 1:1 recorder, drive SmartAnalyze one increment at a time: `static_split([incr], maxStep=incr)` then `StaticAnalyze(node, dof, seg)`. Cross-ref §12as-3, §12am, §12au-3.
+
+#### 5. Softening-solver mismatch is DIRECTIONAL — SmartAnalyze can be stiffer OR softer than the fixed-increment reference (the inverse of §12at)
+
+This wall's softening `PlaneStressUserMaterial` has a non-unique post-cracking branch; the tracked peak depends on solver strategy. Here SmartAnalyze (relaxation + loose-tol recovery) **converges all 200 steps** and tracks a **stiffer rebar-dominated branch (205.6 kN)**, while the reference's fixed-increment `KrylovNewton` run tracks the **softer concrete-crushing branch (148.6 kN)** and stalls at 189/200 (11 steps lost to softening). The elastic branches agree to **1.8%** (verified point-by-point: 1.8% at 0.1–2.4 mm, crossing at ~2.5 mm, then diverging — 25% by 6 mm, 28% at peak), confirming the model definition is correct; the divergence is purely the solver's choice of post-cracking equilibrium path.
+
+This is the **inverse** of §12at's buckling post-mortem, where the *fixed-increment* script overshot the limit point to a *higher* peak (5129 vs 630 kN) and SmartAnalyze gave the *lower*, physically-correct Euler peak. Generalised: **for a softening/snap-through model the fixed-increment path and the adaptive (SmartAnalyze) path are both *valid equilibrium paths* but need not agree on which branch they settle on; the sign and magnitude of the mismatch are solver-dependent and not, by themselves, evidence of a model error.** The model-error detector (from §12at) is the *elastic* range: if the pre-nonlinear stiffness matches the reference (here 1.8%), the materials/section/mesh are correct and the post-nonlinear gap is solver-side; if the elastic range is off, the model definition is wrong.
+
+**Rule:** A softening/snap-through model's post-nonlinear peak is solver-dependent and can be either higher OR lower than a fixed-increment reference (here higher; §12at's buckling was lower). Validate the model on the **elastic-range stiffness match** (here 1.8% to ~2.5 mm) — if that matches, the model is correct and the post-cracking divergence is a §12at-class solver mismatch, not a bug. Cross-ref §12at (inverse case), §12as-3, §12z.
+
+#### Detection / Rules
+- **Nonlinear RC shell recipe:** `PlaneStressUserMaterial → PlateFromPlaneStress` (concrete) + `Steel02 → PlateRebar` (rebar) → `section("LayeredShell")`; shell element takes the secTag directly. NOT the `PlateFiber` elastic-shell path (§12as).
+- **`PlaneStressUserMaterial` 7 args:** strength-then-strain-stops smeared-RC convention; pass verbatim, do NOT reinterpret as elastic constants. Detection: elastic stiffness wildly off ⇒ mis-parsed arg; only post-cracking off ⇒ args fine, gap is solver-side.
+- **Gravity + loadConst ordering:** manual `LoadControl` gravity loop → `loadConst("-time",0.0)` → `wipeAnalysis()` → define lateral pattern → DisplacementControl pushover. Lateral pattern before `loadConst` ⇒ infinite force at step 0 (§12z-1).
+- **`static_split` pushover cadence:** one increment at a time, `static_split([incr], maxStep=incr)` for 1:1 recorder (§12am per-increment; cf §12au per-cycle).
+- **Softening solver-mismatch is directional:** post-nonlinear peak can be higher (here) OR lower (§12at) than the fixed-increment reference; both are valid equilibrium paths. Model correctness is decided by the **elastic-range stiffness match** (1.8% here). Cross-ref §12at (inverse), §12as-3, §12z.
+
+---
+
 ## 13. Versioning & Change Log
 
 | Date | Version | Change |
 |------|---------|--------|
+| 2026-07-12 | 1.47.0 | **Nonlinear RC layered-shell wall — PlaneStressUserMaterial→PlateFromPlaneStress, Steel02→PlateRebar, section LayeredShell, ShellDKGQ, softening-solver mismatch is directional (§12aw):** (1) **Nonlinear RC shell recipe:** concrete via `PlaneStressUserMaterial` (7-param smeared RC) → `PlateFromPlaneStress` (+out-of-plane G); rebar via `Steel02` → `PlateRebar` (90°/0°); assembled by `section("LayeredShell", tag, nLayers, mat t …)` which ShellDKGQ takes directly. NOT the elastic `PlateFiber` chain of §12as. (2) **`PlaneStressUserMaterial` arg-order trap:** the 7 trailing params are strength-then-strain-stops (e.g. arg 3 = −6.13 is a compressive strain stop, NOT a Young's modulus); pass verbatim from source, do NOT reinterpret as elastic constants. Detection: elastic-range stiffness wildly off ⇒ mis-parsed arg; only post-cracking off ⇒ args correct, gap is solver-side. (3) **Gravity + loadConst ordering:** manual `LoadControl` loop → `loadConst("-time",0.0)` → `wipeAnalysis()` → define lateral pattern AFTER loadConst → DisplacementControl pushover (lateral pattern before `loadConst` ⇒ infinite force at step 0; §12z-1). (4) **`static_split` pushover cadence:** one 0.1 mm increment at a time, `static_split([incr], maxStep=incr)` then `StaticAnalyze(node,dof,seg)`, for a 1:1 200-step recorder (§12am per-increment; cf §12au per-cycle). (5) **Softening-solver mismatch is DIRECTIONAL (the inverse of §12at):** this wall's softening PlaneStressUserMaterial has a non-unique post-cracking branch — SmartAnalyze (relaxation + loose-tol recovery) converges all 200/200 steps onto a *stiffer* rebar-dominated branch (205.6 kN) while the reference's fixed-increment KrylovNewton tracks the *softer* concrete-crushing branch (148.6 kN, stalls 189/200). In §12at's buckling the direction was reversed (fixed-increment *overshot* higher; SmartAnalyze gave the lower Euler peak). Rule: the post-nonlinear peak can be higher OR lower than a fixed-increment reference and both are valid equilibrium paths — model correctness is decided by the **elastic-range stiffness match** (verified 1.8% to ~2.5 mm drift; curves cross at ~2.5 mm, reach 25% by 6 mm). Validation: 200/200 steps, 27.7% peak diff (accepted §12at-class solver mismatch, NOT a model error). 7 vis HTMLs + pushover_compare.png + pushover_curve.csv. Source: Dino_LayeredShell_wall conversion (1.5×6.0×0.2 m RC shear wall, 50 ShellDKGQ, 6-layer LayeredShell, original co.tcl). |
+| 2026-07-12 | 1.46.0 | **Simplified lateral MDOF (pure eigen) — ElasticTimoshenkoBeam shear-building idealization, mass-unit double-conversion, no-reference theory validation (§12av):** (1) **ElasticTimoshenkoBeam 3D requires explicit Avy/Avz (11-arg form)** `(tag,i,j,E,G,A,Jx,Iy,Iz,Avy,Avz,transfTag)`; the 9-arg form errors ("not enough args ... $Avy $Avz"). Cross-ref §12l/§12au. (2) **Shear-building idealization via ElasticTimoshenkoBeam:** A=Jx=Iy=Iz=1e20 (rigid axial/bending/torsion) + finite Avy=Avz=3000 → only shear is flexible → k_story = G·Av/L = 1e5 N/mm. A clean 12-element chain is a 12-DOF discrete shear building (cleaner than zeroLength springs + equalDOF when beam visualization is wanted). Detection: if periods don't match shear-building theory, bending stiffness (EI) is leaking in → inflate Iy/Iz. (3) **Mass-unit double-conversion trap (restated for eigen):** the source's `mass 1 1.00E+002` is already in N·s²/mm (= 1 tonne); multiplying by `tonne` double-converts to 100000 → T1 came out 50.03 s instead of 1.582 s (31.6× too long), yet sim-vs-theory was still 0.000% because the theory formula used the same wrong m (self-consistent, invisible bug). Fix: use the raw mass number directly; do NOT ×`tonne`/`kg`. Detection: T1 off ~30–1000× with sim-vs-theory ~0%; ALWAYS sanity-check T1 against an engineering range (12-story ≈ 1–2 s, NOT 50 s). Cross-ref §12al/§12b. (4) **No-reference validation via structural theory:** `tcl_ref/` shipped no Periods.txt/.out files; validated against closed-form `ω_j = 2√(k/m)·sin((2j−1)π/(4N+2))` → **0.0000% all 10 modes** (T1=1.582 s … T10=0.107 s), confirming both the idealization and the mass scaling. (5) **Layout: pure-eigen omits only §11 Loading** (has real nodes/elements/BCs/ODB, unlike §12ar which omits §7–11); §12 hosts `ops.eigen(10)` + `save_eigen_data(mode_tag=m)`; visualize via `plot_eigen_table`/`plot_eigen(subplots=True)`/`plot_eigen_animation` (Guan2020 precedent) + matplotlib (periods bar chart, mode shapes vs height). Dead materials (3 Elastic tags, unreferenced — ElasticTimoshenkoBeam takes E,G as literals) omitted (§12ap-6). Default ARPACK eigen solver (uniform stiffness + full-rank mass — neither §12h-2 nor §12al applies). Validation: 10/10 modes, max 0.0000% vs theory. Source: Dino_MDOF_eigen conversion (12-story 36 m shear building, 13 nodes, 12 ElasticTimoshenkoBeam, 100 t/floor UX-only, original co.tcl). |
+| 2026-07-12 | 1.45.0 | **Arbitrary (irregular) cross-section cyclic — verbatim fibre replay, 3D Fibre `-GJ` mandatory, `static_split` cadence (§12au):** (1) **Verbatim fibre replay** for irregular/re-entrant sections: the 894-concrete+17-rebar section is reconstructed by parsing `section_fiber.tcl` at runtime and emitting each fibre via `ops.fiber(y,z,A,mat)` — re-meshing (`FiberSecMesh`/`ops.patch`) risks A/I drift (§12aq) and getting re-entrant corners wrong (`shapely TopologyException`). Guarantees byte-identical section properties. (2) **3D `section("Fiber")` REQUIRES `-GJ` in OpenSeesPy** — the source Tcl omits it (Tcl only warns; the Aggregator's `T` material supplies torsion); OpenSeesPy *errors* at `section("Fiber",1)` without it. Fix: compute `GJ = G·Σ area·(y²+z²)` (concrete E + fibre polar inertia); Aggregator torsion governs regardless. (3) **`static_split` cyclic cadence:** feed each cycle's displacement **delta** (`incr×N_steps_per_cycle`) as the single target with `maxStep=|incr|` → exactly 100 segments/cycle = 1000 total, 1:1 with the recorder. Passing the *cumulative absolute* destination is a cadence bug: all cycles "finish" (🎉) and peaks match, but `len(history) ≪ N_expected` (got 591/1000) because later cycles' large displacements coalesce into few segments. Detection: progress bars `1/1` not `100/100`. Cross-ref §12am. (4) **DisplacementControl `-time` col = lateral λ** (not force); base shear = λ × P_LATERAL_REF; validate on the λ column (displacement is imposed). §12ap-5 for cyclic. (5) **`.xlsx` via stdlib:** env lacks `openpyxl`/`pandas.read_excel` — read the PMM sheet with `zipfile`+`ElementTree` (`<row>/<c>/<v>` keyed by column letter); verify column units against a physical check (gravity demand inside the P-M surface). Validation: 1000/1000 cyclic steps, peak shear +1684.9/−2026.4 kN matching `node2.out` to **0.0%/0.0%**, per-point RMS 2.44 kN (~0.12%), median relative error 0.000%. 7 vis HTMLs + hysteresis_compare.png + pmm_surface.png + hysteresis_curve.csv. Source: Dino_LowCycle conversion (3D RC cantilever, 5 dispBeamColumn via beamIntegration, irregular section, 10-cycle ±5..±25 mm, original co.tcl + section_fiber.tcl). |
 | 2026-07-11 | 1.44.0 | **Debug scratch-script ≠ standardized model — a solver-mismatch can masquerade as a stale reference (§12at):** During Dino_Buckling validation, a throwaway debug script (manual `ops.analyze(1)` DisplacementControl loop) gave a 5129 kN peak while the reference showed ~630 kN — an 8× gap that triggered a lengthy stale-reference investigation (Euler cross-checks, §12aq-2 pattern). The actual standardized model (SmartAnalyze with relaxation/minStep/algorithm-fallback) gave 526.6 kN — within 3% of Euler cantilever Pcr=542 kN and 16% of the reference. The reference was CORRECT; the 8× gap was entirely the debug script's fixed increment overshooting the post-buckling limit point. Rule: before declaring a committed reference stale, validate with the full standardized model, not a debug script. A debug script is authoritative for model-definition questions (mesh connectivity, materials, fixities) but NOT for response values near limit points/softening/snap-through — fixed-increment and SmartAnalyze diverge there. Detection: if debug script and standardized model disagree by more than the reference does from either, the bug is in the debug script's solver. Cross-ref §12as-3, §12z, §12aj, §12am. Source: Dino_Buckling post-mortem. |
 | 2026-07-11 | 1.43.0 | **First shell-element model — ShellNLDKGQ + PlateFiber section, coordinate-keyed mesh generation for composite sections, SmartAnalyze for post-buckling, deep-nesting path depth (§12as):** (1) Shell-section recipe: ElasticIsotropic → PlateFiber nDMaterial → PlateFiber section (20 mm thick); element takes secTag directly. No `section_library.py` helper for shells. (2) **Coordinate-keyed mesh generation:** multi-wall sections (I-section's 3 walls) MUST share corner nodes by (x,y) coordinate — a flat-list ring generator produces *duplicate* corner nodes → disjoint walls → column never buckles, ~10× too stiff. Fix: key nodes as `{(x,y): tag}` so revisited coordinates reuse the tag. Detection: column doesn't buckle + stiffness ≫ EA/L. (3) **SmartAnalyze required for post-buckling:** a manual fixed-increment DisplacementControl loop (source-style) overshoots the limit point and climbs to 5000+ kN; SmartAnalyze (relaxation=0.5, minStep=1e-2, tryLooseTestTol, algoTypes=[40,10,20,30]) sub-steps through the limit point → 527 kN peak matching Euler cantilever Pcr=542 kN. §12z recipe applied to shell buckling. (4) `save_shell_resp=True` (repo's first shell ODB), `save_frame_resp=False`; omit `node_tags` (§12u). Penalty(1e20,1e20)+UmfPack works for shells — the §12af UmfPack failure is stiffness-contrast-specific, not shell-specific. (5) Deep nesting (`models/Dino/<analysis-name>/`) needs `parents[3]` for standards (not `parents[2]`); use `.exists()` fallback. Validation: 100/100 buckling steps, peak 526.6 kN (sim) vs ~630 kN (ref) — 16% diff; sim peak matches weak-axis cantilever Euler Pcr=542 kN. 7 vis HTMLs + buckling_compare.png + buckling_curve.csv. Source: Dino_Buckling conversion (3D steel I-section cantilever, 1200 ShellNLDKGQ, original co.tcl Tcl, axial-compression buckling). |
 | 2026-07-11 | 1.42.0 | **Section-level (moment-curvature) analysis — layout adaptation, curvature-unit trap, FiberSecMesh vs ops.patch, offset sign (§12ar):** (1) The repo's first pure section-level model (opstool docs Moment-Curvature example) — no nodes/elements/gravity/pushover/ODB. Layout adapted by omitting §7 Nodes / §8 BCs / §9 Elements / §10 ODB / §11 Loading with explanatory comments (NOT bare `pass`); work hosted in §12 ANALYSIS + §13 POST-PROCESSING. Precedent §12p/§12q. (2) **Curvature-unit trap:** `MomentCurvature.analyze(max_phi, incr_phi)` takes curvature in the reciprocal of the model's length unit; converting kN-m→N-mm requires scaling these by ×1e-3 (1/m → 1/mm) — source `incr_phi=1e-5` [1/m] → `1e-8` [1/mm], `max_phi` default 0.5 [1/m] → 5e-4 [1/mm]. Forgetting this gives a 1000× moment error or analysis never reaching the limit state. Strain thresholds (dimensionless) need NO scaling. (3) `opst.pre.section.FiberSecMesh` (polygon patches via sectionproperties, supports holes) vs `ops.patch("rect")` of §12ap/§12e (rectangles only) — choose by geometry; preserve `FiberSecMesh` when the section has holes. Registration method is `SEC.to_opspy_cmds(secTag, GJ)` (NOT `to_ops_cmds`). (4) `opst.pre.section.offset(d)` with `d>0` shrinks inward (calls `buffer(-d)`); wrong sign → `shapely TopologyException: unable to assign free hole to a shell` at mesh time. (5) vis_utils V1–V7 do not apply (no mesh/nodal responses) — use custom matplotlib PNGs (`mphi_curve.png`, `fiber_stress_strain.png`) following `plot_utils.py` style; opstool `.plot_fiber_responses(return_ax=True)`. Validation: all 4 limit-state points within 1.3% of docs reference (phiy +1.24%, My +0.04%, phiu +0.81%, Mu -0.17%). Source: OPST_mc_section conversion (opstool docs Moment-Curvature, 2x2 m hollow RC box, Concrete04 cover+core + Steel01, kN-m→N-mm-MPa). |

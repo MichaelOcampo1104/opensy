@@ -1,5 +1,9 @@
 **/.SmartAnalyze-OpenSees.log
 
+# Scratch console logs from model runs (SmartAnalyze progress bars, etc.)
+run*.log
+run*.txt
+
 # Output directories — generated artifacts only; keep .gitkeep
 models/**/output/**
 !models/**/output/.gitkeep
