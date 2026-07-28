@@ -158,7 +158,11 @@ def define_elements() -> None:
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
 def create_odb(output_dir: Path, odb_tag: int = 1) -> "opst.post.CreateODB":
-    opst.post.set_odb_path(str(output_dir))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    abs_str = str(output_dir.resolve())
+    if sys.platform == "win32" and not abs_str.startswith("\\\\?\\"):
+        abs_str = "\\\\?\\" + abs_str
+    opst.post.set_odb_path(abs_str)
     odb = opst.post.CreateODB(odb_tag=odb_tag)
     odb.save_model_data()
     return odb
