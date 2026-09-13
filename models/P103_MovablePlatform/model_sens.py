@@ -61,6 +61,13 @@ SECTIONS = {
     "RHS100X50X6.3": dict(A=1690.0, IZ=1.970e6, IY=6.300e5, J=1.538e6, mass=13.3),
     "RHS100X50X5":   dict(A=1370.0, IZ=1.670e6, IY=5.430e5, J=1.305e6, mass=10.8),
     "RHS100X50X4":   dict(A=1120.0, IZ=1.400e6, IY=4.620e5, J=1.099e6, mass=8.78),
+    # smaller candidates, for the economic floor
+    "SHS100X5":      dict(A=1870.0, IZ=2.790e6, IY=2.790e6, J=4.287e6, mass=14.7),
+    "SHS70X3.6":     dict(A=942.0, IZ=6.860e5, IY=6.860e5, J=1.054e6, mass=7.40),
+    "SHS60X3":       dict(A=674.0, IZ=3.620e5, IY=3.620e5, J=5.556e5, mass=5.29),
+    "SHS50X3":       dict(A=554.0, IZ=2.020e5, IY=2.020e5, J=3.115e5, mass=4.35),
+    "RHS100X50X3":   dict(A=854.0, IZ=1.100e6, IY=3.680e5, J=8.660e5, mass=6.71),
+    "RHS100X50X5":   dict(A=1370.0, IZ=1.670e6, IY=5.430e5, J=1.305e6, mass=10.8),
 }
 
 # The as-modelled custom sections, for reference/baseline runs
@@ -78,6 +85,12 @@ SENS_SETS = {
     "std_max":    dict(shs="SHS100X10", rhs="RHS100X50X8", ballast_kg=16.7),
     "mid":        dict(shs="SHS100X6.3", rhs="RHS100X50X6.3", ballast_kg=49.4),
     "light":      dict(shs="SHS80X4", rhs="RHS100X50X4", ballast_kg=84.1),
+    "econ_c1":    dict(shs="SHS50X3", rhs="RHS100X50X3", ballast_kg=103.1),
+    "econ_c2":    dict(shs="SHS60X3", rhs="RHS100X50X4", ballast_kg=95.6),
+    "econ_c3":    dict(shs="SHS70X3.6", rhs="RHS100X50X4", ballast_kg=89.8),
+    "econ_c4":    dict(shs="SHS80X4", rhs="RHS100X50X5", ballast_kg=79.6),
+    "econ_c5":    dict(shs="SHS100X5", rhs="RHS100X50X5", ballast_kg=74.3),
+    "econ_c6":    dict(shs="SHS100X6.3", rhs="RHS100X50X6.3", ballast_kg=49.4),
 }
 
 # ── 3. PARAMETERS ──────────────────────────────────────────────────────────────
@@ -225,11 +238,16 @@ def extract(model_set: dict, case: str) -> dict:
     line_b = sum(joints[n] for n in base.LINE_B_NODES)
     disp = {n: [float(v) for v in ops.nodeDisp(n)] for n in base.JOINTS_M}
     max_uz = max(abs(d[2]) for d in disp.values())
+    # vertical (UY) is the serviceability-relevant direction for a platform.
+    # NOTE: nodal values UNDERSTATE member mid-span sag under a UDL; treat this
+    # as a lower bound on the true deflection.
+    max_uy = max(abs(d[1]) for d in disp.values())
     tip = disp[TIP_NODE]
     return dict(
         case=case,
         line_A_N=line_a, line_B_N=line_b, total_N=line_a + line_b,
         uplift=[n for n in base.SUPPORT_NODES if joints[n] < 0.0],
+        max_abs_uy_mm=max_uy,
         max_abs_uz_mm=max_uz,
         tip_uy_mm=tip[1], tip_uz_mm=tip[2],
     )
@@ -256,11 +274,12 @@ def run_set(name: str, model_set: dict) -> dict:
 if __name__ == "__main__":
     which = sys.argv[1:] or list(SENS_SETS)
     print(f"{'set':<10}{'SHS':<22}{'RHS':<18}{'ballast':>8}{'mass kg':>9}"
-          f"{'FoS':>7}{'lineA N':>9}{'lineB N':>9}{'uplift':>8}{'maxUz mm':>10}")
+          f"{'FoS':>7}{'lineA N':>9}{'lineB N':>9}{'maxUy mm':>10}{'maxUz mm':>10}")
     for name in which:
         r = run_set(name, SENS_SETS[name])
         c = r["case301"]
         print(f"{name:<10}{r['shs']:<22}{r['rhs']:<18}{r['ballast_kg']:>8.1f}"
               f"{r['mass_kg']:>9.1f}{r['fos']:>7.3f}{c['line_A_N']:>9.1f}"
-              f"{c['line_B_N']:>9.1f}{('none' if not c['uplift'] else str(c['uplift'])):>8}"
-              f"{r['case301']['max_abs_uz_mm']:>10.3f}")
+              f"{c['line_B_N']:>9.1f}{c['max_abs_uy_mm']:>10.3f}"
+              f"{c['max_abs_uz_mm']:>10.3f}"
+              f"{'  UPLIFT ' + str(c['uplift']) if c['uplift'] else ''}")
