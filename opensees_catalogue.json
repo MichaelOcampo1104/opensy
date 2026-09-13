@@ -1156,11 +1156,11 @@
   },
   {
     "UniqueID": "P103_MovablePlatform",
-    "URL": "local: mm/raw/python-scripts/_verification/staad/P103_Movable_Platform/3D/3D_Movable_bcad-model.std",
-    "num_models": "1",
-    "purpose": "Independent OpenSeesPy counter-check of the STAAD 3D movable-platform model under COMB 301 (1.0 DL + cantilever LL): verify support reactions and the no-uplift verdict.",
+    "URL": "local: mm/raw/python-scripts/_verification/staad/P103_Movable_Platform/3D/3D_Movable_bcad-model.std (reference values: staad_comb202_*.csv, staad_comb301_*.csv)",
+    "num_models": "2 (COMB 301 reactions; COMB 202 reactions + member forces)",
+    "purpose": "Independent OpenSeesPy counter-check of the STAAD 3D movable-platform model. COMB 301 (1.0 DL + cantilever LL) and COMB 202 (1.4 DL + 1.6 LL, ULS): verify support reactions, the no-uplift verdict, and (COMB 202) per-member end forces.",
     "Description of Building Structural System": "Movable steel platform on wheels/casters: two transverse frames (Frame A Z=0, Frame B Z=0.7 m) of SHS 100x100x12.0 columns/beams tied by Z-runners, with a 0.65 m cantilever platform (Z=0.7-1.35 m) carried on rails plus diagonal braces; 100x50x18.7 RHS outrigger (member 7/17). Pinned wheel supports at 6 joints.",
-    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6), 16 nodes (STAAD joint numbers), 23 elasticBeamColumn members (STAAD member numbers) with Linear transf per orientation group. COMB 301 member UDLs (self-weight from AX*density, grating 0.15, angle 0.03, cantilever LL 0.81 N/mm) applied via beamUniform after explicit global-to-local transformation (STAAD UNI GY is global, beamUniform is local). Load-controlled gravity (AGENT.md 3c exception). Reactions vs STAAD/Python: line A 1203 vs 1210/1203 N, line B 7515 vs 7510/7515 N; equilibrium residuals 0.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6), 16 nodes (STAAD joint numbers), 23 elasticBeamColumn members (STAAD member numbers) with Linear transf per orientation group. model.py = COMB 301 (unchanged verified artifact); model_comb202.py = COMB 202, importing geometry/sections/BCs from model.py and adding member end-force verification. Member UDLs applied via beamUniform after explicit global-to-local transformation (STAAD UNI GY is global, beamUniform is local). Load-controlled gravity (AGENT.md 3c exception). RESULTS 2026-09-13: COMB 301 reactions line A 1203.11 (STAAD 1203.11), line B 7514.86 (7514.86), equilibrium 0. COMB 202 reactions line A 6153.9 = STAAD 6153.9 (0.000%), line B 13535.9 = STAAD 13535.9 (0.000%), total 19689.8, no uplift. Member end forces do NOT meet the 3% tolerance: secondary out-of-plane actions (MY/MZ) differ by up to 66% while primary actions hold. Root causes: (a) this model is Euler-Bernoulli while STAAD includes shear deformation - switching to ElasticTimoshenkoBeam closes the 5-7% displacement gap at A_s ~ 0.6-1.0A but does NOT fix forces; (b) Iy/Iz swap on RHS outriggers ruled out (worse). Member-force check is an OPEN ITEM.",
     "Year of design and construction": "2026 (temporary works platform)",
     "2D/3D": "3D",
     "Material": "Steel (elastic, E=200000 MPa)",
@@ -1173,6 +1173,6 @@
     "file format": ".py",
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "mm report: StructChecks/Framig-overturning-check/outputs/Overturning_Stability_Check.docx (FoS 1.72 PASS)",
-    "Notes": "Lessons applied: 12c (every tag/property diffed vs .std), 12j (no Pa/kg; gamma via kN/m3), 12r (explicit Linear TS before Plain pattern), 12n (save_nodal_resp+node_tags, fetch per step), 3c (manual LoadControl/Linear loop). New findings: beamUniform is LOCAL (Wy,Wz transverse, Wx axial - probe-verified); ops.reactions() mandatory before nodeReaction (else 0.0)."
+    "Notes": "Lessons applied: 12c (every tag/property diffed vs .std), 12j (no Pa/kg; gamma via kN/m3), 12r (explicit Linear TS before Plain pattern), 12n (save_nodal_resp+node_tags, fetch per step), 3c (manual LoadControl/Linear loop). New findings: beamUniform is LOCAL (Wy,Wz transverse, Wx axial - probe-verified); ops.reactions() mandatory before nodeReaction (else 0.0); **STAAD OpenSTAAD force/moment output units are kip and kip-in on this build despite GetOutputUnitForForce/Moment returning kN / kN-m** (ratio to hand-computed loads is exactly 4.4484 = kN per kip); STAAD member end forces from GetMemberEndForces(local=1) are global-component forces applied TO the member; STAAD PRIS analysis includes shear deformation; OpenSeesPy element is ElasticTimoshenkoBeam (not ...Beam3d) with argument order E G A J Iz Iy Avy Avz (Iz BEFORE Iy)."
   }
 ]
