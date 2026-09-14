@@ -39,6 +39,13 @@ GPa  = 1000.0
 ksi  = 6.894757 * MPa
 psi  = ksi / 1000.0
 
+# ── Distributed line load ─────────────────────────────────────────────────────
+# In the N-mm system 1 kN/m = 1000 N / 1000 mm = 1.0 N/mm, so these are
+# numerically 1.0. They exist so a UDL can be written in its own units
+# (w = 0.525 * kN_m) instead of a bare number whose units are invisible.
+kN_m  = kN / m          # = 1.0 N/mm
+N_mm  = N / mm          # = 1.0 N/mm  (same physical unit, explicit form)
+
 # ── Mass ──────────────────────────────────────────────────────────────────────
 kg   = N * sec**2 / mm
 tonne = 1000 * kg

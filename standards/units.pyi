@@ -15,6 +15,8 @@ kPa: float
 GPa: float
 ksi: float
 psi: float
+kN_m: float
+N_mm: float
 kg: float
 tonne: float
 sec: float
