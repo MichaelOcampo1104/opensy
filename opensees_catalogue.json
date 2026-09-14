@@ -1132,5 +1132,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Static Elastic-Plastic Analysis of Frame Structures (Dino TCL Ref opensees3 reference examples)",
     "Notes": "Converted from original Tcl reference scripts (co.tcl single-element and co2.tcl 8-element discretization). Units converted to N, mm, MPa. Gravity analysis uses manual LoadControl loop per AGENT.md §3c exception, followed by displacement-controlled pushover managed by opst.anlys.SmartAnalyze. Visualisations rendered via opstool >= 1.0 (vis_utils)."
+  },
+  {
+    "UniqueID": "Dino_SRC_Column_3D_Pushover",
+    "URL": "http://dinochen.com/article.asp?id=267",
+    "num_models": "1",
+    "purpose": "Static elastic-plastic pushover analysis of a 3D steel reinforced concrete (SRC) column under constant axial compression and lateral displacement loading.",
+    "Description of Building Structural System": "Steel reinforced concrete (SRC) column representative of composite member construction, featuring a concrete core, steel rebars, and an embedded steel structural section (H-shape/I-shape).",
+    "Description of Model": "3D finite element model (ndm=3, ndf=6) of a 3.0 m tall SRC cantilever column using a single nonlinearBeamColumn element. Section: 800x800 mm composite fiber section (Concrete01 for core/cover, Steel01 for rebars and steel shape). Gravity analysis under 10000 kN axial force (LoadControl gravity static analysis) -> displacement-controlled pushover up to 40 mm displacement (DisplacementControl via opst.anlys.SmartAnalyze).",
+    "Year of design and construction": "2018",
+    "2D/3D": "3D",
+    "Material": "SRC (Concrete01 + Steel01)",
+    "Lateral system": "Column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Displacement-controlled lateral pushover (to 40 mm, 100 steps)",
+    "Earthquake records": "NA",
+    "Opensees Version": "OpenSeesPy >= 3.0",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "Chen, X. W. (2018). Static elasto-plastic analysis of steel reinforced concrete column. Dino Chen's Blog, http://dinochen.com/article.asp?id=267.",
+    "Links to Papers / Design Reports": "http://dinochen.com/article.asp?id=267",
+    "Notes": "Converted from original Tcl reference script co.tcl. Units are in N, mm, MPa. Gravity analysis uses manual LoadControl loop per AGENT.md §3c exception, followed by displacement-controlled pushover managed by opst.anlys.SmartAnalyze. Visualisations rendered via opstool >= 1.0 (vis_utils)."
   }
 ]
