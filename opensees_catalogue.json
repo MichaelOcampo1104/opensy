@@ -1363,5 +1363,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Original source: models/Dino/Dynamic Analysis of a Frame with Viscous Dampers/ref/opensees/co.tcl (410-line Tcl model), ETABS/ (commercial provenance). Reference results: disp14/disp45.out (UX disp), vel45.out (UX vel), ele110.out (damper force). Ground motion: ground_motions/gm1x.txt (copied from ref/opensees/gm1x.txt).",
     "Notes": "Converted from ref/opensees/co.tcl. DAMPER ARCHITECTURE: 5 nonlinearBeamColumn columns are pure dampers (fiber section holds ONLY 4 Maxwell fibers + Aggregator 1003); native (tag,i,j,nIP,sec,transf) form (\u252c\u00ba12l); -GJ 1.0 negligible per \u252c\u00ba12ba. MAXWELL 4-ARG (K,C,a,L) verified in stock Py -- no custom build. TRANSIENT: Newmark BEFORE SmartAnalyze; transient_split(1000); ODB every 2nd; in-loop nodeDisp+nodeVel+eleResponse every step. SOURCE TEST TOL (EnergyIncr 1e-4/200) passed explicitly -- defaults stall at step 1. NO gravity/loadConst (\u252c\u00ba12i N/A). DAMPER FINDING (\u252c\u00ba12aq-class, OPEN): verbatim dampers engage ~81 kN (hand-calc consistent) vs ref ele110 ~3 N; damper-free probe reproduces ref peak to 6 digits and history to 0.2-1.5% -- reference consistent with idle dampers (likely a without-dampers comparison run filed alongside, mirroring the isolated-frame sibling pattern). DAMPER_ACTIVE flag: True (verbatim, default) / False (limp diagnostic reproducing ref frame: 0.23%/0.31%/1.50%). PATH DEPTH parents[3]. 7 vis HTMLs + dynamic_compare.png + node CSVs. Run: uv run python \"models/Dino/Dynamic Analysis of a Frame with Viscous Dampers/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
+  },
+  {
+    "UniqueID": "Dino_ShearWallCyclic",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Low-cycle reciprocating (cyclic) displacement analysis of a 3D shear-wall component (Dino). A 31-node model (12 dispBeamColumn fiber elements + 24 elasticBeamColumn) runs gravity then 9 DisplacementControl UY segments (+-0.2 to +-1.4 mm x 100 steps) at node 26; validated glitch-aware against node26.out.",
+    "Description of Building Structural System": "3D shear-wall component -- 31 nodes, 3 fully-fixed base nodes (8, 9, 10). 12 dispBeamColumn fiber elements (Steel01 fy=395 MPa + Concrete01 fpc=-30 MPa wrapped by rigid shear+torsion section Aggregators, Lobatto 3 IP) + 24 elasticBeamColumn with inline properties. No masses (static cyclic).",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6). Gravity: Plain pattern 1 (3 x -2.433e5 N UZ); LoadControl x 1 manual loop (\u252c\u00ba3c exception); loadConst (source-verbatim). Cyclic: Plain pattern 2 after loadConst (\u252c\u00ba12z-1; 1 kN UY reference at node 26); 9 segments parsed verbatim from integrator/analyze pairs, each fed as one SmartAnalyze target (static_split, \u252c\u00ba12am) with relaxation+minStep fallback. No MP constraints (puts rigidDiaphragm label only) -- Plain. Source already N-mm-MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "RC (Steel01 + Concrete01 fiber, rigid-shear Aggregator)",
+    "Lateral system": "Shear-wall component (12 dispBeamColumn + 24 elasticBeamColumn)",
+    "building occupancy class": "NA (research specimen)",
+    "Lateral Loading": "Gravity then cyclic UY (9 segments, +-0.2 to +-1.4 mm x 100 steps)",
+    "Earthquake records": "NA (static cyclic)",
+    "Opensees Version": "Standard OpenSeesPy (.venv, Python 3.12.12, opstool 1.0.26)",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Low-cycle reciprocating analysis of shear wall components/OPENSEES/co1.tcl (321-line Tcl cyclic wall model), ETABS/ (commercial provenance). Reference results: node26.out (917 valid rows + 1 glitch row), node0.out (903 rows), ele0.out (902 rows).",
+    "Notes": "Converted from OPENSEES/co1.tcl. VERBATIM FIBER REPLAY (\u252c\u00ba12aq, \u252c\u00ba12ay area-THIRD); Aggregators 1001-1002. dispBeamColumn via shared Lobatto (\u252c\u00ba12l); elasticBeamColumn native 3D. -GJ=1.0 NEGLIGIBLE (\u252c\u00ba12ba parallel-add). SAVE_FRAME_RESP=False. Gravity->loadConst->cyclic (\u252c\u00ba12z-1). REFERENCE FORENSICS: node26.out carries a mid-protocol divergence glitch (~row 857: UY teleports -18 mm for 2 rows) + restart overlap (917 rows vs 901 clean; node0/ele0 disagree at 903/902) -- validated glitch-aware: rows 0-800 index-exact, seg9 + final by peak/value. SmartAnalyze sails through the glitch (\u252c\u00ba12am sub-stepping). SOURCE QUIRKS: fix trailing ';'; GBK bytes (tolerant read). PATH DEPTH parents[3]. VERIFICATION: 901/901 converged, no glitch; segment peaks +5-7% (mean 5.9%, solver-path class \u252c\u00ba12aw); clean-prefix RMS 3.4% of peak; final 0.7%/0.3%. 7 vis HTMLs + cyclic_compare.png + node26_disp_history.csv. Run: uv run python \"models/Dino/Low-cycle reciprocating analysis of shear wall components/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
   }
 ]
