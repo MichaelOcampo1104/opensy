@@ -1342,5 +1342,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Original source: models/Dino/Elastic-Plastic Analysis of Prestressed Beams/ref/OpenSEES/co.tcl (229-line Tcl model) + co.tcl.bak (identical), Model.s2k (SAP2000 sibling), ETABS/ (commercial provenance). Reference results: node19.out (361-row node-19 recorder: LF, UX, UY, UZ), node0.out (full field), result.xlsx.",
     "Notes": "Converted from ref/OpenSEES/co.tcl. VERBATIM FIBER REPLAY (\u252c\u00ba12aq, \u252c\u00ba12ay area-THIRD). dispBeamColumn via shared Lobatto beamIntegration (\u252c\u00ba12l); elasticBeamColumn native 3D (rigid-scale props verbatim). -GJ PHYSICAL (G*Sum(A*r^2)): no Aggregators, so fiber GJ is the true torsion (no \u252c\u00ba12ba parallel-add issue). COMMENTED Steel02 strand line superseded by active Steel01 (one tag-5 only). Dead Elastic mat 3 kept for tag fidelity. SAVE_FRAME_RESP=False (\u252c\u00ba12v). SOURCE QUIRKS: fix trailing ';'; puts rigidDiaphragm label with no MP commands -- Plain; GBK Chinese comment bytes (read tolerantly). PATH DEPTH parents[3]. VERIFICATION: 361/361; LF RMS 2.40 (0.50% post-yield solver path, \u252c\u00ba12aw class); UZ exact. 7 vis HTMLs + pushdown_compare.png + node19_disp_history.csv. Run: uv run python \"models/Dino/Elastic-Plastic Analysis of Prestressed Beams/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
+  },
+  {
+    "UniqueID": "Dino_ViscousDamper",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Dynamic time-history of a 3D frame with viscous dampers (Dino). A 54-node model (105 elasticBeamColumn + 5 nonlinearBeamColumn Maxwell-fiber damper columns, 2% Rayleigh on modes 1-2) runs 20 s of ground motion (1000 steps x 0.02 s); frame response validated against disp14/disp45/vel45 recorders.",
+    "Description of Building Structural System": "3D frame with viscous dampers -- 54 nodes, 9 fixed base nodes. 105 elasticBeamColumn frame members (inline A/E/G/J/Iy/Iz) + 5 nonlinearBeamColumn damper columns (fiber section: 4 Maxwell fibers 0.01x0.01 area 1250, rigid-shear Aggregator 1003). Damper: Maxwell (K=100000, C=3000, a=1, L=1; stock OpenSeesPy). Lumped mass on all 54 nodes. T1=0.312 s, T2=0.257 s.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6). Eigen (2 modes) -> Rayleigh 2% (alphaM/betaKcurr from omega1/omega2, exactly as source) -> UniformExcitation UX (Path series from ground_motions/gm1x.txt: 1501 pts, dt=0.02 s, factor 5; first 20 s consumed) -> transient Newmark(0.5,0.25) via SmartAnalyze (transient_split + per-step TransientAnalyze, ok<0 break). No gravity phase -- direct transient. Transformation constraints, UmfPack system, EnergyIncr 1e-4/200 (source-verbatim). Source already N-mm-MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel + Maxwell dashpots (frame Elastic, damper Maxwell fibers)",
+    "Lateral system": "Frame with viscous dampers (105 elasticBeamColumn + 5 Maxwell-fiber columns)",
+    "building occupancy class": "NA (research specimen)",
+    "Lateral Loading": "Dynamic earthquake (UniformExcitation UX, 20 s)",
+    "Earthquake records": "gm1x.txt (1501 pts, dt=0.02 s, factor 5) in ground_motions/",
+    "Opensees Version": "Standard OpenSeesPy (.venv, Python 3.12.12, opstool 1.0.26)",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Dynamic Analysis of a Frame with Viscous Dampers/ref/opensees/co.tcl (410-line Tcl model), ETABS/ (commercial provenance). Reference results: disp14/disp45.out (UX disp), vel45.out (UX vel), ele110.out (damper force). Ground motion: ground_motions/gm1x.txt (copied from ref/opensees/gm1x.txt).",
+    "Notes": "Converted from ref/opensees/co.tcl. DAMPER ARCHITECTURE: 5 nonlinearBeamColumn columns are pure dampers (fiber section holds ONLY 4 Maxwell fibers + Aggregator 1003); native (tag,i,j,nIP,sec,transf) form (\u252c\u00ba12l); -GJ 1.0 negligible per \u252c\u00ba12ba. MAXWELL 4-ARG (K,C,a,L) verified in stock Py -- no custom build. TRANSIENT: Newmark BEFORE SmartAnalyze; transient_split(1000); ODB every 2nd; in-loop nodeDisp+nodeVel+eleResponse every step. SOURCE TEST TOL (EnergyIncr 1e-4/200) passed explicitly -- defaults stall at step 1. NO gravity/loadConst (\u252c\u00ba12i N/A). DAMPER FINDING (\u252c\u00ba12aq-class, OPEN): verbatim dampers engage ~81 kN (hand-calc consistent) vs ref ele110 ~3 N; damper-free probe reproduces ref peak to 6 digits and history to 0.2-1.5% -- reference consistent with idle dampers (likely a without-dampers comparison run filed alongside, mirroring the isolated-frame sibling pattern). DAMPER_ACTIVE flag: True (verbatim, default) / False (limp diagnostic reproducing ref frame: 0.23%/0.31%/1.50%). PATH DEPTH parents[3]. 7 vis HTMLs + dynamic_compare.png + node CSVs. Run: uv run python \"models/Dino/Dynamic Analysis of a Frame with Viscous Dampers/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
   }
 ]
