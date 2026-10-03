@@ -1321,5 +1321,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Original source: models/Dino/Multi-point Excitation Dynamics Analysis of Bridges/ref/OPENSEES/co.tcl (1362-line Tcl multi-support bridge model), Model.s2k (SAP2000 sibling), SAP2000/Model_V14.sdb (commercial provenance). Reference results: node203_mul.out (PRIMARY -- proven record of the committed co.tcl), node203.out/ele330.out/node0-2.out (self-consistent VARIANT set from an unidentified run), result.xlsx. Records: ground_motions/dm1x+dm2x.txt (copied from ref/OPENSEES/).",
     "Notes": "Converted from ref/OPENSEES/co.tcl. elasticBeamColumn NATIVE 3D; ShellMITC4 deck on PlateFiber (\u252c\u00ba12as). MULTISUPPORT (\u252c\u00ba12p): pattern -> groundMotion(Plain,-disp,tsTag) -> imposedMotion(node,dof,gmTag); numeric tags (\u252c\u00ba12r). DM1X ON BOTH GROUPS (factor 1) -- verbatim. SOLVER FIDELITY: source EnergyIncr 1e-4/200 via testType/testTol/testIterTimes -- SmartAnalyze defaults stall at step 1. NO gravity/loadConst (\u252c\u00ba12i N/A). puts rigidDiaphragm label only -- Transformation as sourced. ODB nodal-only every 2nd step (500 fetches); in-loop nodeDisp/eleResponse every step. REFERENCE FORENSICS (\u252c\u00ba12aq): node203_mul.out reproduced to 0.0001% all DOFs; node203.out row1 is exactly 2x _mul row1 yet finals differ 18x (not uniform scale -- different excitation) so the node203/ele330/node0-2 set is a variant (max diff 115 mm, expected); ele330.out pairs with it (no _mul counterpart). PATH DEPTH parents[3]. VERIFICATION: 1000/1000; UX RMS 0.00014 (0.0001%). 7 vis HTMLs + dynamic_compare.png + node CSV. Run: uv run python \"models/Dino/Multi-point Excitation Dynamics Analysis of Bridges/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
+  },
+  {
+    "UniqueID": "Dino_PrestressedBeam",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Displacement-controlled UZ pushdown (-1.0 mm x 360 steps) of a 3D prestressed beam (Dino). A 24-node model (23 dispBeamColumn fiber elements + 12 rigid elasticBeamColumn links, Steel01/Concrete02 sections with 1600 MPa strand ring) runs a zero-load gravity step then 360 pushdown steps at node 19; validated against node19.out.",
+    "Description of Building Structural System": "3D prestressed beam -- 24 nodes (node 1 near-fixed; nodes 2-24 guided rollers holding UY/RY/RZ). Concrete grid (Concrete02 fpc=-26.8 MPa) + prestressing strand ring (Steel01 fy=1600 MPa, E=206000, 20 fibers on r=50 mm) + mild steel (fy=200 MPa); 12 rigid links (E ~ 2e8 MPa scale) tie the tendon line to the girder. No masses (static).",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6). Phase 1: Plain pattern 1 (single ZERO load at node 3 -- no-op, replayed verbatim); LoadControl x 1 manual loop (\u252c\u00ba3c exception). Phase 2: Plain pattern 2 (-1e3 N UZ at node 19); DisplacementControl node 19 DOF 3 via SmartAnalyze, one -1.0 mm increment per step (\u252c\u00ba12am) for 1:1 alignment with the 361-row reference (1 gravity + 360 pushdown). No loadConst in source (moot -- phase 1 load-free). Source already N-mm-MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Prestressed (Steel01 strand fy=1600 MPa + Concrete02)",
+    "Lateral system": "Prestressed beam (23 dispBeamColumn + 12 rigid links)",
+    "building occupancy class": "NA (research specimen)",
+    "Lateral Loading": "Zero-load gravity then UZ pushdown (-1.0 mm x 360 = -360 mm)",
+    "Earthquake records": "NA (static pushdown)",
+    "Opensees Version": "Standard OpenSeesPy (.venv, Python 3.12.12, opstool 1.0.26)",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Elastic-Plastic Analysis of Prestressed Beams/ref/OpenSEES/co.tcl (229-line Tcl model) + co.tcl.bak (identical), Model.s2k (SAP2000 sibling), ETABS/ (commercial provenance). Reference results: node19.out (361-row node-19 recorder: LF, UX, UY, UZ), node0.out (full field), result.xlsx.",
+    "Notes": "Converted from ref/OpenSEES/co.tcl. VERBATIM FIBER REPLAY (\u252c\u00ba12aq, \u252c\u00ba12ay area-THIRD). dispBeamColumn via shared Lobatto beamIntegration (\u252c\u00ba12l); elasticBeamColumn native 3D (rigid-scale props verbatim). -GJ PHYSICAL (G*Sum(A*r^2)): no Aggregators, so fiber GJ is the true torsion (no \u252c\u00ba12ba parallel-add issue). COMMENTED Steel02 strand line superseded by active Steel01 (one tag-5 only). Dead Elastic mat 3 kept for tag fidelity. SAVE_FRAME_RESP=False (\u252c\u00ba12v). SOURCE QUIRKS: fix trailing ';'; puts rigidDiaphragm label with no MP commands -- Plain; GBK Chinese comment bytes (read tolerantly). PATH DEPTH parents[3]. VERIFICATION: 361/361; LF RMS 2.40 (0.50% post-yield solver path, \u252c\u00ba12aw class); UZ exact. 7 vis HTMLs + pushdown_compare.png + node19_disp_history.csv. Run: uv run python \"models/Dino/Elastic-Plastic Analysis of Prestressed Beams/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
   }
 ]
