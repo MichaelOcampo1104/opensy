@@ -1279,5 +1279,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "Original source: models/Dino/Push-back Analysis of a Frame Shear Wall Structure/ref/co.tcl (7239-line Tcl frame-wall model), model.s2k (SAP2000 sibling). Reference results: node40.out (911 rows: zero + 10 gravity + 900 pushback), Periods.txt (39 eigenvalues), eigen1_node.out (mode-1 UX shape, 956 values).",
     "Notes": "Converted from co.tcl. VERBATIM FIBER REPLAY (\u252c\u00ba12aq, \u252c\u00ba12ay area-THIRD); 4 Aggregators (1001-1004). dispBeamColumn via shared Lobatto beamIntegration (\u252c\u00ba12l); elasticBeamColumn native 3D (A,E,G,J,Iy,Iz). -GJ=1.0 NEGLIGIBLE BY DESIGN: Aggregator ADDS fiber GJ in parallel with rigid T -- physical GJ stiffened torsional modes up to +31% (mode 2); GJ=1.0 matches all 39 eigenvalues to 0.0000%. NO loadConst (faithful). ODB nodal-only + throttled every 10th (in-loop nodeDisp every step). SmartAnalyze NormDispIncr/KrylovNewton; one hard step (~401) cost ~15 min retries, total ~1.5 h. Eigen default solver (fullGenLapack fallback per \u252c\u00ba12al). SOURCE QUIRKS: fix trailing ';'; puts rigidDiaphragm label with no MP commands -- Plain. PATH DEPTH parents[3]. VERIFICATION: 911/911; LF/UX/UY/UZ <=0.0012%; eigen 0.0000%; mode-1 0.0002%. 7 vis HTMLs + pushback_compare.png + node40_disp_history.csv. Run: uv run python \"models/Dino/Push-back Analysis of a Frame Shear Wall Structure/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
+  },
+  {
+    "UniqueID": "Dino_IsolatedFrame",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Nonlinear dynamic time-history of a 3D frame on 9 rubber isolation bearings (Dino). A 126-node model (252 elasticBeamColumn + 9 zeroLength Steel02 isolators, 5% Rayleigh on modes 1-2) runs 20 s of ground motion (1000 steps x 0.02 s); validated against node2/node118/ele244/ele245 recorders.",
+    "Description of Building Structural System": "3D frame on 9 rubber bearings -- 126 nodes, 252 elasticBeamColumn frame members (inline A/E/G/J/Iy/Iz), 9 zeroLength isolators (Steel02 bilinear Fy=100000 N, E=2000 MPa, b=0.15, DOFs 1-2) linking base nodes 109-117 to deck nodes 118-126, equalDOF tying DOFs 3-6 across each bearing. 9 fixed base nodes. Lumped mass on 117 nodes. T1=2.176 s, T2=2.106 s.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6). Eigen (2 modes) -> Rayleigh 5% (alphaM/betaKcurr from omega1/omega2, exactly as source) -> UniformExcitation UX (Path series from ground_motions/gm1x.txt: 1501 pts, dt=0.02 s, factor 10; first 20 s consumed) -> transient Newmark(0.5,0.25) via SmartAnalyze (transient_split + per-step TransientAnalyze, ok<0 break). No gravity phase in source -- direct transient. Transformation constraints (MP equalDOFs, as in source), UmfPack system. Source already N-mm-MPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel (Steel02 isolators + Elastic frame)",
+    "Lateral system": "Frame on rubber bearings (252 elasticBeamColumn + 9 zeroLength)",
+    "building occupancy class": "NA (research specimen)",
+    "Lateral Loading": "Dynamic earthquake (UniformExcitation UX, 20 s)",
+    "Earthquake records": "gm1x.txt (1501 pts, dt=0.02 s, factor 10) in ground_motions/",
+    "Opensees Version": "Standard OpenSeesPy (.venv, Python 3.12.12, opstool 1.0.26)",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Dynamic Analysis of a Frame with Vibration Isolation/ref/opensees/co.tcl (836-line Tcl model) + co.tcl.bak (numerically identical). Sibling variants (not converted): ref/openseesWithoutRubberIsolator/ (fixed-base), ref/sap2000*, ref/ETABS/ (commercial provenance). Reference results: node2/node118.out (1000-row disp), ele244.out/ele244d.out (isolator force/deformation), ele245.out (frame force). Ground motion: ground_motions/gm1x.txt (copied from ref/opensees/gm1x.txt).",
+    "Notes": "Converted from ref/opensees/co.tcl. elasticBeamColumn NATIVE 3D (A,E,G,J,Iy,Iz); zeroLength isolators (-mat/-dir parsed generally). equalDOF DOFs 3-6 + Transformation (source-faithful, \u252c\u00ba12an-consistent). TRANSIENT: Newmark set BEFORE SmartAnalyze; transient_split(1000) + TransientAnalyze(dt), ok<0 break; ODB every 2nd step (500 fetches, \u252c\u00ba3d), in-loop nodeDisp/eleResponse every step. NO gravity/loadConst (\u252c\u00ba12i N/A). GM Path -factor 10 in-series, verbatim. ELE-245 VZ SIGN: Tcl recorder vs eleResponse disagree on the Vz shear pair sign (2 of 12 comps); magnitudes exact to 5 digits -- documented local-axis convention difference. PATH DEPTH parents[3]. VERIFICATION: 1000/1000; node UX 0.0001%; ele244 0.0001%; ele245 magnitude 0.0002%. 7 vis HTMLs + dynamic_compare.png + node CSVs. Run: uv run python \"models/Dino/Dynamic Analysis of a Frame with Vibration Isolation/model.py\" ($env:PYTHONIOENCODING=\"utf-8\")."
   }
 ]
