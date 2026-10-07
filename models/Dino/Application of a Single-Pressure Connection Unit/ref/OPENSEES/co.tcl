@@ -1,0 +1,139 @@
+wipe
+puts "System"
+model basic -ndm 3 -ndf 6
+puts "restraint"
+node 1 0.000E+000 1.000E+003 5.000E+002
+node 2 1.000E+003 1.000E+003 5.000E+002
+node 3 2.000E+003 1.000E+003 5.000E+002
+node 4 2.000E+002 1.000E+003 5.000E+002
+node 5 4.000E+002 1.000E+003 5.000E+002
+node 6 6.000E+002 1.000E+003 5.000E+002
+node 7 8.000E+002 1.000E+003 5.000E+002
+node 8 1.200E+003 1.000E+003 5.000E+002
+node 9 1.400E+003 1.000E+003 5.000E+002
+node 10 1.600E+003 1.000E+003 5.000E+002
+node 11 1.800E+003 1.000E+003 5.000E+002
+node 12 1.000E+003 1.000E+003 0.000E+000
+node 13 2.000E+003 1.000E+003 0.000E+000
+node 14 1.200E+003 1.000E+003 0.000E+000
+node 15 1.400E+003 1.000E+003 0.000E+000
+node 16 1.600E+003 1.000E+003 0.000E+000
+node 17 1.800E+003 1.000E+003 0.000E+000
+node 18 1.000E+003 1.000E+003 1.500E+003
+node 19 8.000E+002 1.000E+003 0.000E+000
+node 20 6.000E+002 1.000E+003 0.000E+000
+node 21 4.000E+002 1.000E+003 0.000E+000
+node 22 2.000E+002 1.000E+003 0.000E+000
+node 23 0.000E+000 1.000E+003 0.000E+000
+node 24 1.000E+003 1.000E+003 2.500E+003
+puts "rigidDiaphragm"
+puts "mass"
+mass 1 6.531E-002 6.531E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 2 1.282E+000 1.282E+000 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 3 6.531E-002 6.531E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 4 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 5 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 6 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 7 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 8 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 9 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 10 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 11 1.301E-001 1.301E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 12 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 13 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 14 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 15 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 16 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 17 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 19 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 20 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 21 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 22 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 23 4.892E-004 4.892E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+puts "node"
+fix 3 1 0 0 0 0 0;
+fix 12 1 1 1 1 1 1;
+fix 13 1 1 1 1 1 1;
+fix 14 1 1 1 1 1 1;
+fix 15 1 1 1 1 1 1;
+fix 16 1 1 1 1 1 1;
+fix 17 1 1 1 1 1 1;
+fix 19 1 1 1 1 1 1;
+fix 20 1 1 1 1 1 1;
+fix 21 1 1 1 1 1 1;
+fix 22 1 1 1 1 1 1;
+fix 23 1 1 1 1 1 1;
+puts "material"
+uniaxialMaterial ENT 1 1.999E+005
+uniaxialMaterial Elastic 2 2.482E+004
+uniaxialMaterial Elastic 3 1.999E+005
+puts "transformation"
+geomTransf Linear 1 1.000 0.000 0.000 
+geomTransf Linear 2 1.000 0.000 0.000 
+geomTransf Linear 3 0.000 0.000 1.000 
+geomTransf Linear 4 0.000 0.000 1.000 
+geomTransf Linear 5 0.000 0.000 1.000 
+geomTransf Linear 6 0.000 0.000 1.000 
+geomTransf Linear 7 0.000 0.000 1.000 
+geomTransf Linear 8 0.000 0.000 1.000 
+geomTransf Linear 9 0.000 0.000 1.000 
+geomTransf Linear 10 0.000 0.000 1.000 
+geomTransf Linear 11 0.000 0.000 1.000 
+geomTransf Linear 12 0.000 0.000 1.000 
+puts "element"
+element elasticBeamColumn 1 2 18 2.400E+005 2.482E+004 1.034E+004 7.512E+009 7.200E+009 3.200E+009 1
+element elasticBeamColumn 2 18 24 2.400E+005 2.482E+004 1.034E+004 7.512E+009 7.200E+009 3.200E+009 2
+element elasticBeamColumn 3 1 4 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 3
+element elasticBeamColumn 4 4 5 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 4
+element elasticBeamColumn 5 5 6 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 5
+element elasticBeamColumn 6 6 7 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 6
+element elasticBeamColumn 7 7 2 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 7
+element elasticBeamColumn 8 2 8 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 8
+element elasticBeamColumn 9 8 9 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 9
+element elasticBeamColumn 10 9 10 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 10
+element elasticBeamColumn 11 10 11 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 11
+element elasticBeamColumn 12 11 3 3.000E+005 2.482E+004 1.034E+004 7.300E+009 2.250E+009 2.500E+010 12
+element truss 13 12 2 2.500E+002 1
+element truss 14 14 8 2.500E+002 1
+element truss 15 15 9 2.500E+002 1
+element truss 16 16 10 2.500E+002 1
+element truss 17 17 11 2.500E+002 1
+element truss 18 13 3 2.500E+002 1
+element truss 19 19 7 2.500E+002 1
+element truss 20 20 6 2.500E+002 1
+element truss 21 21 5 2.500E+002 1
+element truss 22 22 4 2.500E+002 1
+element truss 23 23 1 2.500E+002 1
+puts "recorder"
+recorder Node -file node0.out -time -nodeRange 1 24 -dof 1 2 3 disp
+recorder Node -file node24.out -time -node  24 -dof 1 2 3 disp
+recorder Element -file ele23.out -time -eleRange 13 23 axialForce
+puts "gravity"
+## Load Case = DEAD
+pattern Plain 1 Linear {
+load 24 0.000E+000  0.000E+000 1000.00  0.000E+000 0.000E+000 0.000E+000
+}
+puts "analysis"
+constraints Plain
+numberer Plain
+system BandGeneral
+test EnergyIncr 1.0e-6 1000
+algorithm Newton
+integrator DisplacementControl 24 3 -0.01
+analysis Static
+analyze 100
+
+loadConst 0 
+
+pattern Plain 2 Linear {
+load 24 1.000E+000  0.000E+000 0.00  0.000E+000 0.000E+000 0.000E+000
+}
+puts "analysis"
+constraints Plain
+numberer Plain
+system BandGeneral
+test EnergyIncr 1.0e-6 1000
+algorithm Newton
+integrator DisplacementControl 24 1 0.5
+analysis Static
+analyze 100

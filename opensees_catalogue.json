@@ -1468,5 +1468,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from models/Dino/Application of Seam Connection Unit/ref/OPENSEES/EXAM10.tcl with EXAM10.s2k sibling; node-1 history and final full-field state validated vs node0/node1.out to 0.0001%; element recorders in source are corrupted (axialForce file duplicates time column, deformation file empty) so ele-33 is sim-only."
+  },
+  {
+    "UniqueID": "Dino_SinglePressure",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Two-phase displacement-controlled validation of a beam-on-hangers assembly with compression-only ENT truss links.",
+    "Description of Building Structural System": "Beam line hung by 11 vertical ENT compression-only trusses from fixed bases, with a central mast to z=2500 mm; 12 elasticBeamColumn frame members; sliding support at node 3 plus 10 fully-fixed bases.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6) replaying co.tcl verbatim; phase 1 pushdown (node 24 UZ -0.01 x 100) then phase 2 lateral push (node 24 UX 0.5 x 100) via SmartAnalyze DisplacementControl with per-step ODB capture (nodal plus frame plus truss).",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Concrete frame with ENT hangers",
+    "Lateral system": "Beam on tensionless hangers with mast",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Static two-phase pushover (UZ then UX)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "no",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA",
+    "Notes": "Converted from models/Dino/Application of a Single-Pressure Connection Unit/ref/OPENSEES/co.tcl; node-24 history, final full-field state and hanger axials validated vs node24/node0/ele23.out to 0.0001% over 200 steps; phase-2 pseudo-time excluded (bare loadConst 0 bookkeeping deviation, documented in README)."
   }
 ]
