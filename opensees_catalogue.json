@@ -1489,5 +1489,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "NA",
     "Notes": "Converted from models/Dino/Application of a Single-Pressure Connection Unit/ref/OPENSEES/co.tcl; node-24 history, final full-field state and hanger axials validated vs node24/node0/ele23.out to 0.0001% over 200 steps; phase-2 pseudo-time excluded (bare loadConst 0 bookkeeping deviation, documented in README)."
+  },
+  {
+    "UniqueID": "Dino_ReticulatedShell",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Elastic snap-through buckling of a 3D single-layer steel reticulated shell (Dino Exam09). A 67-node, 72-element dispBeamColumn dome (elastic DH200X200X12X12 fiber section in a shear+torsion Aggregator) is pushed down 1000 mm at crown node 7 in 200 steps of -5 mm under a -1000 N reference load; crown load-factor history matches ref/OPENSEES/node7.out exactly at all 200 steps (peak 1966.81, valley 425.35, final 4967.45).",
+    "Description of Building Structural System": "Single-layer steel reticulated (lattice) shell -- hexagonal plan (~9.6 m span, 0.5 m rise), 6 radial ribs x 5 rings (36 shell members) plus a ground-level perimeter ring beam (36 members, 30 free ring nodes + 6 pinned supports fixed UX/UY/UZ).",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6) with 67 nodes + 72 dispBeamColumn elements parsed verbatim from co.tcl via shared beamIntegration Lobatto (nIP=3); 72 Corotational transforms; one 36-fiber DH200X200X12X12 elastic section (E=2.06e5 MPa) wrapped by Aggregator 1001 (Vy 1.585e8, Vz 3.169e8, T 2.738e10); single Plain pattern (-1000 N UZ at node 7) with DisplacementControl pushdown via SmartAnalyze static.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel (Elastic E=2.06e5 MPa, fiber + rigid-shear Aggregator)",
+    "Lateral system": "Single-layer steel reticulated shell (72 dispBeamColumn, 1 fiber section)",
+    "building occupancy class": "NA (research specimen)",
+    "Lateral Loading": "Displacement-controlled UZ pushdown (-5 mm x 200 steps = -1000 mm)",
+    "Earthquake records": "NA (static buckling)",
+    "Opensees Version": "Standard OpenSeesPy (.venv, Python 3.12.12, opstool 1.0.26)",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Buckling Analysis of Steel Reticulated Shell Structure/ref/OPENSEES/co.tcl (357-line Tcl dispBeamColumn shell model, converted from ETABS EXAM09.EDB via EXAM09.e2k/EXAM09.s2k). Reference results: ref/OPENSEES/node7.out, node0.out, result.xlsx.",
+    "Notes": "Bit-exact vs node7.out at all 200 steps. -GJ = 1.0 for Tcl fidelity (source omits -GJ; the G*Sum(A*r^2) recipe gives 5.05e12 = 184x Aggregator T and over-stiffens post-buckling by ~6.5%). Dead Elastic mats 2/3 kept for tag fidelity. Constraints Plain (source prints rigidDiaphragm label but issues no MP command)."
   }
 ]

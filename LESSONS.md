@@ -64,3 +64,30 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 - Evidence: ElasticShell `analyze 1` → 100× `LoadControl 0.01`; final state
   identical (linear), `vis_06_slider.html` now shows the deflection evolving.
 - Rule: free visualisation win for linear statics; note the ramp in README.
+
+## 2026-10-08 — ReticulatedShell (Exam09 snap-through buckling)
+
+### 11. Tcl-omitted `-GJ` + Aggregator T ⇒ fiber `-GJ 1.0`, NOT G·Σ(A·r²)
+- Evidence: `Dino_ReticulatedShell` — Tcl `section Fiber 1 {...}` omits `-GJ`,
+  torsion governed solely by Aggregator T (2.738e10 N·mm²). Py `-GJ 1.0`
+  reproduces `node7.out` bit-exactly at all 200 steps (peak 1966.81, valley
+  425.35, final 4967.45). The §12au-style polar recipe G·Σ(A·r²) = 5.05e12
+  (184× the Aggregator T) over-stiffened the post-buckling branch by ~6.5%
+  (valley 453 vs 425, final 5287 vs 4967) while the pre-buckling peak still
+  matched (1970 vs 1967) — torsion only bites after snap-through.
+- Rule: when the source omits `-GJ` and an Aggregator supplies `T`, pass a
+  negligible `-GJ` (1.0) so the Aggregator governs alone. Reserve computed GJ
+  for bare fiber sections with genuinely active torsion. Refines item 3.
+
+### 12. Snap-through valleys are post-peak minima, not global minima
+- Evidence: Exam09 load factor starts at 105.9 (step 1), peaks at 1966.8,
+  unloads to 425.4 — `argmin` over the full history returns step 1.
+- Rule: locate the valley as `argmin` over `ref[peak:]`; report peak / valley
+  / final checkpoints for buckling runs.
+
+### 13. Tolerance mirroring is not always the discrepancy driver
+- Evidence: switching SmartAnalyze `NormDispIncr 1e-8` → source-mirrored
+  `EnergyIncr 1e-6 / 200 iter` changed Exam09 results not at all (identical
+  LF to 2 dp) — the 6.5% gap was entirely the GJ formulation (item 11).
+- Rule: when a gap survives tolerance mirroring, suspect formulation
+  (section/transformation defaults), not convergence.

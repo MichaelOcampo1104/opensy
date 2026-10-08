@@ -1,0 +1,357 @@
+wipe
+puts "System"
+model basic -ndm 3 -ndf 6
+puts "restraint"
+node 1 -2.400E+003 -4.157E+003 0.000E+000
+node 2 2.400E+003 -4.157E+003 0.000E+000
+node 3 -4.800E+003 0.000E+000 0.000E+000
+node 4 2.400E+003 4.157E+003 0.000E+000
+node 5 -2.400E+003 4.157E+003 0.000E+000
+node 6 4.800E+003 0.000E+000 0.000E+000
+node 7 0.000E+000 0.000E+000 5.000E+002
+node 8 2.000E+003 -3.464E+003 8.330E+001
+node 9 1.600E+003 -2.771E+003 1.667E+002
+node 10 1.200E+003 -2.079E+003 2.500E+002
+node 11 8.000E+002 -1.386E+003 3.333E+002
+node 12 4.000E+002 -6.928E+002 4.167E+002
+node 13 -2.000E+003 -3.464E+003 8.330E+001
+node 14 -1.600E+003 -2.771E+003 1.667E+002
+node 15 -1.200E+003 -2.079E+003 2.500E+002
+node 16 -8.000E+002 -1.386E+003 3.333E+002
+node 17 -4.000E+002 -6.928E+002 4.167E+002
+node 18 -4.000E+003 0.000E+000 8.330E+001
+node 19 -3.200E+003 0.000E+000 1.667E+002
+node 20 -2.400E+003 0.000E+000 2.500E+002
+node 21 -1.600E+003 0.000E+000 3.333E+002
+node 22 -8.000E+002 0.000E+000 4.167E+002
+node 23 4.000E+003 0.000E+000 8.330E+001
+node 24 3.200E+003 0.000E+000 1.667E+002
+node 25 2.400E+003 0.000E+000 2.500E+002
+node 26 1.600E+003 0.000E+000 3.333E+002
+node 27 8.000E+002 0.000E+000 4.167E+002
+node 28 2.000E+003 3.464E+003 8.330E+001
+node 29 1.600E+003 2.771E+003 1.667E+002
+node 30 1.200E+003 2.079E+003 2.500E+002
+node 31 8.000E+002 1.386E+003 3.333E+002
+node 32 4.000E+002 6.928E+002 4.167E+002
+node 33 -2.000E+003 3.464E+003 8.330E+001
+node 34 -1.600E+003 2.771E+003 1.667E+002
+node 35 -1.200E+003 2.079E+003 2.500E+002
+node 36 -8.000E+002 1.386E+003 3.333E+002
+node 37 -4.000E+002 6.928E+002 4.167E+002
+node 38 -1.600E+003 -4.157E+003 0.000E+000
+node 39 -8.000E+002 -4.157E+003 0.000E+000
+node 40 0.000E+000 -4.157E+003 0.000E+000
+node 41 8.000E+002 -4.157E+003 0.000E+000
+node 42 1.600E+003 -4.157E+003 0.000E+000
+node 43 -4.400E+003 -6.928E+002 0.000E+000
+node 44 -4.000E+003 -1.386E+003 0.000E+000
+node 45 -3.600E+003 -2.079E+003 0.000E+000
+node 46 -3.200E+003 -2.771E+003 0.000E+000
+node 47 -2.800E+003 -3.464E+003 0.000E+000
+node 48 2.800E+003 -3.464E+003 0.000E+000
+node 49 3.200E+003 -2.771E+003 0.000E+000
+node 50 3.600E+003 -2.079E+003 0.000E+000
+node 51 4.000E+003 -1.386E+003 0.000E+000
+node 52 4.400E+003 -6.928E+002 0.000E+000
+node 53 -4.400E+003 6.928E+002 0.000E+000
+node 54 -4.000E+003 1.386E+003 0.000E+000
+node 55 -3.600E+003 2.079E+003 0.000E+000
+node 56 -3.200E+003 2.771E+003 0.000E+000
+node 57 -2.800E+003 3.464E+003 0.000E+000
+node 58 2.800E+003 3.464E+003 0.000E+000
+node 59 3.200E+003 2.771E+003 0.000E+000
+node 60 3.600E+003 2.079E+003 0.000E+000
+node 61 4.000E+003 1.386E+003 0.000E+000
+node 62 4.400E+003 6.928E+002 0.000E+000
+node 63 -1.600E+003 4.157E+003 0.000E+000
+node 64 -8.000E+002 4.157E+003 0.000E+000
+node 65 0.000E+000 4.157E+003 0.000E+000
+node 66 8.000E+002 4.157E+003 0.000E+000
+node 67 1.600E+003 4.157E+003 0.000E+000
+puts "rigidDiaphragm"
+puts "mass"
+mass 1 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 2 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 3 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 4 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 5 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 6 6.523E-002 6.523E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 7 1.309E-001 1.309E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 8 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 9 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 10 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 11 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 12 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 13 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 14 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 15 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 16 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 17 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 18 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 19 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 20 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 21 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 22 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 23 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 24 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 25 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 26 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 27 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 28 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 29 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 30 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 31 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 32 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 33 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 34 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 35 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 36 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 37 4.364E-002 4.364E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 38 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 39 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 40 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 41 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 42 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 43 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 44 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 45 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 46 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 47 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 48 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 49 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 50 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 51 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 52 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 53 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 54 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 55 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 56 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 57 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 58 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 59 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 60 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 61 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 62 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 63 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 64 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 65 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 66 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 67 4.341E-002 4.341E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+puts "node"
+fix 1 1 1 1 0 0 0;
+fix 2 1 1 1 0 0 0;
+fix 3 1 1 1 0 0 0;
+fix 4 1 1 1 0 0 0;
+fix 5 1 1 1 0 0 0;
+fix 6 1 1 1 0 0 0;
+puts "material"
+uniaxialMaterial Elastic 1 2.060E+005
+uniaxialMaterial Elastic 2 2.482E+004
+uniaxialMaterial Elastic 3 1.999E+005
+uniaxialMaterial Elastic 201 1.585E+008
+uniaxialMaterial Elastic 301 3.169E+008
+uniaxialMaterial Elastic 401 2.738E+010
+##DH200X200X12X12 
+section Fiber 1 {
+fiber -9.167E+001 -9.400E+001 2.000E+002 1
+fiber -7.500E+001 -9.400E+001 2.000E+002 1
+fiber -5.833E+001 -9.400E+001 2.000E+002 1
+fiber -4.167E+001 -9.400E+001 2.000E+002 1
+fiber -2.500E+001 -9.400E+001 2.000E+002 1
+fiber -8.333E+000 -9.400E+001 2.000E+002 1
+fiber 8.333E+000 -9.400E+001 2.000E+002 1
+fiber 2.500E+001 -9.400E+001 2.000E+002 1
+fiber 4.167E+001 -9.400E+001 2.000E+002 1
+fiber 5.833E+001 -9.400E+001 2.000E+002 1
+fiber 7.500E+001 -9.400E+001 2.000E+002 1
+fiber 9.167E+001 -9.400E+001 2.000E+002 1
+fiber -9.167E+001 9.400E+001 2.000E+002 1
+fiber -7.500E+001 9.400E+001 2.000E+002 1
+fiber -5.833E+001 9.400E+001 2.000E+002 1
+fiber -4.167E+001 9.400E+001 2.000E+002 1
+fiber -2.500E+001 9.400E+001 2.000E+002 1
+fiber -8.333E+000 9.400E+001 2.000E+002 1
+fiber 8.333E+000 9.400E+001 2.000E+002 1
+fiber 2.500E+001 9.400E+001 2.000E+002 1
+fiber 4.167E+001 9.400E+001 2.000E+002 1
+fiber 5.833E+001 9.400E+001 2.000E+002 1
+fiber 7.500E+001 9.400E+001 2.000E+002 1
+fiber 9.167E+001 9.400E+001 2.000E+002 1
+fiber 0.000E+000 -8.067E+001 1.760E+002 1
+fiber 0.000E+000 -6.600E+001 1.760E+002 1
+fiber 0.000E+000 -5.133E+001 1.760E+002 1
+fiber 0.000E+000 -3.667E+001 1.760E+002 1
+fiber 0.000E+000 -2.200E+001 1.760E+002 1
+fiber 0.000E+000 -7.333E+000 1.760E+002 1
+fiber 0.000E+000 7.333E+000 1.760E+002 1
+fiber 0.000E+000 2.200E+001 1.760E+002 1
+fiber 0.000E+000 3.667E+001 1.760E+002 1
+fiber 0.000E+000 5.133E+001 1.760E+002 1
+fiber 0.000E+000 6.600E+001 1.760E+002 1
+fiber 0.000E+000 8.067E+001 1.760E+002 1
+}
+section Aggregator 1001 201 Vy 301 Vz 401 T -section 1
+puts "transformation"
+geomTransf Corotational 1 0.052 -0.090 0.995 
+geomTransf Corotational 2 0.052 -0.090 0.995 
+geomTransf Corotational 3 0.052 -0.090 0.995 
+geomTransf Corotational 4 0.052 -0.090 0.995 
+geomTransf Corotational 5 0.052 -0.090 0.995 
+geomTransf Corotational 6 0.052 -0.090 0.995 
+geomTransf Corotational 7 -0.052 -0.090 0.995 
+geomTransf Corotational 8 -0.052 -0.090 0.995 
+geomTransf Corotational 9 -0.052 -0.090 0.995 
+geomTransf Corotational 10 -0.052 -0.090 0.995 
+geomTransf Corotational 11 -0.052 -0.090 0.995 
+geomTransf Corotational 12 -0.052 -0.090 0.995 
+geomTransf Corotational 13 -0.104 0.000 0.995 
+geomTransf Corotational 14 -0.104 0.000 0.995 
+geomTransf Corotational 15 -0.104 0.000 0.995 
+geomTransf Corotational 16 -0.104 0.000 0.995 
+geomTransf Corotational 17 -0.104 0.000 0.995 
+geomTransf Corotational 18 -0.104 0.000 0.995 
+geomTransf Corotational 19 0.104 0.000 0.995 
+geomTransf Corotational 20 0.104 0.000 0.995 
+geomTransf Corotational 21 0.104 0.000 0.995 
+geomTransf Corotational 22 0.104 0.000 0.995 
+geomTransf Corotational 23 0.104 0.000 0.995 
+geomTransf Corotational 24 0.104 0.000 0.995 
+geomTransf Corotational 25 0.052 0.090 0.995 
+geomTransf Corotational 26 0.052 0.090 0.995 
+geomTransf Corotational 27 0.052 0.090 0.995 
+geomTransf Corotational 28 0.052 0.090 0.995 
+geomTransf Corotational 29 0.052 0.090 0.995 
+geomTransf Corotational 30 0.052 0.090 0.995 
+geomTransf Corotational 31 -0.052 0.090 0.995 
+geomTransf Corotational 32 -0.052 0.090 0.995 
+geomTransf Corotational 33 -0.052 0.090 0.995 
+geomTransf Corotational 34 -0.052 0.090 0.995 
+geomTransf Corotational 35 -0.052 0.090 0.995 
+geomTransf Corotational 36 -0.052 0.090 0.995 
+geomTransf Corotational 37 0.000 0.000 1.000 
+geomTransf Corotational 38 0.000 0.000 1.000 
+geomTransf Corotational 39 0.000 0.000 1.000 
+geomTransf Corotational 40 0.000 0.000 1.000 
+geomTransf Corotational 41 0.000 0.000 1.000 
+geomTransf Corotational 42 0.000 0.000 1.000 
+geomTransf Corotational 43 0.000 0.000 1.000 
+geomTransf Corotational 44 0.000 0.000 1.000 
+geomTransf Corotational 45 0.000 0.000 1.000 
+geomTransf Corotational 46 0.000 0.000 1.000 
+geomTransf Corotational 47 0.000 0.000 1.000 
+geomTransf Corotational 48 0.000 0.000 1.000 
+geomTransf Corotational 49 0.000 0.000 1.000 
+geomTransf Corotational 50 0.000 0.000 1.000 
+geomTransf Corotational 51 0.000 0.000 1.000 
+geomTransf Corotational 52 0.000 0.000 1.000 
+geomTransf Corotational 53 0.000 0.000 1.000 
+geomTransf Corotational 54 0.000 0.000 1.000 
+geomTransf Corotational 55 0.000 0.000 1.000 
+geomTransf Corotational 56 0.000 0.000 1.000 
+geomTransf Corotational 57 0.000 0.000 1.000 
+geomTransf Corotational 58 0.000 0.000 1.000 
+geomTransf Corotational 59 0.000 0.000 1.000 
+geomTransf Corotational 60 0.000 0.000 1.000 
+geomTransf Corotational 61 0.000 0.000 1.000 
+geomTransf Corotational 62 0.000 0.000 1.000 
+geomTransf Corotational 63 0.000 0.000 1.000 
+geomTransf Corotational 64 0.000 0.000 1.000 
+geomTransf Corotational 65 0.000 0.000 1.000 
+geomTransf Corotational 66 0.000 0.000 1.000 
+geomTransf Corotational 67 0.000 0.000 1.000 
+geomTransf Corotational 68 0.000 0.000 1.000 
+geomTransf Corotational 69 0.000 0.000 1.000 
+geomTransf Corotational 70 0.000 0.000 1.000 
+geomTransf Corotational 71 0.000 0.000 1.000 
+geomTransf Corotational 72 0.000 0.000 1.000 
+puts "element"
+element dispBeamColumn 1 2 8 3 1001 1
+element dispBeamColumn 2 8 9 3 1001 2
+element dispBeamColumn 3 9 10 3 1001 3
+element dispBeamColumn 4 10 11 3 1001 4
+element dispBeamColumn 5 11 12 3 1001 5
+element dispBeamColumn 6 12 7 3 1001 6
+element dispBeamColumn 7 1 13 3 1001 7
+element dispBeamColumn 8 13 14 3 1001 8
+element dispBeamColumn 9 14 15 3 1001 9
+element dispBeamColumn 10 15 16 3 1001 10
+element dispBeamColumn 11 16 17 3 1001 11
+element dispBeamColumn 12 17 7 3 1001 12
+element dispBeamColumn 13 3 18 3 1001 13
+element dispBeamColumn 14 18 19 3 1001 14
+element dispBeamColumn 15 19 20 3 1001 15
+element dispBeamColumn 16 20 21 3 1001 16
+element dispBeamColumn 17 21 22 3 1001 17
+element dispBeamColumn 18 22 7 3 1001 18
+element dispBeamColumn 19 6 23 3 1001 19
+element dispBeamColumn 20 23 24 3 1001 20
+element dispBeamColumn 21 24 25 3 1001 21
+element dispBeamColumn 22 25 26 3 1001 22
+element dispBeamColumn 23 26 27 3 1001 23
+element dispBeamColumn 24 27 7 3 1001 24
+element dispBeamColumn 25 4 28 3 1001 25
+element dispBeamColumn 26 28 29 3 1001 26
+element dispBeamColumn 27 29 30 3 1001 27
+element dispBeamColumn 28 30 31 3 1001 28
+element dispBeamColumn 29 31 32 3 1001 29
+element dispBeamColumn 30 32 7 3 1001 30
+element dispBeamColumn 31 5 33 3 1001 31
+element dispBeamColumn 32 33 34 3 1001 32
+element dispBeamColumn 33 34 35 3 1001 33
+element dispBeamColumn 34 35 36 3 1001 34
+element dispBeamColumn 35 36 37 3 1001 35
+element dispBeamColumn 36 37 7 3 1001 36
+element dispBeamColumn 37 1 38 3 1001 37
+element dispBeamColumn 38 38 39 3 1001 38
+element dispBeamColumn 39 39 40 3 1001 39
+element dispBeamColumn 40 40 41 3 1001 40
+element dispBeamColumn 41 41 42 3 1001 41
+element dispBeamColumn 42 42 2 3 1001 42
+element dispBeamColumn 43 3 43 3 1001 43
+element dispBeamColumn 44 43 44 3 1001 44
+element dispBeamColumn 45 44 45 3 1001 45
+element dispBeamColumn 46 45 46 3 1001 46
+element dispBeamColumn 47 46 47 3 1001 47
+element dispBeamColumn 48 47 1 3 1001 48
+element dispBeamColumn 49 2 48 3 1001 49
+element dispBeamColumn 50 48 49 3 1001 50
+element dispBeamColumn 51 49 50 3 1001 51
+element dispBeamColumn 52 50 51 3 1001 52
+element dispBeamColumn 53 51 52 3 1001 53
+element dispBeamColumn 54 52 6 3 1001 54
+element dispBeamColumn 55 3 53 3 1001 55
+element dispBeamColumn 56 53 54 3 1001 56
+element dispBeamColumn 57 54 55 3 1001 57
+element dispBeamColumn 58 55 56 3 1001 58
+element dispBeamColumn 59 56 57 3 1001 59
+element dispBeamColumn 60 57 5 3 1001 60
+element dispBeamColumn 61 4 58 3 1001 61
+element dispBeamColumn 62 58 59 3 1001 62
+element dispBeamColumn 63 59 60 3 1001 63
+element dispBeamColumn 64 60 61 3 1001 64
+element dispBeamColumn 65 61 62 3 1001 65
+element dispBeamColumn 66 62 6 3 1001 66
+element dispBeamColumn 67 5 63 3 1001 67
+element dispBeamColumn 68 63 64 3 1001 68
+element dispBeamColumn 69 64 65 3 1001 69
+element dispBeamColumn 70 65 66 3 1001 70
+element dispBeamColumn 71 66 67 3 1001 71
+element dispBeamColumn 72 67 4 3 1001 72
+puts "recorder"
+recorder Node -file node0.out -time -nodeRange 1 67 -dof 1 2 3 disp
+recorder Node -file node7.out -time -node 7 -dof 1 2 3 disp
+puts "loading"
+## Load Case = DEAD
+pattern Plain 1 Linear {
+load 7 0.000E+000 0.000E+000 -1.000E+003 0.000E+000 0.000E+000 0.000E+000
+}
+puts "analysis"
+constraints Lagrange 
+numberer RCM
+system UmfPack
+test EnergyIncr 1.0e-6 200
+algorithm Newton
+integrator DisplacementControl 7 3 -5
+analysis Static
+analyze 200
