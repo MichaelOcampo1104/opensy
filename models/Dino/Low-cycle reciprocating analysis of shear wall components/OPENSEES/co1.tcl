@@ -1,0 +1,321 @@
+wipe
+puts "System"
+model basic -ndm 3 -ndf 6
+puts "restraint"
+node 1 0.000E+000 1.219E+003 9.150E+002
+node 2 5.585E+002 1.219E+003 9.150E+002
+node 3 5.585E+002 0.000E+000 9.150E+002
+node 4 1.117E+003 1.219E+003 9.150E+002
+node 5 2.792E+002 1.219E+003 9.150E+002
+node 6 5.585E+002 6.095E+002 9.150E+002
+node 7 8.378E+002 1.219E+003 9.150E+002
+node 8 8.378E+002 1.219E+003 0.000E+000
+node 9 2.792E+002 1.219E+003 0.000E+000
+node 10 5.585E+002 6.095E+002 0.000E+000
+node 11 0.000E+000 1.219E+003 1.830E+003
+node 12 5.585E+002 1.219E+003 1.830E+003
+node 13 5.585E+002 0.000E+000 1.830E+003
+node 14 1.117E+003 1.219E+003 1.830E+003
+node 15 2.792E+002 1.219E+003 1.830E+003
+node 16 5.585E+002 6.095E+002 1.830E+003
+node 17 8.378E+002 1.219E+003 1.830E+003
+node 18 0.000E+000 1.219E+003 2.745E+003
+node 19 5.585E+002 1.219E+003 2.745E+003
+node 20 5.585E+002 0.000E+000 2.745E+003
+node 21 1.117E+003 1.219E+003 2.745E+003
+node 22 2.792E+002 1.219E+003 2.745E+003
+node 23 5.585E+002 6.095E+002 2.745E+003
+node 24 8.378E+002 1.219E+003 2.745E+003
+node 25 0.000E+000 1.219E+003 3.660E+003
+node 26 5.585E+002 1.219E+003 3.660E+003
+node 27 5.585E+002 0.000E+000 3.660E+003
+node 28 1.117E+003 1.219E+003 3.660E+003
+node 29 2.792E+002 1.219E+003 3.660E+003
+node 30 5.585E+002 6.095E+002 3.660E+003
+node 31 8.378E+002 1.219E+003 3.660E+003
+puts "rigidDiaphragm"
+puts "mass"
+mass 1 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 2 3.580E-004 3.580E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 3 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 4 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 5 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 6 2.847E-001 2.847E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 7 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 8 6.510E-002 6.510E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 9 6.510E-002 6.510E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 10 1.422E-001 1.422E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 11 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 12 3.580E-004 3.580E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 13 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 14 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 15 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 16 2.847E-001 2.847E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 17 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 18 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 19 3.580E-004 3.580E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 20 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 21 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 22 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 23 2.847E-001 2.847E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 24 1.304E-001 1.304E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 25 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 26 3.580E-004 3.580E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 27 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 28 1.193E-004 1.193E-004 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 29 6.534E-002 6.534E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 30 1.425E-001 1.425E-001 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+mass 31 6.534E-002 6.534E-002 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+puts "node"
+fix 8 1 1 1 1 1 1;
+fix 9 1 1 1 1 1 1;
+fix 10 1 1 1 1 1 1;
+puts "Equal DOF"
+puts "material"
+##################################################################将材料1改为Steel01材料
+#uniaxialMaterial Elastic 1 1.999E+005
+uniaxialMaterial Steel01 1 395 200000 0.0185
+uniaxialMaterial Elastic 2 2.550E+004
+uniaxialMaterial Elastic 3 3.000E+004
+##################################################################将材料4改为Concrete01材料
+#uniaxialMaterial Elastic 4 3.150E+004
+uniaxialMaterial Concrete01 4  -30  -0.0028 -15 -0.015
+uniaxialMaterial Elastic 5 2.060E+005
+uniaxialMaterial Elastic 201 6.225E+008
+uniaxialMaterial Elastic 301 6.225E+008
+uniaxialMaterial Elastic 401 2.292E+012
+uniaxialMaterial Elastic 202 1.360E+009
+uniaxialMaterial Elastic 302 1.360E+009
+uniaxialMaterial Elastic 402 5.361E+012
+uniaxialMaterial Elastic 203 5.282E+008
+uniaxialMaterial Elastic 303 5.282E+008
+uniaxialMaterial Elastic 403 1.690E+011
+##C35W102X558 
+section Fiber 1 {
+fiber -4.080E+001 -2.232E+002 2.277E+003 4
+fiber -2.040E+001 -2.232E+002 2.277E+003 4
+fiber 0.000E+000 -2.232E+002 2.277E+003 4
+fiber 2.040E+001 -2.232E+002 2.277E+003 4
+fiber 4.080E+001 -2.232E+002 2.277E+003 4
+fiber -4.080E+001 -1.116E+002 2.277E+003 4
+fiber -2.040E+001 -1.116E+002 2.277E+003 4
+fiber 0.000E+000 -1.116E+002 2.277E+003 4
+fiber 2.040E+001 -1.116E+002 2.277E+003 4
+fiber 4.080E+001 -1.116E+002 2.277E+003 4
+fiber -4.080E+001 0.000E+000 2.277E+003 4
+fiber -2.040E+001 0.000E+000 2.277E+003 4
+fiber 0.000E+000 0.000E+000 2.277E+003 4
+fiber 2.040E+001 0.000E+000 2.277E+003 4
+fiber 4.080E+001 0.000E+000 2.277E+003 4
+fiber -4.080E+001 1.116E+002 2.277E+003 4
+fiber -2.040E+001 1.116E+002 2.277E+003 4
+fiber 0.000E+000 1.116E+002 2.277E+003 4
+fiber 2.040E+001 1.116E+002 2.277E+003 4
+fiber 4.080E+001 1.116E+002 2.277E+003 4
+fiber -4.080E+001 2.232E+002 2.277E+003 4
+fiber -2.040E+001 2.232E+002 2.277E+003 4
+fiber 0.000E+000 2.232E+002 2.277E+003 4
+fiber 2.040E+001 2.232E+002 2.277E+003 4
+fiber 4.080E+001 2.232E+002 2.277E+003 4
+fiber -3.200E+001 -2.600E+002 5.808E+001 1
+fiber 3.200E+001 -2.600E+002 5.808E+001 1
+fiber -3.200E+001 2.600E+002 5.808E+001 1
+fiber 3.200E+001 2.600E+002 5.808E+001 1
+fiber -3.200E+001 -1.560E+002 5.808E+001 1
+fiber -3.200E+001 -5.200E+001 5.808E+001 1
+fiber -3.200E+001 5.200E+001 5.808E+001 1
+fiber -3.200E+001 1.560E+002 5.808E+001 1
+fiber 3.200E+001 -1.560E+002 5.808E+001 1
+fiber 3.200E+001 -5.200E+001 5.808E+001 1
+fiber 3.200E+001 5.200E+001 5.808E+001 1
+fiber 3.200E+001 1.560E+002 5.808E+001 1
+}
+##C35W102X1219 
+section Fiber 2 {
+fiber -4.876E+002 -4.080E+001 4.974E+003 4
+fiber -2.438E+002 -4.080E+001 4.974E+003 4
+fiber 0.000E+000 -4.080E+001 4.974E+003 4
+fiber 2.438E+002 -4.080E+001 4.974E+003 4
+fiber 4.876E+002 -4.080E+001 4.974E+003 4
+fiber -4.876E+002 -2.040E+001 4.974E+003 4
+fiber -2.438E+002 -2.040E+001 4.974E+003 4
+fiber 0.000E+000 -2.040E+001 4.974E+003 4
+fiber 2.438E+002 -2.040E+001 4.974E+003 4
+fiber 4.876E+002 -2.040E+001 4.974E+003 4
+fiber -4.876E+002 0.000E+000 4.974E+003 4
+fiber -2.438E+002 0.000E+000 4.974E+003 4
+fiber 0.000E+000 0.000E+000 4.974E+003 4
+fiber 2.438E+002 0.000E+000 4.974E+003 4
+fiber 4.876E+002 0.000E+000 4.974E+003 4
+fiber -4.876E+002 2.040E+001 4.974E+003 4
+fiber -2.438E+002 2.040E+001 4.974E+003 4
+fiber 0.000E+000 2.040E+001 4.974E+003 4
+fiber 2.438E+002 2.040E+001 4.974E+003 4
+fiber 4.876E+002 2.040E+001 4.974E+003 4
+fiber -4.876E+002 4.080E+001 4.974E+003 4
+fiber -2.438E+002 4.080E+001 4.974E+003 4
+fiber 0.000E+000 4.080E+001 4.974E+003 4
+fiber 2.438E+002 4.080E+001 4.974E+003 4
+fiber 4.876E+002 4.080E+001 4.974E+003 4
+fiber -5.905E+002 -3.200E+001 5.605E+001 1
+fiber -4.921E+002 -3.200E+001 5.605E+001 1
+fiber -3.937E+002 -3.200E+001 5.605E+001 1
+fiber -2.953E+002 -3.200E+001 5.605E+001 1
+fiber -1.968E+002 -3.200E+001 5.605E+001 1
+fiber -9.842E+001 -3.200E+001 5.605E+001 1
+fiber 0.000E+000 -3.200E+001 5.605E+001 1
+fiber 9.842E+001 -3.200E+001 5.605E+001 1
+fiber 1.968E+002 -3.200E+001 5.605E+001 1
+fiber 2.953E+002 -3.200E+001 5.605E+001 1
+fiber 3.937E+002 -3.200E+001 5.605E+001 1
+fiber 4.921E+002 -3.200E+001 5.605E+001 1
+fiber 5.905E+002 -3.200E+001 5.605E+001 1
+fiber -5.905E+002 3.200E+001 5.605E+001 1
+fiber -4.921E+002 3.200E+001 5.605E+001 1
+fiber -3.937E+002 3.200E+001 5.605E+001 1
+fiber -2.953E+002 3.200E+001 5.605E+001 1
+fiber -1.968E+002 3.200E+001 5.605E+001 1
+fiber -9.842E+001 3.200E+001 5.605E+001 1
+fiber 0.000E+000 3.200E+001 5.605E+001 1
+fiber 9.842E+001 3.200E+001 5.605E+001 1
+fiber 1.968E+002 3.200E+001 5.605E+001 1
+fiber 2.953E+002 3.200E+001 5.605E+001 1
+fiber 3.937E+002 3.200E+001 5.605E+001 1
+fiber 4.921E+002 3.200E+001 5.605E+001 1
+fiber 5.905E+002 3.200E+001 5.605E+001 1
+}
+section Aggregator 1001 201 Vy 301 Vz 401 T -section 1
+section Aggregator 1002 202 Vy 302 Vz 402 T -section 2
+puts "transformation"
+geomTransf Linear 1 1.000 0.000 0.000 
+geomTransf Linear 2 1.000 0.000 0.000 
+geomTransf Linear 3 1.000 0.000 0.000 
+geomTransf Linear 4 0.000 0.000 1.000 
+geomTransf Linear 5 0.000 0.000 1.000 
+geomTransf Linear 6 0.000 0.000 1.000 
+geomTransf Linear 7 0.000 0.000 1.000 
+geomTransf Linear 8 0.000 0.000 1.000 
+geomTransf Linear 9 0.000 0.000 1.000 
+geomTransf Linear 10 1.000 0.000 0.000 
+geomTransf Linear 11 1.000 0.000 0.000 
+geomTransf Linear 12 1.000 0.000 0.000 
+geomTransf Linear 13 0.000 0.000 1.000 
+geomTransf Linear 14 0.000 0.000 1.000 
+geomTransf Linear 15 0.000 0.000 1.000 
+geomTransf Linear 16 0.000 0.000 1.000 
+geomTransf Linear 17 0.000 0.000 1.000 
+geomTransf Linear 18 0.000 0.000 1.000 
+geomTransf Linear 19 1.000 0.000 0.000 
+geomTransf Linear 20 1.000 0.000 0.000 
+geomTransf Linear 21 1.000 0.000 0.000 
+geomTransf Linear 22 0.000 0.000 1.000 
+geomTransf Linear 23 0.000 0.000 1.000 
+geomTransf Linear 24 0.000 0.000 1.000 
+geomTransf Linear 25 0.000 0.000 1.000 
+geomTransf Linear 26 0.000 0.000 1.000 
+geomTransf Linear 27 0.000 0.000 1.000 
+geomTransf Linear 28 1.000 0.000 0.000 
+geomTransf Linear 29 1.000 0.000 0.000 
+geomTransf Linear 30 1.000 0.000 0.000 
+geomTransf Linear 31 0.000 0.000 1.000 
+geomTransf Linear 32 0.000 0.000 1.000 
+geomTransf Linear 33 0.000 0.000 1.000 
+geomTransf Linear 34 0.000 0.000 1.000 
+geomTransf Linear 35 0.000 0.000 1.000 
+geomTransf Linear 36 0.000 0.000 1.000 
+puts "element"
+
+element dispBeamColumn 1 24 31 4 1001 1
+element dispBeamColumn 2 22 29 4 1001 2
+element dispBeamColumn 3 23 30 4 1002 3
+element elasticBeamColumn 4 25 29 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 4
+element elasticBeamColumn 5 29 26 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 5
+element elasticBeamColumn 6 26 30 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 6
+element elasticBeamColumn 7 30 27 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 7
+element elasticBeamColumn 8 26 31 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 8
+element elasticBeamColumn 9 31 28 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 9
+element dispBeamColumn 10 17 24 4 1001 10
+element dispBeamColumn 11 15 22 4 1001 11
+element dispBeamColumn 12 16 23 4 1002 12
+element elasticBeamColumn 13 18 22 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 13
+element elasticBeamColumn 14 22 19 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 14
+element elasticBeamColumn 15 19 23 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 15
+element elasticBeamColumn 16 23 20 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 16
+element elasticBeamColumn 17 19 24 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 17
+element elasticBeamColumn 18 24 21 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 18
+element dispBeamColumn 19 7 17 4 1001 19
+element dispBeamColumn 20 5 15 4 1001 20
+element dispBeamColumn 21 6 16 4 1002 21
+element elasticBeamColumn 22 11 15 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 22
+element elasticBeamColumn 23 15 12 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 23
+element elasticBeamColumn 24 12 16 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 24
+element elasticBeamColumn 25 16 13 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 25
+element elasticBeamColumn 26 12 17 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 26
+element elasticBeamColumn 27 17 14 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 27
+element dispBeamColumn 28 8 7 4 1001 28
+element dispBeamColumn 29 9 5 4 1001 29
+element dispBeamColumn 30 10 6 4 1002 30
+element elasticBeamColumn 31 1 5 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 31
+element elasticBeamColumn 32 5 2 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 32
+element elasticBeamColumn 33 2 6 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 33
+element elasticBeamColumn 34 6 3 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 34
+element elasticBeamColumn 35 2 7 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 35
+element elasticBeamColumn 36 7 4 1.520E+004 2.060E+008 7.923E+007 2.133E+006 3.955E+008 2.693E+007 36
+
+
+puts "shell element"
+puts "recorder"
+recorder Node -file node0.out -time -nodeRange 1 31 -dof 1 2 3 disp
+recorder Element -file ele0.out -time -eleRange 1 36 localForce
+##################################################################增加记录节点26的位移
+recorder Node -file node26.out -time -node 26 -dof 1 2 3 disp
+puts "gravity"
+## Load Case = DEAD
+pattern Plain 1 Linear {
+load 29 0.000E+000 0.000E+000 -2.433E+005 0.000E+000 0.000E+000 0.000E+000
+load 30 0.000E+000 0.000E+000 -2.433E+005 0.000E+000 0.000E+000 0.000E+000
+load 31 0.000E+000 0.000E+000 -2.433E+005 0.000E+000 0.000E+000 0.000E+000
+}
+puts "analysis"
+constraints Plain
+numberer Plain
+system BandGeneral
+test EnergyIncr 1.0e-6 200
+algorithm Newton
+integrator LoadControl 1
+analysis Static
+analyze 1
+##################################################################以上荷载保持不变
+loadConst 0.0
+puts "pushover"
+## Load Case = PUSH
+pattern Plain 2 Linear {
+load 26 0.000E+000 1.000E+003 0.000E+000 0.000E+000 0.000E+000 0.000E+000
+}
+puts "analysis"
+constraints Plain
+numberer Plain
+system BandGeneral
+test EnergyIncr 1.0e-6 200
+algorithm Newton
+analysis Static
+
+##################################################################低周往复分析
+integrator DisplacementControl 26 2 0.2
+analyze 100
+integrator DisplacementControl 26 2 -0.4
+analyze 100
+integrator DisplacementControl 26 2 0.6
+analyze 100
+integrator DisplacementControl 26 2 -0.8
+analyze 100
+integrator DisplacementControl 26 2 1.0
+analyze 100
+integrator DisplacementControl 26 2 -1.2
+analyze 100
+integrator DisplacementControl 26 2 1.4
+analyze 100
+integrator DisplacementControl 26 2 -1.4
+analyze 100
+integrator DisplacementControl 26 2 1.2
+analyze 100
