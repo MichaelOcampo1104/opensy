@@ -1195,5 +1195,26 @@
     "Suggested Model citation": "Chen, X. W. (2018). Static elasto-plastic analysis of steel reinforced concrete column. Dino Chen's Blog, http://dinochen.com/article.asp?id=267.",
     "Links to Papers / Design Reports": "http://dinochen.com/article.asp?id=267",
     "Notes": "Converted from original Tcl reference script co.tcl. Units are in N, mm, MPa. Gravity analysis uses manual LoadControl loop per AGENT.md \u252c\u00ba3c exception, followed by displacement-controlled pushover managed by opst.anlys.SmartAnalyze. Visualisations rendered via opstool >= 1.0 (vis_utils)."
+  },
+  {
+    "UniqueID": "LbarWalkway2m",
+    "URL": "NA",
+    "num_models": "1",
+    "purpose": "Equivalent OpenSeesPy model of the STAAD 2 m L-bar walkway, run at ULS 1.35 DL + 1.5 LL for member forces and reactions.",
+    "Description of Building Structural System": "2 m walkway framing in equal angles EA 75x75x6 (S275): two 1 m spans cantilevering from a fixed support with a diagonal brace to a pinned support 0.6 m below.",
+    "Description of Model": "3D elastic model (ndm=3, ndf=6) with 4 nodes and 3 elasticBeamColumn members (tags = STAAD joint/member numbers). Joint 1 fixed, joint 4 pinned. Single ULS pattern combining factored selfweight (1.35) and 2.25 kN/m live UDL on the two span members (1.5). Load-controlled static via the AGENT.md 3c manual LoadControl/Linear loop. ODB via opst.post.CreateODB.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Steel (S275, elastic)",
+    "Lateral system": "Braced cantilever walkway",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Gravity-only static (ULS)",
+    "Earthquake records": "NA",
+    "Opensees Version": "NA",
+    "model generator": "NA",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "models/2m L bars Walk way/Lbar walkway.std",
+    "Notes": "Two deliberate deviations from the .std (user-confirmed 2026-09-23): member 3 same EA 75x75x6 (no property in .std); joint 4 pinned (no support in .std, else a mechanism). Nominal EA 75x75x6: A=873 mm2, Iy=Iz=455000 mm4, J=10368 mm4. Counter-check vs STAAD .anl pending (<=3%)."
   }
 ]
