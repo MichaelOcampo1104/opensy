@@ -91,3 +91,26 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
   LF to 2 dp) — the 6.5% gap was entirely the GJ formulation (item 11).
 - Rule: when a gap survives tolerance mirroring, suspect formulation
   (section/transformation defaults), not convergence.
+
+
+## 2026-11-14 — Dino_FramePushover (Exam04 3D RC Frame Pushover)
+
+### 14. Provenance cross-check catches misnamed folders
+- Evidence: Folder named `Elastic Time History Analysis of Frame Structure`, but
+  `ref/EXAM04.s2k` header reads `实例4_框架结构推覆分析` and `co.tcl` implements
+  gravity + 100-step displacement-controlled pushover (`node8.out`).
+- Rule: always verify header comments and load patterns in `.tcl` / `.s2k`
+  sources rather than assuming folder names reflect the actual analysis type.
+
+### 15. Lateral reference pattern ordering with `loadConst`
+- Evidence: defining lateral pattern before gravity causes `ops.loadConst("-time", 0.0)`
+  to freeze the reference lateral vector to λ=0, leading to DisplacementControl failure.
+- Rule: strictly define lateral pushover patterns AFTER `run_gravity()` and
+  `loadConst("-time", 0.0)`.
+
+### 16. Fast SmartAnalyze convergence on 3D RC fiber frames
+- Evidence: `Dino_FramePushover` with 47 `nonlinearBeamColumn` elements and 4 fiber
+  aggregators solved 10 gravity steps + 100 pushover steps to 300 mm in 0.48 s.
+  Nodal displacement matched `node8.out` within 0.00045 mm (0.00015%).
+- Rule: mirroring the source's `EnergyIncr 1e-3` / 1000 iter tolerance under
+  SmartAnalyze provides fast convergence and bit-accurate tracking on RC frames.
