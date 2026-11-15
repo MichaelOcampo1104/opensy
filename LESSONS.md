@@ -215,3 +215,9 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 27. Early load-factor offset against a Tcl reference: rule out the solver, then document it
 - Evidence: `Dino_RC_Column_4Elem_3D_Pushover` (tcl_ref/opensees2/co.tcl). Node 1 UX matches exactly and UZ within 4.8e-6 mm, but the replayed load factor is 13% high at step 1 (16.50 vs 14.60 kN) and 2.6 kN high at step 3, falling to a 0.11% mean error from step 10. A plain-Newton replay matches the SmartAnalyze run to 1.5e-10 kN, and a similar early offset (about 15% at step 1) appears in `Dino_SRC_Column_3D_Pushover`.
 - Rule: when displacements match and only the early load factors differ, run a plain-Newton literal replay to rule out the solver, then state the offset in the README and catalogue. Do not tune the model toward the reference.
+
+## 2026-11-15 — Dino_Beam_Exam03_Pushdown (Example 03: reference outputs unusable)
+
+### 28. Check that a reference is non-degenerate before converting; if it is not, validate analytically and say so
+- Evidence: `Exam03.tcl` (tcl_ref/opensees) has a `node0.out` whose 600 displacement entries are all zero, and its node5.out and element outputs are missing. The conversion was therefore checked only against elastic beam theory: the first three steps match cracked-section theory to 0.13%. For cracked sections the sign of the load matters: with asymmetric reinforcement (780 mm^2 top, 1470 mm^2 bottom), sagging and hogging stiffnesses differ (6.05e13 vs 3.68e13 N mm^2).
+- Rule: before converting, count the nonzero entries in each reference file. If the references are empty or zero, convert anyway if useful, record "analytic only" in the README and catalogue, and state the basis of the check.

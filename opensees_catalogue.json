@@ -1615,5 +1615,26 @@
     "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, video 03/04. http://www.dinochen.com/article.asp?id=296",
     "Links to Papers / Design Reports": "Original source: models/Dino/Static Elastic-Plastic Analysis of Frame Structures/Dino_RC_Column_1Elem_3D_Pushover/ref/co.tcl (copied from tcl_ref/opensees). Reference results: ref/node1.out (node 1); ref/excel.xlsx (curve2 left block equals node1.out; right block not reproduced).",
     "Notes": "Node 1 UX exact and UZ within 5e-6 mm; load factor mean error 0.53% over 100 steps, mostly from steps 1-9 (up to 2.9 kN high). A plain-Newton replay gives identical results, so the early offset lies between the reference and the literal replay (see LESSONS 27). -GJ 1e8 N mm (co.tcl assigns none; AGENT.md default)."
+  },
+  {
+    "UniqueID": "Dino_Beam_Exam03_Pushdown",
+    "URL": "http://www.dinochen.com/article.asp?id=152",
+    "num_models": "1",
+    "purpose": "Vertical uniform load (10 N/mm) on a 3 m simply supported 300x600 mm fiber beam, pushed down at midspan by 10 mm in 0.1 mm steps (Dino Example 03). No usable reference output: the source node0.out records zeros only.",
+    "Description of Building Structural System": "Simply supported 3 m RC beam, 300x600 mm section: 36 concrete fibers (Concrete01) and 5 longitudinal bars (Steel01, 390 and 490 mm^2), pinned at x = 0 and a roller at x = 3000 mm.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6) with 7 nodes and six nonlinearBeamColumn elements (3 integration points, Linear transforms with local z along global Z), verbatim from Exam03.tcl. Uniform load by eleLoad beamUniform (-10 N/mm). Midspan displacement control on node 5 (UZ, 0.1 mm x 100 steps) via SmartAnalyze with plain Newton first and EnergyIncr 1e-6.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "RC (Concrete01 + Steel01)",
+    "Lateral system": "NA (beam)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Vertical uniform load with midspan pushdown (10 mm, 100 steps)",
+    "Earthquake records": "NA",
+    "Opensees Version": "OpenSeesPy >= 3.0",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, Example 03: Elastic-Plastic Analysis of a Simply Supported Beam. http://www.dinochen.com/article.asp?id=152",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Static Elastic-Plastic Analysis of Frame Structures/Dino_Beam_Exam03_Pushdown/ref/Exam03.tcl (copied from tcl_ref/opensees). ref/node0.out records zeros only; the source's node5.out and element outputs are not present.",
+    "Notes": "Analytic verification only: the first three steps match cracked-section beam theory (Concrete01 without tension, EI = 6.05e13 N mm^2) to 0.13%. The full pushdown (load factor 22.80 at 10 mm) has no reference. -GJ 1e8 N mm (Exam03.tcl assigns none; AGENT.md default)."
   }
 ]
