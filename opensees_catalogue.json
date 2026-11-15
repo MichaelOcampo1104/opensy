@@ -1594,5 +1594,26 @@
     "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, video 03/04. http://www.dinochen.com/article.asp?id=296",
     "Links to Papers / Design Reports": "Original source: models/Dino/Static Elastic-Plastic Analysis of Frame Structures/Dino_RC_Column_4Elem_3D_Pushover/ref/co.tcl (copied from tcl_ref/opensees2). Reference results: ref/node0.out (nodes 1-5), ref/node1.out (node 1); ref/model1.s2k is the ETABS text export of the source model.",
     "Notes": "Node 1 UX exact and UZ within 5e-6 mm; load factor mean error 0.49% over 100 steps, nearly all from steps 1-9 (up to 2.6 kN high). A plain-Newton replay gives identical results, so the solver is ruled out and the early offset lies between the reference and the literal replay (similar to Dino_SRC_Column_3D_Pushover). -GJ 1e8 N mm (co.tcl assigns none; AGENT.md default)."
+  },
+  {
+    "UniqueID": "Dino_RC_Column_1Elem_3D_Pushover",
+    "URL": "http://www.dinochen.com/article.asp?id=296",
+    "num_models": "1",
+    "purpose": "Gravity (4500 kN) followed by a 100 mm displacement-controlled pushover of a 3D reinforced-concrete column modelled with one nonlinearBeamColumn element and one 500x500 mm fiber section (Dino video tutorial 03/04).",
+    "Description of Building Structural System": "3 m tall RC column, 500x500 mm section with 25 concrete fibers (Concrete01) and 18 longitudinal bars of 490.6 mm^2 (Steel01), fixed at the base.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6) with two nodes and one nonlinearBeamColumn element (3 integration points, Linear transform); 43 fibers, nodes, element and lumped masses verbatim from co.tcl. Gravity by LoadControl (0.01 x 100) then loadConst; pushover by SmartAnalyze displacement control on the top node (1 mm x 100 steps) with plain Newton first and EnergyIncr 1e-6.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "RC (Concrete01 + Steel01)",
+    "Lateral system": "Column",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Displacement-controlled lateral pushover (to 100 mm, 100 steps)",
+    "Earthquake records": "NA",
+    "Opensees Version": "OpenSeesPy >= 3.0",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, video 03/04. http://www.dinochen.com/article.asp?id=296",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Static Elastic-Plastic Analysis of Frame Structures/Dino_RC_Column_1Elem_3D_Pushover/ref/co.tcl (copied from tcl_ref/opensees). Reference results: ref/node1.out (node 1); ref/excel.xlsx (curve2 left block equals node1.out; right block not reproduced).",
+    "Notes": "Node 1 UX exact and UZ within 5e-6 mm; load factor mean error 0.53% over 100 steps, mostly from steps 1-9 (up to 2.9 kN high). A plain-Newton replay gives identical results, so the early offset lies between the reference and the literal replay (see LESSONS 27). -GJ 1e8 N mm (co.tcl assigns none; AGENT.md default)."
   }
 ]
