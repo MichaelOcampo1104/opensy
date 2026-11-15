@@ -8,6 +8,10 @@ run*.txt
 models/**/output/**
 !models/**/output/.gitkeep
 
+# Variant run folders from level/parameter sweeps (e.g. output_xiao/,
+# output_zhong/) - generated artifacts, never committed
+models/**/output_*/
+
 # OpenSees output files — large generated artifacts
 *.nc
 Opensees_references/**/.opstool.output/
