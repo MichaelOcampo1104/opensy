@@ -73,8 +73,9 @@ fy_shape    = 360.0 * MPa        # steel shape yield strength [MPa]
 Es_shape    = 205000.0 * MPa     # steel shape elastic modulus [MPa]
 b_shape     = 0.001              # strain hardening ratio
 
-# Torsional rigidity
-Gj          = 1.0e12 * N * mm**2 # Torsional stiffness
+# Torsional rigidity. co.tcl assigns none; 1e8 N*mm is the default noted in
+# AGENT.md. Torsion is fixed at both ends, so this value does not affect the response.
+Gj          = 1.0e8 * N * mm**2
 
 # Loading
 P_gravity   = 1.0e7 * N          # gravity load (10000 kN = 10 MN)
@@ -377,10 +378,13 @@ def run_pushover(
     ops.numberer("Plain")
     ops.system("BandGeneral")
     
+    # Newton first (flag 10), as in co.tcl; testTol matches co.tcl's EnergyIncr 1e-6
     analysis = opst.anlys.SmartAnalyze(
         analysis_type="Static",
+        testType="EnergyIncr",
+        testTol=1.0e-6,
         tryAlterAlgoTypes=True,
-        algoTypes=[40, 10, 20, 30, 50, 60],
+        algoTypes=[10, 40, 20, 30, 50, 60],
         tryAddTestTimes=True,
         testIterTimesMore=[50, 100],
         relaxation=0.5,
