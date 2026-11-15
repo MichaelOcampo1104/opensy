@@ -209,3 +209,9 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
   Nodal displacement matched `node8.out` within 0.00045 mm (0.00015%).
 - Rule: mirroring the source's `EnergyIncr 1e-3` / 1000 iter tolerance under
   SmartAnalyze provides fast convergence and bit-accurate tracking on RC frames.
+
+## 2026-11-15 — Dino_RC_Column_4Elem_3D_Pushover (video 03/04 frame column)
+
+### 27. Early load-factor offset against a Tcl reference: rule out the solver, then document it
+- Evidence: `Dino_RC_Column_4Elem_3D_Pushover` (tcl_ref/opensees2/co.tcl). Node 1 UX matches exactly and UZ within 4.8e-6 mm, but the replayed load factor is 13% high at step 1 (16.50 vs 14.60 kN) and 2.6 kN high at step 3, falling to a 0.11% mean error from step 10. A plain-Newton replay matches the SmartAnalyze run to 1.5e-10 kN, and a similar early offset (about 15% at step 1) appears in `Dino_SRC_Column_3D_Pushover`.
+- Rule: when displacements match and only the early load factors differ, run a plain-Newton literal replay to rule out the solver, then state the offset in the README and catalogue. Do not tune the model toward the reference.
