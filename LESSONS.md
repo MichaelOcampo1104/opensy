@@ -92,23 +92,118 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 - Rule: when a gap survives tolerance mirroring, suspect formulation
   (section/transformation defaults), not convergence.
 
+## 2026-10-08 — LowCycleSteel (Exam08 4000-step reciprocation)
+
+### 14. SmartAnalyze flag 40 is KrylovNewton, NOT Newton (10 = plain Newton)
+- Evidence: Exam08 `.SmartAnalyze-OpenSees.log` shows
+  `AcceleratedNewton::solveCurrentStep()` with default `algoTypes=[40, …]`;
+  `_setAlgorithm` map: 10 = `("Newton",)`, 40 = `("KrylovNewton",)`.
+  KrylovNewton exploded at steps 532/1015 (Norm 1e4 vs tol 0.1) where plain
+  Newton (flag 10) passes — all prior Dino models ran KrylovNewton
+  unknowingly (harmless there: elastic or mild plasticity).
+- Rule: when the source says `algorithm Newton`, pass `algoTypes=[10]`.
+  Read the flag map, never assume 40 == Newton.
+
+### 15. Loose test tolerance fabricates softening — tighten to find the truth
+- Evidence: `Dino_LowCycleSteel` (Steel01+b=0.001, Linear geometry — no
+  softening mechanism exists): source-mirrored `NormDispIncr 0.1` produced a
+  virgin peak 6637 @ UX~50 then spurious softening to 6253 (xls block A,
+  "degrading" to 5900 by phase 4). Tight `1e-6` recovered the TRUE hardening
+  curve = xls block B, bit-exact at all 4010 steps (mean rel err 1e-6;
+  peaks 6706.9/-6727.2/6755.4/-6779.0). Block A is a loose-tol artifact.
+- Rule: when a hardening-material + Linear-geometry model softens, suspect
+  the TEST first, not the physics. Run tight; if tight == a reference block
+  and loose == another, the loose block is the artifact — anchor the tight
+  one and document the deviation from the source tolerance.
+
+### 16. Solver-switch rescues branch-jump — validate per-step, don't assume
+- Evidence: Exam08 reversal deaths retried with ModifiedNewton/KrylovNewton/
+  BFGS then Newton restored: run "completed" but UX err 0.13 mm, LF err up
+  to 861x — rescued steps jumped equilibrium branches and poisoned the rest
+  of the path. Unrecorded bisection (down to seg/16) stalled identically.
+- Rule: a rescue that changes the solver (or step) invalidates the whole
+  downstream path. Any rescue experiment must be followed by full-length
+  per-step validation; on mismatch, discard the rescue, don't keep it.
+
+### 17. Linear-solver roundoff decides knife-edge Newton convergence
+- Evidence: Exam08 step 532 (virgin capacity, UX~53) failed Newton with
+  `BandGeneral`, passed with source-mirrored `UmfPack` — all else equal.
+- Rule: mirror the source `system` (UmfPack/RCM here) before blaming the
+  model; roundoff-level differences are decisive at limit points.
+
+### 18. Legacy `.xls` references need xlrd (installed to `.venv`, env-only)
+- Evidence: Exam08 `result.xls` (BIFF8, 4010×9: cols A–D vs F–I two-run
+  comparison) unreadable by openpyxl; `uv pip install --python .venv/... xlrd`
+  (pure-python, git-ignored env) reads it. Dual-block sheets: validate
+  against EACH block separately and anchor explicitly (here: right block).
+- Rule: never assume which block/sheet is authoritative — let the
+  verification decide, and name the anchor (cols F–I) in README + header.
+
+## 2026-10-08 — FrameTH (Exam07 GM transient)
+
+### 19. `nonlinearBeamColumn` IS `forceBeamColumn` (prove it, don't assume it)
+- Evidence: `Dino_FrameTH` — Tcl `nonlinearBeamColumn` replayed as
+  `forceBeamColumn` matches node59 to ~1% pre-yield; a `dispBeamColumn`
+  trial was 8x worse (mean 28% vs 1.3%, UXmax 27 vs 40 mm — disp locks).
+- Rule: legacy name = force-based element. Run the disp-counterfactual
+  once when the mapping is uncertain; keep the result in the README.
+
+### 20. Recorder/eleResponse shear signs are ORIENTATION-dependent (refines 1)
+- Evidence: Exam07 base columns (vertical, vecxz 0,0,1): Py `eleResponse`
+  Vz (idx 2,8) is the negative of the Tcl `localForce` recorder, Vy/M/N
+  agree — flips [2,8], NOT item-1's [1,2,7,8]. Totals prove it:
+  ΣVz raw = −ref (554k vs 554k mirrored); flipped ΣVz peak +2.2%.
+- Rule: resolve the flip set empirically per orientation from a static row
+  (gravity/first-step), then apply globally. Never port a flip set across
+  orientations. In-plane N/Vz/My then matched to ~1% (means).
+
+### 21. `wipeAnalysis()` after `loadConst` so Newmark sets cleanly
+- Evidence: without it, `ops.integrator("Newmark")` while the gravity
+  Static analysis exists warns "can't set transient integrator in static
+  analysis" and falls back to the default integrator (here identical
+  Newmark 0.5/0.25 by luck — same parameters, same results).
+- Rule: `ops.wipeAnalysis()` right after gravity `loadConst`; then eigen →
+  rayleigh → GM pattern → transient setup (source order).
+
+### 22. Multi-level xlsx: derive factors from elastic ratios, verify each
+- Evidence: Exam07 `result_all.xlsx` (小/中/大 shear+disp, no factors
+  stated): elastic-shear ratio 455:910:2002 with 大=0.6072 (committed Tcl)
+  gives 小/中 = 0.13803/0.27606 (≈50/100/220 gal); both level-runs match
+  to ~1–2% (peaks +0.07%/+0.4%), confirming factors AND model jointly.
+  大 sheet col B ≡ node59.out row-for-row.
+- Rule: cross-check sheets against .out files first (identity → same run),
+  derive missing scales from linear-regime ratios, validate every level.
+  Env-only level driver (sets GM_FACTOR, custom outdir) keeps model.py
+  canonical — never commit variant outputs.
+
+### 23. Deep-plastic transient drift is version-level, not settings-level
+- Evidence: Exam07 大震 matches (UX, N/Vz/My ~1%) through first deep yield
+  (~t=4 s), then branch-diverges (sim +29.9 vs ref −0.9 at t≈4.03 s) and
+  Newton dies at t=8.7 s. Exhausted: Newton/Krylov/BFGS/ModifiedNewton,
+  tol 0.1/1e-6 (identical paths — item 15 n/a here), BandGeneral/UmfPack,
+  bisection to seg/16, algo-switch rescues (branch-jump, item 16).
+  Mild regimes stay version-robust (elastic shell bit-exact; 小/中 ~1%).
+- Rule: for GM transients, validate per-regime (gravity/small/moderate/deep)
+  and report the breakdown honestly with the boundary (here: first deep
+  yield). Death-after-divergence is a consequence, not a second problem —
+  fix the divergence or document it, don't chase the death.
 
 ## 2026-11-14 — Dino_FramePushover (Exam04 3D RC Frame Pushover)
 
-### 14. Provenance cross-check catches misnamed folders
+### 24. Provenance cross-check catches misnamed folders
 - Evidence: Folder named `Elastic Time History Analysis of Frame Structure`, but
   `ref/EXAM04.s2k` header reads `实例4_框架结构推覆分析` and `co.tcl` implements
   gravity + 100-step displacement-controlled pushover (`node8.out`).
 - Rule: always verify header comments and load patterns in `.tcl` / `.s2k`
   sources rather than assuming folder names reflect the actual analysis type.
 
-### 15. Lateral reference pattern ordering with `loadConst`
+### 25. Lateral reference pattern ordering with `loadConst`
 - Evidence: defining lateral pattern before gravity causes `ops.loadConst("-time", 0.0)`
   to freeze the reference lateral vector to λ=0, leading to DisplacementControl failure.
 - Rule: strictly define lateral pushover patterns AFTER `run_gravity()` and
   `loadConst("-time", 0.0)`.
 
-### 16. Fast SmartAnalyze convergence on 3D RC fiber frames
+### 26. Fast SmartAnalyze convergence on 3D RC fiber frames
 - Evidence: `Dino_FramePushover` with 47 `nonlinearBeamColumn` elements and 4 fiber
   aggregators solved 10 gravity steps + 100 pushover steps to 300 mm in 0.48 s.
   Nodal displacement matched `node8.out` within 0.00045 mm (0.00015%).
