@@ -1657,5 +1657,26 @@
     "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, Example 05: Frame Structure Modal Analysis. http://www.dinochen.com/article.asp?id=156",
     "Links to Papers / Design Reports": "Original source: models/Dino/Frame Structure Modal Analysis/ref/co.tcl (from the archive OPENSEES/co.tcl). Reference: ref/Periods.txt (12 eigenvalues). ETABS model: ref/EXAM05.s2k and ref/EXAM05.EDB.",
     "Notes": "Eigenvalues match the source Periods.txt to 0.000033% (maximum); T1 = 0.4278 s, T12 = 0.0720 s. The source's eigen recorder outputs are not in the archive, so the eigenvalues are the only reference. Mass units N s^2/mm used as given (AGENT.md §12al)."
+  },
+  {
+    "UniqueID": "Dino_Truss_Bridge_Ex01",
+    "URL": "http://www.dinochen.com/article.asp?id=150",
+    "num_models": "1",
+    "purpose": "Linear static analysis of a 3D truss bridge (Dino Example 01) under four 100 kN vertical nodal loads on the top chord, in 100 load steps. Node, node-5 and element-force histories are checked against the source recorders.",
+    "Description of Building Structural System": "Truss bridge, 24 m span, two chords 3 m apart in Y. Bottom chord at z = 0, top chord at z = 4.5 m. 18 nodes and 46 truss members (chord members A = 21200 mm^2, others A = 13050 mm^2). Fixed supports at the bottom-chord ends (nodes 1, 2, 9, 10).",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=3) with 46 truss elements (uniaxial Elastic steel, E = 199900 MPa), verbatim from ref/Exam01.tcl. Four 100 kN loads (-Z) at nodes 13-16; LoadControl 0.01 x 100 steps with Newton, EnergyIncr 1e-6 and BandGeneral. Manual load loop under the AGENT.md 3c LoadControl exception.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Elastic steel (E = 199900 MPa)",
+    "Lateral system": "Top and bottom lateral bracing (truss members)",
+    "building occupancy class": "NA",
+    "Lateral Loading": "None (vertical nodal loads, 4 x 100 kN on the top chord)",
+    "Earthquake records": "NA",
+    "Opensees Version": "OpenSeesPy >= 3.0",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, Example 01: Static Analysis of a Truss Bridge Structure. http://www.dinochen.com/article.asp?id=150",
+    "Links to Papers / Design Reports": "Original source: ref/Exam01.tcl (Dino Example 01 archive). Reference outputs: ref/node0.out, ref/node5.out, ref/ele0.out. ETABS model: ref/EXAM01.s2k, ref/EXAM01.EDB, ref/EXAM01.ebk.",
+    "Notes": "Nodes, members, areas, supports and loads match the source. Axial forces match ele0.out to 0.00025 % and node 5 to 0.0003 % of max |value|. KNOWN DISCREPANCY, not a model error: the free stiffness has a zero-energy mode, a common UY translation of nodes 11-18 (smallest eigenvalue -1.7e-10 N/mm vs 3.5e6 N/mm). The source and this model settle on different values of it: the top-chord UY differs by one constant, +0.0973 mm at step 100 (the same for all eight nodes to 6e-7 mm). Both solutions satisfy equilibrium. With that translation removed, the node0.out max error is 0.0003 % (5.88 % as recorded). Materials 2 and 3 are unused in the source and omitted."
   }
 ]

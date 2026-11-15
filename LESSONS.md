@@ -221,3 +221,9 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 28. Check that a reference is non-degenerate before converting; if it is not, validate analytically and say so
 - Evidence: `Exam03.tcl` (tcl_ref/opensees) has a `node0.out` whose 600 displacement entries are all zero, and its node5.out and element outputs are missing. The conversion was therefore checked only against elastic beam theory: the first three steps match cracked-section theory to 0.13%. For cracked sections the sign of the load matters: with asymmetric reinforcement (780 mm^2 top, 1470 mm^2 bottom), sagging and hogging stiffnesses differ (6.05e13 vs 3.68e13 N mm^2).
 - Rule: before converting, count the nonzero entries in each reference file. If the references are empty or zero, convert anyway if useful, record "analytic only" in the README and catalogue, and state the basis of the check.
+
+## 2026-11-15 — Dino_Truss_Bridge_Ex01 (Example 01: zero-energy mode in the truss)
+
+### 29. A zero-energy mode makes some displacements non-unique: find the null vector before chasing a mismatch
+- Evidence: `Dino_Truss_Bridge_Ex01` (ref/Exam01.tcl). Element forces and every displacement match the source to about 0.0003 %, except UY of the eight top-chord nodes, which differ by one common value (+0.0973 mm at step 100, the same for all eight to 6e-7 mm). The free stiffness is singular to round-off (smallest eigenvalue -1.7e-10 N/mm vs 3.5e6 N/mm), and its null vector is uniform UY on nodes 11-18: no member joins the top chord to the bottom chord in Y.
+- Rule: when a family of DOFs differs by one common constant, compute the stiffness null vector before tuning anything. If it matches the difference, document it, compare with that mode removed, and state that both solutions satisfy equilibrium.
