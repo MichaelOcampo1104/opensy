@@ -1636,5 +1636,26 @@
     "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, Example 03: Elastic-Plastic Analysis of a Simply Supported Beam. http://www.dinochen.com/article.asp?id=152",
     "Links to Papers / Design Reports": "Original source: models/Dino/Static Elastic-Plastic Analysis of Frame Structures/Dino_Beam_Exam03_Pushdown/ref/Exam03.tcl (copied from tcl_ref/opensees). ref/node0.out records zeros only; the source's node5.out and element outputs are not present.",
     "Notes": "Analytic verification only: the first three steps match cracked-section beam theory (Concrete01 without tension, EI = 6.05e13 N mm^2) to 0.13%. The full pushdown (load factor 22.80 at 10 mm) has no reference. -GJ 1e8 N mm (Exam03.tcl assigns none; AGENT.md default)."
+  },
+  {
+    "UniqueID": "Dino_Frame_Modal_Ex05",
+    "URL": "http://www.dinochen.com/article.asp?id=156",
+    "num_models": "1",
+    "purpose": "Pure modal analysis (12 modes) of the Example 04 four-storey 3D frame with elastic sections (Dino Example 05). Eigenvalues are validated against the source's Periods.txt.",
+    "Description of Building Structural System": "Four-storey 3D frame, plan 9.0 m x 5.0 m (bays 4.5 m in X and 5.0 m in Y), floors at 4.5, 7.5, 10.5 and 13.5 m, base fixed.",
+    "Description of Model": "3D OpenSeesPy model (ndm=3, ndf=6) with 28 nodes and 47 elasticBeamColumn elements in four property sets, 22 lumped translational masses (N s^2/mm), all verbatim from co.tcl. ops.eigen(12) with mode shapes saved to the ODB; no load patterns.",
+    "Year of design and construction": "NA",
+    "2D/3D": "3D",
+    "Material": "Elastic (E = 26800 MPa)",
+    "Lateral system": "Moment frame",
+    "building occupancy class": "NA",
+    "Lateral Loading": "None (modal analysis)",
+    "Earthquake records": "NA",
+    "Opensees Version": "OpenSeesPy >= 3.0",
+    "model generator": "NA (manual conversion of Tcl source)",
+    "file format": ".py",
+    "Suggested Model citation": "Chen, X. W. Dino Chen's OpenSees tutorial, Example 05: Frame Structure Modal Analysis. http://www.dinochen.com/article.asp?id=156",
+    "Links to Papers / Design Reports": "Original source: models/Dino/Frame Structure Modal Analysis/ref/co.tcl (from the archive OPENSEES/co.tcl). Reference: ref/Periods.txt (12 eigenvalues). ETABS model: ref/EXAM05.s2k and ref/EXAM05.EDB.",
+    "Notes": "Eigenvalues match the source Periods.txt to 0.000033% (maximum); T1 = 0.4278 s, T12 = 0.0720 s. The source's eigen recorder outputs are not in the archive, so the eigenvalues are the only reference. Mass units N s^2/mm used as given (AGENT.md §12al)."
   }
 ]
