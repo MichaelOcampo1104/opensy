@@ -227,3 +227,9 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 29. A zero-energy mode makes some displacements non-unique: find the null vector before chasing a mismatch
 - Evidence: `Dino_Truss_Bridge_Ex01` (ref/Exam01.tcl). Element forces and every displacement match the source to about 0.0003 %, except UY of the eight top-chord nodes, which differ by one common value (+0.0973 mm at step 100, the same for all eight to 6e-7 mm). The free stiffness is singular to round-off (smallest eigenvalue -1.7e-10 N/mm vs 3.5e6 N/mm), and its null vector is uniform UY on nodes 11-18: no member joins the top chord to the bottom chord in Y.
 - Rule: when a family of DOFs differs by one common constant, compute the stiffness null vector before tuning anything. If it matches the difference, document it, compare with that mode removed, and state that both solutions satisfy equilibrium.
+
+## 2026-11-16 — opensy_ref.py status notes (Examples 37, 40)
+
+### 30. A reference list's status notes go stale; check the repo before recording an example as "not done"
+- Evidence: `opensy_ref.py` said Example 40 was "Not done on opensy" and Example 37 "Check this might done in opensy". The repo already had both: `models/Dino/Sectional Analysis of Pushover curves/model.py` (catalogued as `Dino`, which breaks the `Dino_*` pattern) and `models/Dino/Buckling analysis of Shell element steel column` (`Dino_Buckling`). For Example 02, searches for its dinochen id (151) and title found nothing in the repo except `opensy_ref.py`.
+- Rule: before recording an example as "not done", match its title against folder names, README headings and catalogue text. Most catalogue entries carry no dinochen URL and some IDs break the `Dino_*` pattern, so the id alone is not enough.
