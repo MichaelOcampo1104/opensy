@@ -233,3 +233,25 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 30. A reference list's status notes go stale; check the repo before recording an example as "not done"
 - Evidence: `opensy_ref.py` said Example 40 was "Not done on opensy" and Example 37 "Check this might done in opensy". The repo already had both: `models/Dino/Sectional Analysis of Pushover curves/model.py` (catalogued as `Dino`, which breaks the `Dino_*` pattern) and `models/Dino/Buckling analysis of Shell element steel column` (`Dino_Buckling`). For Example 02, searches for its dinochen id (151) and title found nothing in the repo except `opensy_ref.py`.
 - Rule: before recording an example as "not done", match its title against folder names, README headings and catalogue text. Most catalogue entries carry no dinochen URL and some IDs break the `Dino_*` pattern, so the id alone is not enough.
+
+## 2026-11-16 — Geo_example_1 (OpenSees geotechnical Example 1, SI to N-mm)
+
+### 31. units.py mass constants are 1000x off: `kg` is one tonne, and `tonne` is 1000 tonnes
+- Evidence: `standards/units.py` sets `kg = N*sec**2/mm` (one tonne in the N-mm-s system) and `tonne = 1000*kg`. So `DENSITY_STEEL = 7850*kg/m**3` comes out 1000x too heavy. In `Geo_example_1` the source density 2.0 t/m^3 is written as `2.0 * (N*sec**2/mm) / m**3` = 2.0e-9 N.s^2/mm^4, and the displacement and acceleration histories match the source to 1.6e-6 and 1.4e-6 of their peaks. A 1000x density error would change the period by about 32x.
+- Rule: for SI masses, write the N.s^2/mm value explicitly (t/m^3 divided by 1e9). Do not use `kg` or `tonne` from units.py for mass until they are fixed. The AGENT.md §3a copy of units.py also differs from the file: its `Pa` is 1e-6 N/mm^2, but the file's `Pa` is 1 MPa.
+
+### 32. The current PressureIndependMultiYield takes 11 values; older Tcl lines that omit the last four fail
+- Evidence: openseespy 3.8.0 rejects the source line `nDMaterial PressureIndependMultiYield 2 2 $massDen $G $B $cohesion $peakShearStrain` with "invalid PressureIndependMultiYield double inputs", then "invalid PressureIndependMultiYield numberOfYieldSurf". The accepted order is `(tag, nd, rho, G, B, cohesion, peakShearStrain, frictionAng, refPress, pressDependCoe, numberOfYieldSurf)`. The recommended values 0, 100 kPa, 0 and 20 were used. The element stays elastic (peak in-plane shear 10.4 kPa against 30 kPa cohesion), so they do not change the result. `updateMaterialStage -stage 0` prints "no effect" for this material.
+- Rule: when porting an older multi-yield material line, supply the recommended values, then check that the response never reaches yield before relying on the elastic result.
+
+### 33. A Tcl `recorder Element ... material N` takes a Gauss-point index, not a material tag
+- Evidence: `example_1.tcl` records `material 1` and `material 3` on element 1. The file defines only material tags 1 (FluidSolidPorous, never used by the element) and 2 (PIMY). The ODB Gauss points 1 and 3 match the source stress and strain recorders to 4.7e-6 and 1.6e-6 of the reference peaks.
+- Rule: when a recorder's `material` index matches no defined tag, read it as a Gauss-point number, then confirm against the source values.
+
+### 34. Stress columns come in a different order in the source recorder and in opstool; match them by name
+- Evidence: the source `stress*.out` columns are (sigma11, sigma22, sigma33, sigma12, para). opstool's `Stresses` stores (sigma11, sigma22, sigma12, sigma33, para#1). Matching by position puts sigma12 against sigma33 and is off by about 3 kPa at Gauss point 1. Matching by name gives 4.7e-6.
+- Rule: map each recorder column to its ODB component by name (see `compare_with_reference()` in `models/Geo_example_1/model.py`). Never assume the two orders agree.
+
+### 35. SmartAnalyze's success line crashes a Windows console; `printPer=0` does not stop it
+- Evidence: with `printPer=0` and `testPrintFlag=0`, the analysis finished, and then opstool's `_print_status` raised `UnicodeEncodeError` (cp1252) on the final emoji line. `PYTHONIOENCODING=utf-8` fixed it. This refines AGENT.md §12az-3, which treats `printPer=0` as enough.
+- Rule: on Windows, run SmartAnalyze models with `PYTHONIOENCODING=utf-8`, and say so in the README.
