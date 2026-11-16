@@ -21,6 +21,8 @@
 **Validation** (`output/validation.txt`, written by `model.py`): displacement, acceleration, and stress and strain at Gauss points 1 and 3 match the six source outputs. The largest error is 4.7e-6 of each reference peak (pass threshold 1e-3). `output/response_compare.png` overlays the responses.
 
 **References:**
+Source series: Zhaohui Yang and Jinchi Lu, OpenSees wiki PressureDependMultiYield02 examples (https://opensees.berkeley.edu/wiki/index.php/PressureDependMultiYield02-Example_1), listed in `opensy_ref.py` as "Jinchi Lu and Zhaohui Yang". The file-level match to a wiki page is not verified.
+Related: DesignSafe PRJ-1901, "Free field Analysis using OpenSees" (https://www.designsafe-ci.org/data/browser/public/designsafe.storage.published/PRJ-1901).
 Source script and outputs: `tcl_ref/example_1.tcl`, `tcl_ref/disp.out`, `tcl_ref/acce.out`, `tcl_ref/stress1.out`, `tcl_ref/strain1.out`, `tcl_ref/stress3.out`, `tcl_ref/strain3.out`.
 
 **Suggested Citation:** NA

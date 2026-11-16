@@ -255,3 +255,9 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 35. SmartAnalyze's success line crashes a Windows console; `printPer=0` does not stop it
 - Evidence: with `printPer=0` and `testPrintFlag=0`, the analysis finished, and then opstool's `_print_status` raised `UnicodeEncodeError` (cp1252) on the final emoji line. `PYTHONIOENCODING=utf-8` fixed it. This refines AGENT.md §12az-3, which treats `printPer=0` as enough.
 - Rule: on Windows, run SmartAnalyze models with `PYTHONIOENCODING=utf-8`, and say so in the README.
+
+## 2026-11-16 — Geo_example_1 source link (opensy_ref.py)
+
+### 36. Look up the source link in the reference list before converting; a file's own credit line does not give the link
+- Evidence: `example_1.tcl` credits Zhaohui Yang (UCSD) but gives no URL. I converted it first and set the catalogue URL to `NA`. Afterwards `opensy_ref.py` line 5643 ("Jinchi Lu and Zhaohui Yang") linked to the OpenSees wiki page PressureDependMultiYield02-Example_1, and the "Arduino, Pedro" entry (line 829) linked to DesignSafe PRJ-1901. The WebFetch tool was unavailable (model error), and the search summaries disagree on whether the non-02 wiki Example 1 page uses PIMY or PDMY. The file-level match is therefore unverified.
+- Rule: before converting, search the reference list for the author name and the material name. Put the link in the catalogue, and mark a file-level match as unverified when the source page could not be opened.
