@@ -261,3 +261,21 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 36. Look up the source link in the reference list before converting; a file's own credit line does not give the link
 - Evidence: `example_1.tcl` credits Zhaohui Yang (UCSD) but gives no URL. I converted it first and set the catalogue URL to `NA`. Afterwards `opensy_ref.py` line 5643 ("Jinchi Lu and Zhaohui Yang") linked to the OpenSees wiki page PressureDependMultiYield02-Example_1, and the "Arduino, Pedro" entry (line 829) linked to DesignSafe PRJ-1901. The WebFetch tool was unavailable (model error), and the search summaries disagree on whether the non-02 wiki Example 1 page uses PIMY or PDMY. The file-level match is therefore unverified.
 - Rule: before converting, search the reference list for the author name and the material name. Put the link in the catalogue, and mark a file-level match as unverified when the source page could not be opened.
+
+## 2026-11-16 — SalarDelavar_Aggregated_Column_Pushover (GitHub 2D column pushover)
+
+### 37. A reference figure can come from different parameters than its script; check the yield moment before accepting the model
+- Evidence: the script sets FI_Y = 1.474e-6 1/mm, so MY = 1.131e9 N.mm. The figure's first yield kink is about 0.91e9 N.mm, its peak moment about 1.24e9 and its end shear about 247 kN. A diagnostic copy outside the repo with FI_Y = 1.18e-6 1/mm gives MY 9.05e8, peak moment 1.232e9, end shear 246.4 kN and end axial 446.4 kN at -0.1421 mm, which match the figure. The initial stiffness (18,413 N/mm) is the same in both runs, so only the post-yield curvature differs.
+- Rule: compare the first yield moment and the peak with the figure before accepting a model. If they differ, run a diagnostic copy outside the repo, report the value, and keep the script's value in the deliverable.
+
+### 38. A pushover reference pattern with a vertical part adds axial load as the lateral load grows
+- Evidence: the source pattern is (1 N lateral, -1 N vertical) per unit load factor, so the axial force rises from 200 kN to about 447 kN at 1750 mm. The figure's end axial force of about 450 kN and axial shortening of -0.142 mm agree with this.
+- Rule: read the axial force plot first. If it rises with the lateral load, the reference pattern has a vertical part, and that part must be kept.
+
+### 39. Source comments can contradict the code; convert the code and record the mismatch
+- Evidence: `Weight = 200000.0  # [kg]` is used as a load in N (200 kN). `ops.fix(1, 1, 1, 1)` is commented "free theta" but fixes all three DOFs. The fall-back ladder names 'RaphsonNewton', which OpenSees does not define. The reference-list entry gives Material "RC" for a steel section.
+- Rule: convert the code, not the comments. Record each mismatch in the README, and check every algorithm and material name in the source against OpenSees.
+
+### 40. After wipeAnalysis, SmartAnalyze warns and falls back to default handlers; re-set the source's handlers first
+- Evidence: the first run of `SalarDelavar_Aggregated_Column_Pushover` printed "no ConstraintHandler / Numberer / LinearSOE specified" warnings at every SmartAnalyze step, because `wipeAnalysis` had cleared the handlers. After `ops.constraints("Plain")`, `ops.numberer("Plain")` and `ops.system("BandGeneral")` were set between `wipeAnalysis` and `SmartAnalyze`, the log had no warnings, and the end state matched to roundoff (top shear 307,733 N, base moment 1.5387e9 N.mm).
+- Rule: after `wipeAnalysis`, set the source's constraints, numberer and system again before `SmartAnalyze`, and grep the log for "no ... specified". This refines AGENT.md §12w, item 4, which covers the case with no `wipeAnalysis`.
