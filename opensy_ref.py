@@ -1062,7 +1062,7 @@ catalogue = [
         "file format": "python",
         "Suggested Model citation": "",
         "Links to Papers / Design Reports": "",
-        "Notes": "Not done on opensy",
+        "Notes": "Converted to models/Dino/Sectional Analysis of Pushover curves (catalogue UniqueID: Dino).",
     },
 
 
@@ -1085,7 +1085,7 @@ catalogue = [
         "file format": ".tcl scripts",
         "Suggested Model citation": "",
         "Links to Papers / Design Reports": "",
-        "Notes": "Check this might done in opensy",
+        "Notes": "Converted to models/Dino/Buckling analysis of Shell element steel column (catalogue UniqueID: Dino_Buckling).",
     },
 
 
