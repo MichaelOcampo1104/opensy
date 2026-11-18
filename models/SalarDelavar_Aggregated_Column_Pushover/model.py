@@ -29,6 +29,8 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "standards"))
 from units import *  # noqa: E402,F403  (mm, m, sec, N, MPa)
 from vis_utils import (  # noqa: E402
     _headless,
+    vis_curves,
+    vis_pushover_animation,
     vis_defo,
     vis_loads,
     vis_model,
@@ -289,6 +291,20 @@ def post_process(odb: "opst.post.CreateODB", output_dir: Path, history: dict) ->
     odb.save_response()
     save_history(history, output_dir)
     plot_curves(history, output_dir)
+    # Interactive version of the same three curves (V8, plotly); magnitudes as in plot_curves.
+    vis_curves(output_dir, [
+        {"x": history["axial_disp"], "y": np.abs(history["axial"]),
+         "xlabel": "Axial displacement at top (mm)", "ylabel": "Axial compressive force (N)",
+         "title": "Axial force-displacement"},
+        {"x": history["lateral"], "y": np.abs(history["shear"]),
+         "xlabel": "Lateral displacement at top (mm)", "ylabel": "Shear force (N)",
+         "title": "Shear force-displacement"},
+        {"x": np.abs(history["rotation"]), "y": np.abs(history["moment"]),
+         "xlabel": "Rotation at top (rad)", "ylabel": "Moment at base (N.mm)",
+         "title": "Moment-rotation"},
+    ])
+    # Animated test: column moving, capacity curve drawn step by step (V9, plotly).
+    vis_pushover_animation(output_dir, history, L_COL)
     if not _headless():
         vis_defo(output_dir, filename="vis_05_deformed.html", odb_tag=ODB_TAG,
                  resp_dof="UX", resp_type="disp", scale=1.0)

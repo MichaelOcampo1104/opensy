@@ -32,7 +32,7 @@
 - The source's hand-written fall-back ladder names the algorithm `RaphsonNewton`, which OpenSees does not define. SmartAnalyze's own ladder replaces it.
 - The reference-list entry gives Material "RC". The section is steel.
 
-**Outputs** (in `output/`, git-ignored): `pushover_history.csv` (lateral, axial displacement, rotation, axial force, shear, moment per step), `pushover_curves.png`, and the V1 to V5 HTML views.
+**Outputs** (in `output/`, git-ignored): `pushover_history.csv` (lateral, axial displacement, rotation, axial force, shear, moment per step), `pushover_curves.png` (static), `vis_08_curves.html` (interactive plotly view of the same three curves, from `vis_utils.vis_curves`), `vis_09_pushover_animation.html` (animated test: the column moves while the shear-displacement curve is drawn step by step, with Play, Pause and a step slider, from `vis_utils.vis_pushover_animation`; the column is drawn as the chord between its two nodes, so bending inside the element is not shown), and the V1 to V5 HTML views.
 
 **Run:**
 ```bash
