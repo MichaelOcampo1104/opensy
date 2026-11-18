@@ -1720,5 +1720,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "OpenSees Examples Manual, example 3600: https://opensees.berkeley.edu/OpenSees/manuals/ExamplesManual/HTML/3600.htm (source script by Salar Delavar Ghashghaei)",
     "Notes": "Source py_ref/COLUMN_PUSHOVER_P-M_INTERACTION.py converted to the AGENT.md layout. Solver: SmartAnalyze (EnergyIncr 1e-6, 1000 iterations, Newton first). Initial stiffness 18,413 N/mm equals 3EI/L^3. The reference figure matches the script with FI_Y = 1.18e-6 1/mm instead of the script's 1.474e-6 (diagnostic only; the deliverable keeps the script value). Source comments: Weight labelled kg but used as N; fix comment says free theta but code fixes all DOFs. The reference-list entry says Material RC; the section is steel."
+  },
+  {
+    "UniqueID": "SalarDelavar_Bridge_Viscous_Damper_SDOF",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/BRIDGE_VISCOUS_DAMPER_SDOF",
+    "num_models": "1",
+    "purpose": "Free vibration of a bridge substructure with a deck on bearings and viscous dampers, after a 0.3 mm static deck displacement.",
+    "Description of Building Structural System": "Bridge substructure given as lumped parameters: substructure mass Ms on spring ks with damper Cs to ground; deck mass Mb on a bearing (spring kb, damper Cb) with a viscous damper Cd between Ms and Mb. No section or geometry in the source.",
+    "Description of Model": "2D model (ndm=2, ndf=2) with the y DOF restrained, so motion is along x. Five zeroLength elements with linear viscous dampers (alpha=1). Static DisplacementControl step moves Mb to 0.3 mm, then Newmark (gamma 0.5, beta 0.25) free vibration for 10 s at dt=0.01 s through SmartAnalyze.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Linear springs and linear viscous dampers (lumped; no structural material)",
+    "Lateral system": "Bridge substructure with deck bearing and viscous damper",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Free vibration after static deck displacement (no ground motion)",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/BRIDGE_VISCOUS_DAMPER_SDOF (source repository; no paper cited in the source)",
+    "Notes": "Source py_ref/BRIDGE_VISCOUS_DAMPER_SDOF.py converted to the AGENT.md layout. Masses labelled kg in the source are used as N.s^2/mm (1000 kg each), kept as written. OpenSees ignores the Rayleigh stiffness term on zeroLength elements without -doRayleigh, so the source's DR=0.02 is not in the run; modal damping comes from the dashpots (19% and 72%). link_rayleigh=True adds the flag. The source figure matches the same equations with u0=0.1 mm, not the script's 0.3 mm (diagnostic only; the deliverable keeps 0.3 mm). PERIOD=pi/omega is half the period. Model is ndm=2 with y restrained (opstool load plots need two components). OpenSees equals a numpy Newmark replica to roundoff."
   }
 ]

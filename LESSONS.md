@@ -279,3 +279,33 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 40. After wipeAnalysis, SmartAnalyze warns and falls back to default handlers; re-set the source's handlers first
 - Evidence: the first run of `SalarDelavar_Aggregated_Column_Pushover` printed "no ConstraintHandler / Numberer / LinearSOE specified" warnings at every SmartAnalyze step, because `wipeAnalysis` had cleared the handlers. After `ops.constraints("Plain")`, `ops.numberer("Plain")` and `ops.system("BandGeneral")` were set between `wipeAnalysis` and `SmartAnalyze`, the log had no warnings, and the end state matched to roundoff (top shear 307,733 N, base moment 1.5387e9 N.mm).
 - Rule: after `wipeAnalysis`, set the source's constraints, numberer and system again before `SmartAnalyze`, and grep the log for "no ... specified". This refines AGENT.md §12w, item 4, which covers the case with no `wipeAnalysis`.
+
+## 2026-11-18 — SalarDelavar_Bridge_Viscous_Damper_SDOF (GitHub bridge viscous damper)
+
+### 41. A "kg" label on a mass can hide a 1000x unit difference; check the period against the time step and the figure
+- Evidence: `Ms = 1000  # [kg]` and `Mb = 500  # [kg]` are used in OpenSees as N.s^2/mm, and 1 N.s^2/mm = 1000 kg. Read as kg, the masses would be 1.0 and 0.5 N.s^2/mm. The undamped period would then be 9 ms, shorter than the 10 ms step, and the dashpots alone would overdamp the chain (all four eigenvalues are real). With the values as written, u0 = 0.1 mm reproduces the figure's displacement peak to 2e-6 (LESSON 47), so the values are kept.
+- Rule: before converting a mass labelled kg, compute the period and the damped eigenvalues under each reading. Keep the values the figure supports, and record the reading in the README.
+
+### 42. Rayleigh coefficients in the source: a0 = 2*DR has no 1/s, and PERIOD = pi/Omega is half the period
+- Evidence: `a0 = (2 * Omega01 * DR) / Omega01` cancels Omega, so a0 = 0.04 with no unit. The mass term would need 2*DR*Omega = 0.89 1/s to give 2 % in mode 1; as written it gives 0.09 %. `PERIOD = np.pi / Omega01` is T1/2 = 0.1405 s, while T1 = 2*pi/Omega1 = 0.2810 s.
+- Rule: check the units of each Rayleigh coefficient and of each period formula. Keep the source's values, and report the modal damping the run actually has.
+
+### 43. OpenSees ignores the Rayleigh stiffness term on zeroLength elements unless -doRayleigh is given
+- Evidence: a single spring-mass test with a zeroLength spring and `ops.rayleigh(0, betaK, 0, 0)` gave the undamped response (end displacement 0.0939 mm), while a numpy Newmark with C = betaK*K gave 0.0067 mm. Adding `-doRayleigh` to the same element gave 0.006726 mm, which matches numpy. The mass term (alphaM) is applied at the domain level and acts without the flag. In the bridge model the stiffness term (a1 = 1.79e-3 s) is therefore inactive, and the damping is the dashpots alone: modal xi = 19 % and 72 %. The model keeps the source's behaviour (`link_rayleigh = False`). With `link_rayleigh = True`, the two-mass run matches the numpy replica with a1*K to 1e-16 mm.
+- Rule: when a source uses Rayleigh damping with zeroLength elements, test whether the stiffness term acts, and report the modal damping of the run rather than the nominal DR.
+
+### 44. opstool cannot draw one-component nodal loads; ndm = 1 fails at the V3 and V4 stages
+- Evidence: `opst.vis.plotly.plot_model(show_nodal_loads=True)` on a 1D model raises `IndexError` at `data[1]` in `opstool/post/_get_model_data_base.py` (`_make_nodal_load`), so V3 and V4 cannot run. The model was rebuilt as ndm = 2, ndf = 2 with the y DOF restrained at every node. The equations are unchanged, and all four stages then run.
+- Rule: model 1D motion as ndm = 2, ndf = 2 with the y DOF fixed, so that the mandatory V3 and V4 stages work.
+
+### 45. zeroLength elements with spread display coordinates warn once per element but give the same response
+- Evidence: spreading the nodes to x = 0, 1000 and 2000 mm for the plots gives `ZeroLength::setDomain(): Element ... has L= 1000, which is greater than the tolerance` for each element. The displacement histories with coincident and spread nodes agree to the printed precision, and the spread run agrees with the numpy replica to 3e-17 mm.
+- Rule: keep the source's coincident nodes unless the plots need separation. If you separate them, expect the warnings, and confirm the response against coincident nodes.
+
+### 46. A displacement-controlled static step leaves the nodal accelerations at zero, so the first Newmark steps start unbalanced
+- Evidence: after the 0.3 mm deck step, the equilibrium acceleration of Mb at t = 0 is -200 mm/s^2 (from M a = -K u), but OpenSees starts the transient from zero acceleration. The run matches a Newmark replica that also starts from zero, to 3e-17 mm. Against the exact continuous solution the error is 0.0215 mm (7 % of u0) at t = 0.07 s. With the consistent start, a0 = -inv(M) K u0, the error falls to 0.0020 mm, which is the Newmark error.
+- Rule: after a static step that is followed by a transient, compare the start acceleration with the equilibrium value. Keep the source's behaviour, and report the difference in validation.txt.
+
+### 47. A figure can match the script's equations with a different initial displacement; test the peaks before accepting a parameter
+- Evidence: the figure's displacement peak, 0.098615 mm, is its first sample, so the deck starts near 0.1 mm, while the script has u0 = 0.3 mm. The same equations with u0 = 0.1 mm give 0.0986156 mm (2e-6 relative), 1.3841 mm/s (0.1 % low), 55.376 mm/s^2 (0.02 % low) and 7270 N (0.15 % low). The model keeps 0.3 mm, and validation.txt reports the 0.1 mm replica.
+- Rule: when a figure's peaks match only under another parameter, run a diagnostic outside the deliverable, report the result, and keep the script's value. This extends LESSON 37.
