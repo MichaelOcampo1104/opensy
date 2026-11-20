@@ -1741,5 +1741,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/BRIDGE_VISCOUS_DAMPER_SDOF (source repository; no paper cited in the source)",
     "Notes": "Source py_ref/BRIDGE_VISCOUS_DAMPER_SDOF.py converted to the AGENT.md layout. Masses labelled kg in the source are used as N.s^2/mm (1000 kg each), kept as written. OpenSees ignores the Rayleigh stiffness term on zeroLength elements without -doRayleigh, so the source's DR=0.02 is not in the run; modal damping comes from the dashpots (19% and 72%). link_rayleigh=True adds the flag. The source figure matches the same equations with u0=0.1 mm, not the script's 0.3 mm (diagnostic only; the deliverable keeps 0.3 mm). PERIOD=pi/omega is half the period. Model is ndm=2 with y restrained (opstool load plots need two components). OpenSees equals a numpy Newmark replica to roundoff."
+  },
+  {
+    "UniqueID": "SalarDelavar_Cable_Suspension_Bridge_04",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CABLE_SUSPENSION_BRIDGE/OPENSEES_CABLE_SUSPENSION_BRIDGE_04",
+    "num_models": "1",
+    "purpose": "Pushover, free vibration and seismic (ground motion Y) response of a 2D cable suspension bridge idealization, with added bending stiffness in the deck.",
+    "Description of Building Structural System": "Suspension bridge in the style of Puente Presidente Ibanez: one equivalent top cable (22 nodes, 210 m span, 25 m towers, 20 m sag) carrying 22 hangers to a 22-node deck.",
+    "Description of Model": "2D model (ndm=2, ndf=3). Cables and hangers are corotTruss (E = 2.1e7 N/mm2 as written). The deck is a corotational elasticBeamColumn with the source's area and an added inertia pi*D^4/64 (D = 145.6 m; not in the source). Pushover as a raw ops.analyze loop (approved exception to AGENT.md §3c; 250000 steps of 0.01 mm to -2500 mm). Free vibration from 20 mm (Newmark, undamped and Rayleigh). Seismic Y via HHT with alpha = 1 (50 s, dt = 0.01 s).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Elastic (E = 2.1e7 N/mm2 as written in the source); no yielding (LINEAR = True)",
+    "Lateral system": "Suspension bridge: top cable, hangers and deck",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover (displacement control); free vibration after 20 mm deck displacement; ground motion Y",
+    "Earthquake records": "Ground_Acceleration_Y.txt (999 points, dt = 0.01 s, factor 9810 mm/s2); Ground_Acceleration_X.txt is kept but not run",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CABLE_SUSPENSION_BRIDGE/OPENSEES_CABLE_SUSPENSION_BRIDGE_04 (source repository; the PDF documentation was not parsed)",
+    "Notes": "Source py_ref/OPENSEES_CABLE_SUSPENSION_BRIDGE_04.py converted to the AGENT.md layout. The truss-only source is a mechanism (64 members for 80 free DOFs, LESSON 48), so bending stiffness was added to the deck (a deviation, LESSON 50). With I = pi*D^4/64 the first period is 0.0197 s, about two time steps of 0.01 s, so the seismic results are aliased. corotTruss ignores the Rayleigh stiffness term (LESSON 49). TOTAL_MASS = 5e7, labelled kg, is used as N.s^2/mm as written. The control node 33 is not the midspan. The pushover is a raw ops.analyze loop, the exception to AGENT.md §3c approved by the user on 2026-11-20 (SmartAnalyze stopped it at -168.8 mm; LESSON 53). The source's two dynamic runs are identical (LESSON 52). See README."
   }
 ]

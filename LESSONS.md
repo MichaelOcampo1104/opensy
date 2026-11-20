@@ -309,3 +309,32 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 47. A figure can match the script's equations with a different initial displacement; test the peaks before accepting a parameter
 - Evidence: the figure's displacement peak, 0.098615 mm, is its first sample, so the deck starts near 0.1 mm, while the script has u0 = 0.3 mm. The same equations with u0 = 0.1 mm give 0.0986156 mm (2e-6 relative), 1.3841 mm/s (0.1 % low), 55.376 mm/s^2 (0.02 % low) and 7270 N (0.15 % low). The model keeps 0.3 mm, and validation.txt reports the 0.1 mm replica.
 - Rule: when a figure's peaks match only under another parameter, run a diagnostic outside the deliverable, report the result, and keep the script's value. This extends LESSON 37.
+
+## 2026-11-20 — SalarDelavar_Cable_Suspension_Bridge_04 (truss-only mechanism; converted with added deck beam stiffness, LESSONS 49-53)
+
+### 48. A truss-only model has a singular initial stiffness; the source's fallback runs it, but equilibrium fails
+- Evidence: the source builds the cables, deck and hangers only as `corotTruss` elements. With 22 nodes per cable there are 21 top + 21 deck + 22 hanger members = 64 members, and the four end nodes are fixed, which leaves 80 free DOFs. Each member adds one rank-1 term to K, so rank(K) is at most 64 < 80 and the undeformed stiffness is singular. The source's first pushover algorithm (ModifiedNewton with EnergyIncr) fails at step 1 (load factor -nan). The source's retry ladder (KrylovNewton with NormDispIncr) recovers step 1, and steps 2 to 10 then converge with the first algorithm. The load factor grows roughly as the cube of the displacement, which suggests the stiffness comes from cable tension (not verified). But the support reactions are not in equilibrium: the horizontal reactions sum to +63.6 N, -63.6 N and +63.6 N at steps 2, 5 and 8, where the applied load is vertical only. The cause is not confirmed. The reference figure's 51-node version has the same count: 151 members for 196 free DOFs.
+- Rule: before converting a truss-only source, count members against free DOFs. Then run the source's own loop and check global equilibrium at each step before trusting any output. Convert the code as written and record the mismatch. Do not add elements without the author's intent.
+
+## 2026-11-20 — SalarDelavar_Cable_Suspension_Bridge_04 (conversion with added deck beam stiffness)
+
+### 49. OpenSees ignores the Rayleigh stiffness term on corotTruss elements; elasticBeamColumn does apply it
+- Evidence: a single spring-mass test with a corotTruss element and `ops.rayleigh(0, 0, 0, betaK)` gave the same end displacement as the undamped run (-0.098926 mm). The same test with an elasticBeamColumn matched a numpy Newmark run with C = betaK*K to 1e-16 mm (end 0.006726 mm, undamped 0.093907 mm). A zeroLength element needs `-doRayleigh` for the same term (LESSON 43).
+- Rule: in a truss-only model, Rayleigh damping gives mass-proportional damping only. Check each element type with a one-element test before reporting a damped response, and state which elements carry the stiffness term.
+
+### 50. A stabilizing beam stiffness can set the response; check the first period against the time step
+- Evidence: the source gives the deck only an area and an equivalent diameter (145.6 m). Adding bending stiffness from the same solid circle (I = pi*D^4/64 = 2.2e19 mm^4, EI = 4.6e26 N.mm^2) makes deck flexure the first mode, with T1 = 0.0197 s. OpenSees and numpy agree on this period. With dt = 0.01 s the response is aliased (T1/dt is about 2). The pushover becomes linear, with a stiffness of about 2.4e12 N/mm. For the deck mode, T scales with I^(-1/2).
+- Rule: when a stabilizing assumption is needed, state its basis, compute the first period, and compare it with the time step before trusting any dynamic result. Do not choose the value to fit a figure.
+
+### 51. SmartAnalyze costs about 5.8 ms per static step, against 0.5 ms for raw ops.analyze; plan the run time
+- Evidence: 1000 static displacement-control steps took 5.8 s in SmartAnalyze and 0.5 s with raw `ops.analyze`, on the same model and settings. Reading the reactions every step added nothing measurable. The source's 250,000-step pushover therefore takes about 25 minutes, and the ODB fetches were limited to 100 calls.
+- Rule: time one step inside SmartAnalyze before writing a long protocol. Limit ODB fetches for long analyses, and state the run time in the README.
+
+### 52. A source's "damped" run can equal the undamped run when the damping call sits behind an unset flag
+- Evidence: in the source's dynamic function, the Rayleigh call is inside `if periodTF:`, and both dynamic runs set `periodTF = False`. The `damping` argument is never used, so the two runs are identical by construction. The conversion runs the dynamic analysis once.
+- Rule: check that each damping option reaches the solver, and compare the damped and undamped outputs before reporting any effect of damping.
+
+### 53. SmartAnalyze can stop a long displacement-control pushover early; a raw loop with the same test can run to the target
+- Evidence: in the converted cable model, SmartAnalyze reports a failed step at step 16,881 (control node -168.8 mm, load factor 4.07e14 N). The same step with raw `ops.analyze`, with EnergyIncr 1e-6 and a persistent ModifiedNewton, converges for 250,000 steps. Calling `support_reactions()` after each step does not change the failure. Re-creating the integrator or the analysis object at each step, as SmartAnalyze does, fails at step 6 in the raw replay, although SmartAnalyze itself reaches step 16,880. The exact mechanism is not identified.
+- Rule: after each SmartAnalyze run, compare the last step with the protocol's target. If the run stops early, replay the window with raw OpenSees to see whether the state is solvable. Report the mechanism as unidentified when it is not found, and do not change the solver settings without a decision.
+- Outcome: the user approved a raw `ops.analyze` loop for this pushover on 2026-11-20, as an exception to AGENT.md §3c. The loop keeps the source's EnergyIncr 1e-6 test, ModifiedNewton algorithm and 0.01 mm increment, and reaches the 2500 mm target.
