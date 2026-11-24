@@ -1825,5 +1825,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CABLE_SUSPENSION_FOOT_BRIDGE/CABLE_STRUCTURE_03 (source repository; the source script lists reference links, including https://www.semanticscholar.org/paper/CABLE-SUSPENDED-PEDESTRIAN-BRIDGE-DESIGN-FOR-RURAL-Bang/6dd8ec9c0d0ca6059af6d6cbb7e5b6e25aed5bcf, which was not opened)",
     "Notes": "Source py_ref/OPENSEES_CABLE_SUSPENSION_BRIDGE_03.py converted to the AGENT.md layout. The source's 50 corotTruss members on 98 free DOFs are singular (LESSON 48, LESSON 58). Bending stiffness was added to every member, as approved by the user (LESSON 50's rule: I from the solid circle of the section area). Pinned ends with free end rotations. TOTAL_MASS = 50000, labelled kg, is used as N.s^2/mm as written (LESSON 55). The source's Rayleigh coefficients come from assumed frequencies; with beam members they also damp the stiffness term: first-mode ratios 285 % (free run) and 9.6 % (dynamic run), against 0.02 % and 0.6 % for mass-only damping (LESSON 54, LESSON 59). The shortest periods (0.00455 s) are shorter than dt = 0.01 s, as in the source's truss chain (LESSON 60). See README."
+  },
+  {
+    "UniqueID": "SalarDelavar_Concrete_Column_Joints_Contact",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_COLUMN_JOINTS_CONTACT",
+    "num_models": "1",
+    "purpose": "Horizontal pushover and two-direction ground motion response of a 3 m reinforced concrete column with axial, lateral and rotational joint springs at both ends (beam-column joint model); fibre sections and corotational beam-columns.",
+    "Description of Building Structural System": "Single 3 m RC column, 600 x 600 mm section, 50 mm cover, 16 bars of 25 mm, with joint springs at the base and at the top that represent the beam-column joints.",
+    "Description of Model": "2D (ndm 2, ndf 3). Three corotational nonlinearBeamColumn elements with fibre sections: Concrete02 core and cover (f'c 25 MPa), Hysteretic reinforcement as written (E_s 2.1e6 N/mm2, f_y 4000 N/mm2). Joint springs as zeroLength elements (Steel02): lateral and axial (P_Y = 42000 B H, P_K = P_Y/12) and rotational (M_Y = 57530 B H, M_K = M_Y/0.0523). Horizontal displacement control of the top node to 520 mm (52,000 steps of 0.01 mm, SmartAnalyze, ModifiedNewton). Seismic: Newmark (0.5, 0.25), dt 0.01 s, 10 s, both records scaled by 98.1 mm/s2 per unit, modal Rayleigh damping at 5 % from the first two eigenvalues.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (Concrete02 core and cover, f'c 25 MPa; Hysteretic reinforcement as written; Steel02 joint springs)",
+    "Lateral system": "3 m RC column with lateral, axial and rotational joint springs at the base and the top",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover (horizontal displacement control); ground motions X and Y",
+    "Earthquake records": "Ground_Acceleration_X.txt and Ground_Acceleration_Y.txt (999 points at 0.01 s; identical to the foot-bridge records); scaled by 98.1 mm/s2 per unit",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_COLUMN_JOINTS_CONTACT (source repository; the source also ships a PDF and a PowerPoint, not parsed)",
+    "Notes": "Source py_ref/CONCRETE_COLUMN_JOINTS_CONTACT.py converted to the AGENT.md layout. The top lateral spring carries the applied load and the column base shear is only its share (LESSON 63). Masses labelled [N] are used as N.s^2/mm as written; read as a weight, the period would fall below dt (LESSON 64). The zeroLength springs carry no stiffness-proportional damping, so the two lowest modes damp at 2.5 % instead of 5 % (LESSON 49, LESSON 62); the source's log-decrement estimate on the forced record is not a damping ratio. The seismic replica starts from zero acceleration with the source's initial velocity, as OpenSees does (LESSON 61). See README."
   }
 ]

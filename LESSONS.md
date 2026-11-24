@@ -369,3 +369,19 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 60. A time step can be longer than the shortest period of a chain; check the short periods as well as the first
 - Evidence: sub-model 03 has 34 of its 98 translational modes with periods shorter than dt = 0.01 s; the shortest is 0.00455 s. The source's truss chain has the same shortest period and the same count, because they come from its axial stiffness EA/L and nodal mass as written, so the beam conversion did not create them. The undamped seismic run has a peak horizontal support reaction of 11.0 kN, more than six times the rigid-body inertia of the record (about 1.7 kN).
 - Rule: list the shortest periods before reading a dynamic result. If any is shorter than dt, state which outputs it can affect, and do not read the reactions as physical until the time step has been checked.
+
+### 61. A replica of a transient run must start from the solver's initial state: zero acceleration and the source's initial velocity
+- Evidence: in the concrete column joint model, a linear Newmark replica that computed the initial acceleration from the ground force at t = 0 differed from the OpenSees seismic run by 1.6e-4 mm in the first 2 s (0.85 % of the largest response; about 2.8 times too large at the first step). OpenSees starts from zero acceleration with the initial velocity iv0 (5e-5 mm/s, the source's -vel0). With that start the replica agrees to 3e-10 mm (x) and 7e-8 mm (y). A one-step shift of the force made the difference about ten times larger, so the time alignment was already correct.
+- Rule: before judging a replica of a dynamic run, match its initial acceleration and velocity to the solver's convention, and test a one-step shift to confirm the time alignment.
+
+### 62. A log-decrement estimate of a forced response is not a damping ratio; use the modal ratio from the matrices
+- Evidence: the source estimates damping from the displacement peaks of the whole 10 s ground-motion record. The record is forced, and the run ends 0.02 s after it, so the peaks are not free decay. The conversion gives -1.07 %. The numpy modal ratios of the two lowest modes are 2.50 % and 2.51 % as written, and 5.00 % when the springs also carry the stiffness term.
+- Rule: report the modal ratios computed from the matrices, and do not use a log-decrement of a forced response as a damping estimate. This extends LESSON 54.
+
+### 63. A joint spring much stiffer than the column carries almost all of the lateral load; the column's base shear then does not show the total load
+- Evidence: in the concrete column joint model the top lateral spring has 1.26e9 N/mm. A cantilever of the same bending stiffness (3EI/L^3 with EI = 9.4e14 N.mm^2) would have about 1e5 N/mm, so the spring is more than 10^3 times stiffer. At 5 mm top displacement the spring carries 6.3 GN and the column base shear is 0.36 MN (0.006 % of the load). At 520 mm the spring carries 68.9 GN and the base shear is 1.45 MN (0.002 %). The source's pushover plots the base shear, so its curve shows the column's share, not the total load.
+- Rule: before interpreting a pushover base shear, compare each support spring force with the applied load, and report which path carries the load.
+
+### 64. A mass labelled as a weight moves the period by a factor of 100 and can fall below the time step; check the label against its use
+- Evidence: the source labels its top-node masses "[N]" (2.0e6) and uses them as N.s^2/mm (2e9 kg). Read as a weight, the mass is 2.0e6 N / 9810 mm/s^2 = 204 N.s^2/mm, and the two lowest periods become 0.00253 s and 0.00252 s, which the time step of 0.01 s does not resolve. As written, the periods are 0.2503 s and 0.2495 s (25 steps per period). This extends LESSON 55.
+- Rule: check each mass label against the way the code uses it, and compare the resulting period with the time step before reading any dynamic result.
