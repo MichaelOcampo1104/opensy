@@ -403,3 +403,25 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 68. A pushover that controls one node and records another reports a smaller displacement than its target; the ductility then refers to the recorded node
 - Evidence: the source controls node 4 to 175 mm and records node 3. At the last step the node-3 displacement is 167.0 mm without the plate and 167.5 mm with it. The source's bilinear fit, ductility and R are computed from the node-3 displacement, so mu = 3.52 and 3.72 refer to node 3, not to the 175 mm control.
 - Rule: state in the README which node gives the ductility, and do not read the last control value as the recorded displacement.
+
+## 2026-11-24 — SalarDelavar_Confinement_Nonconstant_Elastic_Or_Inelastic_Frame (2D fibre frame, elastic and inelastic pushover and time history)
+
+### 69. OpenSees lumps the element mass for `-mass`: m·L/2 at each end, with no rotational inertia
+- Evidence: a single elastic cantilever element (L = 1000 mm, m = 6.25 N·s²/mm², EI = 10^14 N·mm², EA = 10^9 N) has eigenvalues 96 and 320 rad²/s². These equal 6EI/(mL^4) and EA/(mL/2), the lumped values. The consistent mass of the same element gives 199.7. For the ten-node frame, the six lowest finite eigenvalues of the lumped numpy model, with the massless rotational DOFs condensed out, agree with OpenSees to six decimal places, and the inelastic element starts with the same eigenvalues as the elastic one.
+- Rule: check the element mass convention on one element before comparing periods. Build the numpy eigenproblem with the lumped mass, condense the massless DOFs, and state the convention in the README.
+
+### 70. The ground excitation applies the full element mass at each free end, not the lumped half
+- Evidence: a single mass on a spring matches the textbook Newmark step exactly (unit test: −2.000 x 10^-5, −8.400 x 10^-5, −1.608 x 10^-4), so the integrator is standard. For the frame, the first step of the node-3 displacement is 1.298 times the textbook value M·r·a. For one cantilever element, the free-end displacement is 2.01 times the textbook value without a nodal mass and 1.208 times with a 12,000 nodal mass; both match the rule that the free end receives the full element mass m·L. The replica with the force Σ(nodal mass) + Σ(m·L at each free end) reproduces the first four steps to seven digits and the linear-geometry OpenSees run over 5000 steps to 3.6 x 10^-11. The textbook force M·r differs by 41 % over 1000 steps. The eigenvalues and the effective mass keep the lumped mass (LESSON 69).
+- Rule: do not assume the excitation force uses the same mass as the eigen analysis. Match the force to the solver's first steps (one DOF first, then the model), and state the rule that is found.
+
+### 71. Source masses labelled [kg] are used in N·s²/mm, and the element masses do not match the density of concrete (extends LESSON 55 and 64)
+- Evidence: the source's nodal mass 12000 is labelled [kg], and its element masses come from the factors 0.000025·B·H (6.25 for the column, 3.75 for the beam). In the N-mm-s system the total mass is 87,750 N·s²/mm and the four lowest periods are 7.58, 2.44, 1.83 and 1.03 s. Read as kg, each mass is 1000 times smaller and each period 0.0316 times these, down to 0.033 s, which is 3.3 steps of dt = 0.01 s. In N-mm-s, the element mass per unit length is about 10^4 times that of a 500 x 500 mm concrete column at 2500 kg/m³.
+- Rule: check each mass label against the unit system the code uses and against the density of the material, and check the shortest period against the time step before reading any transient. Keep the source's value and report both readings.
+
+### 72. A replica of a corotational transient agrees only while the displacement is small; a linear-geometry run of the same model attributes the rest (extends LESSON 56)
+- Evidence: the elastic run (corotational) agrees with the linear replica to 1.3 x 10^-8 while |u| <= 1 mm and to 2.1 x 10^-4 while |u| <= 10 mm. Over the full record the difference is 2.5 %, and the peak displacement is 328.7 mm against 325.5 mm with a linear transformation. The same model with a linear transformation agrees with the replica to 3.6 x 10^-11 over 5000 steps, so the residual is geometric.
+- Rule: compare a replica only over the window where the displacement is small, report the whole-record difference separately, and attribute it to the geometry only after a linear-geometry run of the same model confirms it.
+
+### 73. A Linear time series grows with time in a transient analysis, so a static load in a dynamic pattern is a ramp
+- Evidence: in a transient analysis, a unit horizontal load in a `Linear` pattern gives tip displacements 8.64 x 10^-5, 1.728 x 10^-4 and 2.592 x 10^-4 mm at t = 1, 2 and 3 s, so the load is t N. The source adds such a load to the time-history run, where it reaches 50 N at 50 s.
+- Rule: when a static load is placed in a `Linear` pattern that is used in a transient analysis, the load is a ramp in time. Check the time dependence of every load in a dynamic pattern.

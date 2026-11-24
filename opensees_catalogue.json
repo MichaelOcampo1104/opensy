@@ -1867,5 +1867,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/COMPOSITE_SECTION%20(FRP%20or%20PLATE) (source repository)",
     "Notes": "Source py_ref/COMPOSITE_SECTION_FRAME_PUSHOVER.py converted to the AGENT.md layout. Concrete01 has no tension, so the first step is cracked (LESSON 65); the first-step check uses the section state of each integration point (LESSON 66). The source's beam plate is on a width face in its own coordinates, not a bottom plate (LESSON 67). Results as written: R = 8.3800 without and 9.5761 with the plate. The source's Excel export is written as CSV."
+  },
+  {
+    "UniqueID": "SalarDelavar_Confinement_Nonconstant_Elastic_Or_Inelastic_Frame",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/CONFINEMENT_NONCONSTANT_ELASTIC_OR_INELASTIC_FRAME",
+    "num_models": "1",
+    "purpose": "Comparison of the elastic and inelastic behaviour of a 2D reinforced-concrete frame with fibre sections whose confinement ratio varies along the frame: pushover to 675 mm and X time history with the source's Rayleigh damping (first of the seven sub-models of CONFINEMENT_ENHANCEMENT_RATIO).",
+    "Description of Building Structural System": "Single-storey portal frame with fixed bases: two 3 m columns of 500 x 500 mm (six 25 mm bars, 50 mm cover) and a 7 m beam of 500 x 300 mm (eight 18 mm bars); confinement enhancement ratios 1.25, 1.10, 1.15 and 1.05 along the frame.",
+    "Description of Model": "2D (ndm 2, ndf 3). Nine corotational beam-column elements: nonlinearBeamColumn with 10 integration points (inelastic run) or elasticBeamColumn on the same fibre sections (elastic run); 40 x 5 fibres per patch. Concrete01 (f'c 25 MPa, confined core and cover) and Hysteretic reinforcement as written (f_y 4000 MPa, E_s 2e5 MPa). Pushover: displacement control of node 4 to 675 mm in 0.05 mm steps (13500 steps, SmartAnalyze). Time history: X record scaled by 9810 mm/s2 x 10, Newmark 0.5 / 0.25, dt 0.01 s, 50 s; source Rayleigh damping from the first two modes (5 % and 3 %). Two runs each, elastic and inelastic.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (Concrete01 confined core and cover, f'c 25 MPa; Hysteretic reinforcement as written)",
+    "Lateral system": "Portal frame with confinement ratios varying along the frame",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover (horizontal displacement control of node 4); X ground motion (time history)",
+    "Earthquake records": "Ground_Acceleration_X.txt (999 values at 0.01 s, in g; scaled by 9810 mm/s2 and 10); Ground_Acceleration_Y.txt (copied, not used)",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/CONFINEMENT_NONCONSTANT_ELASTIC_OR_INELASTIC_FRAME (source repository; the source's PDF and PowerPoint were not parsed)",
+    "Notes": "Source py_ref/CONFINEMENT_NONCONSTANT_ELASTIC_OR_INELASTIC_FRAME.py converted to the AGENT.md layout. The source's masses labelled kg are used as N.s^2/mm as written (LESSON 71). The excitation force follows OpenSees (LESSON 70), and the replica is validated only while the displacement is small (LESSON 72). The other six sub-models of CONFINEMENT_ENHANCEMENT_RATIO are not converted yet."
   }
 ]
