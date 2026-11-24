@@ -385,3 +385,21 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 64. A mass labelled as a weight moves the period by a factor of 100 and can fall below the time step; check the label against its use
 - Evidence: the source labels its top-node masses "[N]" (2.0e6) and uses them as N.s^2/mm (2e9 kg). Read as a weight, the mass is 2.0e6 N / 9810 mm/s^2 = 204 N.s^2/mm, and the two lowest periods become 0.00253 s and 0.00252 s, which the time step of 0.01 s does not resolve. As written, the periods are 0.2503 s and 0.2495 s (25 steps per period). This extends LESSON 55.
 - Rule: check each mass label against the way the code uses it, and compare the resulting period with the time step before reading any dynamic result.
+
+## 2026-11-24 — SalarDelavar_Composite_Section_FRP_or_Plate (2D fibre portal frame, Concrete01 and a steel-plate jacket)
+
+### 65. A Concrete01 frame is cracked from its first step: a gross-section check is 2.6 times too stiff
+- Evidence: the first pushover step of the source's frame has load factor 270.5 in OpenSees. A linear numpy frame with the uncracked sections gives 698.9 (762.7 with the plate), 2.6 times the OpenSees value. Concrete01 has no tensile strength, so its tension fibres carry no stiffness, and every section is cracked under any bending moment. The first version of the model's check used the gross section and failed for this reason.
+- Rule: before choosing a reference for a first step, check each material's tension behaviour. A model whose concrete has no tension needs a cracked-section reference.
+
+### 66. A zero-axial-force cracked section misses 1.7 % of the first step; the check must use the section state at each integration point
+- Evidence: with a cracked section at zero axial force, the numpy frame gives 266.0 at the first step, 1.7 % below OpenSees (270.5). The vertical loads put about -237 N of axial force in each column at the first step, and the cracked section's axial-bending coupling depends on that force. A force-based element whose section flexibility follows the state at each of its five Lobatto points, iterated to convergence, gives 270.5248 without the plate (relative difference 4.7e-5) and 349.2369 with it (9.6e-6). A 5-point Gauss-Legendre rule gives 4.6e-4 and 4.1e-4 instead, so the integration rule must match the OpenSees element. The remaining 5e-5 is of the order of the displacement tolerance.
+- Rule: for a frame with cracked fibre sections, check the first step with the state-dependent force-based element and the solver's integration rule. Show the Gauss-Legendre variant to expose the sensitivity, and do not use a cracked section taken at zero force.
+
+### 67. A patch described by a comment can sit elsewhere: the source's "bottom" plate of the beam is on a width face
+- Evidence: the source's beam plate is `patch('rect', ..., -(y1 + T), -z1 - T, y1 + T, -z1)`, with the comment "Bottom plate". Its depth range covers the full height plus the plate thickness, and its width range lies outside the -z face. The plate is therefore a 10 mm strip on one width face spanning the depth, and in the 2D frame it stiffens the beam like a web (uncracked EI +1.8 %). The column patches, by contrast, cover the four faces as intended.
+- Rule: check each source patch against its coordinates, not its comment. Keep the geometry as written, and state in the README where the plate actually is.
+
+### 68. A pushover that controls one node and records another reports a smaller displacement than its target; the ductility then refers to the recorded node
+- Evidence: the source controls node 4 to 175 mm and records node 3. At the last step the node-3 displacement is 167.0 mm without the plate and 167.5 mm with it. The source's bilinear fit, ductility and R are computed from the node-3 displacement, so mu = 3.52 and 3.72 refer to node 3, not to the 175 mm control.
+- Rule: state in the README which node gives the ductility, and do not read the last control value as the recorded displacement.

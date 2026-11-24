@@ -1846,5 +1846,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_COLUMN_JOINTS_CONTACT (source repository; the source also ships a PDF and a PowerPoint, not parsed)",
     "Notes": "Source py_ref/CONCRETE_COLUMN_JOINTS_CONTACT.py converted to the AGENT.md layout. The top lateral spring carries the applied load and the column base shear is only its share (LESSON 63). Masses labelled [N] are used as N.s^2/mm as written; read as a weight, the period would fall below dt (LESSON 64). The zeroLength springs carry no stiffness-proportional damping, so the two lowest modes damp at 2.5 % instead of 5 % (LESSON 49, LESSON 62); the source's log-decrement estimate on the forced record is not a damping ratio. The seismic replica starts from zero acceleration with the source's initial velocity, as OpenSees does (LESSON 61). See README."
+  },
+  {
+    "UniqueID": "SalarDelavar_Composite_Section_FRP_or_Plate",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/COMPOSITE_SECTION%20(FRP%20or%20PLATE)",
+    "num_models": "1",
+    "purpose": "Horizontal pushover of a 2D reinforced-concrete portal frame with fibre sections, without and with a 10 mm steel-plate jacket, with a bilinear fit, the over-strength factor, the ductility and R (sub-model of the source folder COMPOSITE_SECTION (FRP or PLATE)).",
+    "Description of Building Structural System": "Single-storey, single-bay portal frame with fixed bases: two 3 m columns of 500 x 500 mm (six 25 mm bars, 50 mm cover) and a 7 m beam of 500 x 300 mm (eight 18 mm bars).",
+    "Description of Model": "2D (ndm 2, ndf 3). Three corotational nonlinearBeamColumn elements with five integration points and fibre sections (20 x 5 fibres per patch). Concrete01 for the confined core and the cover; Hysteretic reinforcement and Hysteretic steel plate as written. Horizontal displacement control of node 4 to 175 mm in 0.05 mm steps (3500 steps; SmartAnalyze, NormDispIncr 1e-6). Two runs: without and with the plate.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (Concrete01 core and cover; Hysteretic reinforcement as written; Hysteretic steel plate as written)",
+    "Lateral system": "Portal frame (two fixed-base columns and one beam), with and without a steel-plate jacket",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover (horizontal displacement control of node 4)",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/COMPOSITE_SECTION%20(FRP%20or%20PLATE) (source repository)",
+    "Notes": "Source py_ref/COMPOSITE_SECTION_FRAME_PUSHOVER.py converted to the AGENT.md layout. Concrete01 has no tension, so the first step is cracked (LESSON 65); the first-step check uses the section state of each integration point (LESSON 66). The source's beam plate is on a width face in its own coordinates, not a bottom plate (LESSON 67). Results as written: R = 8.3800 without and 9.5761 with the plate. The source's Excel export is written as CSV."
   }
 ]
