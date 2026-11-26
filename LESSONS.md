@@ -425,3 +425,79 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 73. A Linear time series grows with time in a transient analysis, so a static load in a dynamic pattern is a ramp
 - Evidence: in a transient analysis, a unit horizontal load in a `Linear` pattern gives tip displacements 8.64 x 10^-5, 1.728 x 10^-4 and 2.592 x 10^-4 mm at t = 1, 2 and 3 s, so the load is t N. The source adds such a load to the time-history run, where it reaches 50 N at 50 s.
 - Rule: when a static load is placed in a `Linear` pattern that is used in a transient analysis, the load is a ramp in time. Check the time dependence of every load in a dynamic pattern.
+
+## 2026-11-25 — SalarDelavar_Confinement_Nonconstant_Elastic_Inelastic_Impact (2D fibre frame under a harmonic nodal load)
+
+### 74. A time series built on one time axis and applied at another spacing runs at a different frequency: the source's harmonic load runs at 0.1 times its intended frequency
+- Evidence: the source computes 5000 values of 1 MN sin(0.65 ω_n t) on load_time = linspace(0, 5 s, 5000), a spacing of 0.0010002 s, and applies them as a Path series with -dt 0.01 s. The applied frequency is 0.32971 rad/s (period 19.06 s), not 3.29648 rad/s (period 1.906 s). The first zero crossing comes at 9.53 s, not 0.953 s, and the values last 49.99 s. The elastic run follows the applied series: the replica agrees with it to 8.0 x 10^-7 over the first 83 steps (|u| <= 1 mm).
+- Rule: when a time series is computed on one time axis and applied at a fixed dt, compare the two spacings, and the period of the applied series with the stated frequency, before reading any response. Keep the source's values and state the mismatch in the README.
+
+### 75. A Path series of nodal forces is not scaled by mass, unlike UniformExcitation: the replica applies only the load values
+- Evidence: the source applies the values as nodal loads of 1.0 in X at nodes 3 and 4 in a Plain pattern, with no ground motion. A replica that applies F(t) at those DOFs, with the gross stiffness, the lumped mass with the nodal masses and the Rayleigh damping, agrees with OpenSees to 8.0 x 10^-7 over the first 83 steps (|u| <= 1 mm), 3.1 x 10^-4 over 189 steps (|u| <= 10 mm) and 3.3 x 10^-3 over the whole 100 s. The same model with a linear transformation agrees to 1.5 x 10^-11 over all 10,000 steps, so the rest is the corotational geometry (LESSON 72).
+- Rule: the force a pattern applies depends on its type. UniformExcitation applies the element and nodal masses to the free DOFs, while a nodal load applies only its value. Build the replica from the pattern the solver uses, then run the same model with a linear transformation before attributing the residual to geometry.
+
+### 76. A Path series is zero after its last value
+- Evidence: the source's values end at 49.99 s with -0.699 MN, and the run lasts 100 s. OpenSees agrees with a replica that applies zero force after the last value: the largest |u| after 50 s is 38.24 mm (OpenSees) and 38.34 mm (replica), a difference of 2.7 x 10^-3 of the maximum. A replica that holds the last value settles near -31 mm and differs from OpenSees by 1.59 times the maximum.
+- Rule: check how the solver evaluates a time series beyond its last value before reading the response after the data end, and test the replica with the other convention.
+
+### 77. A natural frequency typed into a source script need not be the frame's first frequency
+- Evidence: the source sets omega_n = 5.0715 rad/s (period 1.2389 s) as a constant, and its script has no eigen analysis. This frame's first two periods are 7.584 s and 2.441 s (lumped masses in N·s²/mm, LESSON 71), so 5.0715 rad/s matches neither. The source's target 0.65 omega_n (3.30 rad/s) is about four times this frame's first frequency (0.83 rad/s).
+- Rule: compare a hard-coded frequency with the model's own eigenvalues before using it to set a load frequency, and report the difference.
+
+### 78. On Windows a path longer than 259 characters fails in the ODB writer, so a long model folder name can stop a run after both analyses have finished
+- Evidence: a run under a 75-character UniqueID stopped in `odb.save_response()` with FileNotFoundError on a zarr partial file of the pushover ODB. The path was 265 characters (`models\<UniqueID>\output\RespStepData-pushover_elastic.odb\part_1.zarr\ModelInfo\FixedNodalData\FixedNodalData\.zarray.<hash>.partial`). The 63-character UniqueID of the first sub-model has a deepest final output file of 216 characters. With a 61-character UniqueID, the same model ran to exit code 0 and wrote all its CSV, text and figure files.
+- Rule: keep the UniqueID, which is also the folder name, at 61 characters or fewer for this stack, and check the longest output path (including the temporary zarr files) before the first long run. Rename the folder before running if the name is longer.
+
+## 2026-11-25 — SalarDelavar_Ductility_Damage_Index_Confinement_Enhancement (2D fibre frame, ductility damage index)
+
+### 79. A sub-model of the same source series can change a scale factor, so each sub-model's parameters are read from its own script
+- Evidence: the first sub-model's main sets `SSF_X = 10.0`, and the ductility sub-model's main sets `SSF_X = 0.01` for the same record (the two X records are identical files, byte for byte). The ductility sub-model also has no elastic branch in its `PD_ANALYSIS`. Its inelastic time history peaks at 0.35 mm, where the first sub-model's peaks at 445.9 mm.
+- Rule: read the scale factors, the element branches and the durations from each sub-model's own script. Do not reuse a previous sub-model's parameter set, even when the record files are identical.
+
+### 80. A helper with the same name can change between sub-models: port each version and check its guards against the record
+- Evidence: `DAMPING_RATIO_FUN.py` differs between the first sub-model and the ductility sub-model. The first returns 0 when there are fewer than two peaks or a non-positive peak. The second has no such check and returns NaN. On the ductility time history, 7 of the 24 local maxima of the node-3 displacement are zero or negative, so the log-decrement ratio is undefined there: the second version returns NaN, and the first would return 0.
+- Rule: diff each helper file against the version already ported before reusing a port, and state in the README what the helper returns for a record it cannot evaluate. Two versions can disagree on the same input.
+
+### 81. A period helper that takes the minimum over four eigenvalues returns NaN when one eigenvalue is negative, and a finite-value summary hides it
+- Evidence: in the inelastic time history of the impact-load sub-model, 4 of 10,000 steps have a negative tangent-stiffness eigenvalue, the first at 15.67 s, so the source helper's `np.min` and `np.max` return NaN at those steps. The first report took `np.min` over the whole run, and the range printed as NaN for the whole run. Over the finite steps the range is 1.39 s to 102.5 s.
+- Rule: count the NaN results before summarising a range, use NaN-aware reductions, and report the count and the time of the first NaN step.
+
+## 2026-11-25 — SalarDelavar_Ductility_Damage_Index_Confinement_Rigid_Roof (2D fibre frame with a rigid roof)
+
+### 82. A "rigid roof" in a source can be a rotation restraint at the roof nodes, not a rigid diaphragm: read the flags of each fix()
+- Evidence: the source's `ops.fix(3, 0, 0, 1)`, `ops.fix(4, 0, 0, 1)`, `ops.fix(9, 0, 0, 1)` and `ops.fix(10, 0, 0, 1)` restrain the third flag, the rotation, and leave the translations free. With the restraints, the two top nodes move together in X: node 3 reaches 675.000 mm, the same as the control node 4. The first pushover load factor rises from 299.8 to 1041.3, about 3.5 times. A numpy model with the same restraints reproduces the first step (relative difference 1.6 x 10^-4), the Rayleigh coefficients (to six digits) and the periods of the two targeted modes (4.480435 s and 1.247120 s).
+- Rule: name a restraint by the DOFs it removes, not by the word in the source's comment. Re-derive the numpy free-DOF set from the restraint flags before comparing with OpenSees.
+
+### 83. A bilinear fit of a softening pushover gives a negative post-yield tangent and an over-strength factor below 1, and a damage index below 0
+- Evidence: in this sub-model the base shear peaks at 3.33 MN and falls to 3.04 MN at 675 mm, so the post-yield tangent of the fit is -133.4 N/mm and Omega_0 = 0.9743. The damage indices are -0.0848 in X and -0.1605 in Y, because the peak displacements (24.1 mm and 3.4 mm) lie below the yield displacements of the fits (75.0 mm and 8.8 mm). The source's formula is not clipped.
+- Rule: check the sign of the post-yield stiffness before reading Omega_0 and the damage index, and report a negative index as computed, with its reason, instead of clipping it.
+
+## 2026-11-26 — SalarDelavar_Optimization_Confinement_Enhancement_Ratio (2D fibre frame, confinement ratio search)
+
+### 84. A branch that the source's main script never calls is not part of the analysis: list the calls before converting
+- Evidence: the source's `PD_ANALYSIS` has a DYNAMIC branch (an HHT integrator, Rayleigh damping from its two lowest modes, and a Path ground motion), but the main script calls `PD_ANALYSIS` only with `ANA_KIND='PUSHOVER'`, in the three search calls. The branch is not converted, and the README says so.
+- Rule: before converting a source file, list every call of each function and each branch. A branch with no call is documented as not converted, not converted silently.
+
+### 85. Analyses run in separate processes must not share a working folder: opstool's set_odb_path removes the results folder of that folder
+- Evidence: three worker processes started from the model folder failed in `opstool.post.set_odb_path` with PermissionError (WinError 5) in `shutil.rmtree`. opstool fixes its results folder when it is imported (`RESULTS_DIR = Path(os.getcwd()) / ".opstool.output"`), so each worker removed the folder that the others were using. With each worker started from its own folder under `output/.work`, the three pushovers of each iteration completed, and the final run wrote 16 ODB sets.
+- Rule: start each parallel analysis process from its own working folder before it imports opstool, and call `set_odb_path` only inside that process.
+
+### 86. A source's exported results come from its last call in a loop, not from its optimum: run the optimum itself
+- Evidence: the source's Excel export and plots use the variables of the last `PD_ANALYSIS` call in its loop, which is at X + ESP in the last iteration. The conversion adds one pushover at the optimum X* = 2.147387. Its ductility is 5.500000 (a difference of 3 x 10^-13 from the target), and its own results are written.
+- Rule: when the source reports 'the optimum', check which call produced its outputs, and run the optimum explicitly.
+
+### 87. A fibre mesh across the width of a patch does not change an in-plane response with a one-dimensional concrete law
+- Evidence: at X = 1.25 the ductility is 5.751466871648777 with one fibre across the width and 5.751466871638407 with five (a difference of 1 x 10^-11). The first pushover step and the equilibrium agree to rounding. With one fibre across, each pushover took 48 to 90 s.
+- Rule: refine or coarsen a mesh only in the directions that enter the constitutive law, and test one analysis before and after a mesh change. A change along the depth of a section does change the result, so it is a separate decision.
+
+### 88. A long search must save each completed iteration and resume from it
+- Evidence: a search run stopped during its fifth iteration when the session ended. Its first four iterations existed only in memory, so their values and the final pushover were lost, and the run had to start again from the beginning.
+- Rule: write each completed iteration to disk at once, and let a restarted run continue from the last saved iteration, after removing the partial output of the iteration it was in.
+
+### 89. Run times measured while another model run shares the machine are not comparable: record the load with each timing
+- Evidence: the same pushover (Kc = 1.25, whose results agree with the first sub-model's CSV to the last digit) took 625.6 s in the identity check. That check ran while another session's `model.py` was using the machine, and the first sub-model's own pushover took 3 min 28 s (its README).
+- Rule: take a timing only when no other run is active, or record the other load next to it, and compare times only between runs made under the same load.
+
+### 90. opstool writes an empty `.opstool.output` folder into the working folder, and the repository's .gitignore does not cover it
+- Evidence: empty `.opstool.output` folders appeared inside model folders during several runs (the first sub-model's, and the optimisation search's). The .gitignore covers only `Opensees_references/**/.opstool.output/`, so the folder shows as untracked and would be committed with its model if it were staged.
+- Rule: before staging a model folder, check for `.opstool.output` and remove it. A `.gitignore` rule for `models/**/.opstool.output/` would prevent this; that rule is not added here.
