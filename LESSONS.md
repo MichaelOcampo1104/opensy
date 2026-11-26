@@ -539,3 +539,39 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 99. A bonded pad with a modulus 1000 times the soil's concentrated the contact at its edges even when thin, which the plate stiffness index does not predict; the interface has not been varied
 - Evidence: the 0.3 m pad (K = 0.02) carried 127.5 and 136.3 kPa in its two edge half-metre bins and 59.0 kPa in the middle. The 0.6 m pad at E 3 GPa (also K = 0.02) gave 132.6 and 142.4 kPa at the edges and 59.3 kPa in the middle. A flexible-plate expectation is near-uniform contact at small K. The frictionless case has not been run, so the cause is open.
 - Rule: do not read a plate stiffness index as the contact shape of a bonded pad. Run the frictionless interface, or report the edge pattern as unconfirmed.
+
+## 2026-11-26 — SalarDelavar_Sensitivity_Confinement_Enhancement_Ratio_Rebar (2D fibre frame, rebar and confinement grid)
+
+### 100. A ratio the source derives from its geometry must be checked against the bars its own section places
+- Evidence: the source's RO_COL = 8 As / (Hc Bc) and RO_BE = 6 As / (Hb Bb). Its CONFINED_CONCRETE_SECTION places six bars in a column (three on each face) and eight in a beam (three, two and three). At 20 mm column rebar the stated ratios are 0.010053 (column) and 0.008042 (beam); the bars the sections have give 0.007540 and 0.010723. So the stated column ratio is 8/6 of the six-bar value, and the stated beam ratio is 6/8 of the eight-bar value.
+- Rule: when a source derives a quantity (ratio, area, mass) from a section, count the bars in that section's own calls and compare. Where they differ, convert the source's formula as written and report both values, naming the count the section uses.
+
+### 101. A sub-model that looks like an earlier one can use other section offsets: read each source's section calls
+- Evidence: on the same 500 x 500 mm column and 500 x 300 mm beam, the sensitivity source sets the middle column, the beam and the middle beam at Kfc - 0.05, - 0.10 and - 0.15; the optimisation source sets them at Kc - 0.15, - 0.10 and - 0.20. Reusing the optimisation's section list would have changed every section's confinement ratio silently.
+- Rule: before reusing a section list, parameter set or helper from an earlier conversion, compare the calls of the new source with the earlier model line by line.
+
+### 102. A source's label or printed value can name a different quantity than the array it uses: check each one
+- Evidence: the source prints a Y-direction 'Ductility Ratio' as YY[2]/YY[1], where YY is the absolute axial force, not the ratio X[2]/X[1] of its Y fit. Its stiffness scatter plots label the x axis as lateral stiffness while plotting rotational stiffness there, and its step plots label moments in kN.mm for values in N.mm. The table column AXIAL_RIGIDITY holds the maximum absolute axial force, the same values as AXIAL_FORCE.
+- Rule: check every printed value and axis label against the array it is applied to. The converted model computes each quantity from the array its name describes, and the README records each difference from the source.
+
+### 103. opstool's SmartAnalyze log is written to the working folder, so the main process should run from output/
+- Evidence: the scratch smoke test ran from its own output folder, and `.SmartAnalyze-OpenSees.log` appeared there next to the ODB files. The repository's .gitignore covers models/**/output/** only, so a log written to the model folder would be untracked.
+- Rule: change into output/ before the first analysis of a model run whose analyses write logs to the working folder. The converted sensitivity model does this in its main block.
+
+### 104. A single-case equilibrium check can miss isolated bad steps: check the base reactions against the load at every step, in every case
+- Evidence: the optimisation sub-model's one-case check agreed at every step (1.5 x 10^-11 and 5.9 x 10^-11). The sensitivity grid's 25 pushovers show isolated steps in five cases where the base reactions depart from the applied load by up to 1.4 x 10^-3 of the largest load: 3.4 kN in the axial reaction at one step of the 28 mm, 1.25 case, and 64 N in the shear at a few neighbouring steps. The displacement-increment test (tolerance 10^-6) was met at those steps. Setting them to equilibrium changes the ductility and the over-strength factor by at most 1 x 10^-8, so the fits are not affected here.
+- Rule: in each pushover's validation, compare the base reactions with the applied load at every step, report the largest departure and its step, and repeat the check for every case of a grid rather than for one. A convergence test on displacement increments does not bound the force error of a step.
+
+## 2026-11-26 — SalarDelavar_Sensitivity_Cdepth_Confinement_Free_Vibration (2D fibre frame, pushover and free vibration grid)
+
+### 105. A logarithmic decrement from every local maximum is undefined when a two-mode free decay has negative secondary peaks: report the count, and do not quote a value from a short record
+- Evidence: the source's damping helper takes the log of the ratios of consecutive local maxima of node 3's displacement. In the free vibration of the 18 cases the maxima include 2 to 6 negative values (secondary peaks of the two-mode response), so the log of a negative ratio is undefined, and the port returns NaN in all 18 cases. Using only the positive peaks gives 1.5 to 7.2 %, over a 20 s record that holds two to three cycles of the first mode, so those values depend on the record length. The Rayleigh ratios as set (5 % and 3 %) are exact.
+- Rule: before quoting a logarithmic decrement, count the peaks and their signs, and check that the record covers several cycles of the mode of interest. Report the NaN as it is, and check the damping against the Rayleigh coefficients.
+
+### 106. A mass that is off by a factor 10^4 moves the shortest period by its square root (100), so the time step has to be checked under each reading
+- Evidence: the source's element masses are 10^4 times the density of concrete per unit area. The shortest period of the lumped-mass frame is 0.110 to 0.118 s with them as written and 1.11 to 1.19 ms with the density of concrete, a ratio of about 100, while the first period differs by a factor of 46 to 48 because the nodal mass also differs (12000 against 12). The time step of 0.001 s resolves the shortest period 110 times as written, but only about once with the density reading.
+- Rule: when a mass reading is uncertain, compute the shortest period under each reading before choosing the time step. This extends LESSON 71.
+
+### 107. A case that two sub-models share is a cross-check of the shared conversion, and it must reproduce the same results
+- Evidence: the case 500 mm, 28 mm, Kfc 1.25 of the seventh sub-model has the same frame and sections as the 28 mm, Kfc 1.25 case of the sixth. Both give a ductility of 5.738404, R 7.0480 and the same residual steps (8420 and 10746 to 10750), so the section code and the solver path agree across the two conversions.
+- Rule: where two sub-models of one source share a case, compare that case between them before reporting either, and record the agreement.
