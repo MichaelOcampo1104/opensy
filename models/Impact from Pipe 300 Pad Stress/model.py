@@ -1172,6 +1172,97 @@ def run_interface_study(output_dir: Path) -> None:
     print("interface study complete", flush=True)
 
 
+def run_friction_iteration(output_dir: Path, case: dict) -> dict:
+    """Friction model for one pad case: three passes, each with the friction limit from the previous pass's normal force.
+
+    Args:
+        output_dir: Folder for the case outputs.
+        case: One entry of pad_cases.
+
+    Returns:
+        Summary of the last pass, with the number of passes and the normal-force change in the last pass.
+    """
+    guess = None
+    change = float("nan")
+    for _ in range(3):
+        res = run_case(output_dir, case, interface="friction", normal_guess=guess)
+        normal = res["data"]["interface_normal_N"]
+        if guess is not None:
+            change = float(np.max(np.abs(normal - guess) / np.maximum(normal, 1e-9)))
+        guess = normal
+    res["summary"]["friction_passes"] = 3
+    res["summary"]["friction_normal_change_last_pass"] = change
+    return res["summary"]
+
+
+def compare_friction_coarse(output_dir: Path, coarse_rows: dict) -> None:
+    """Friction model on the coarser pad zones: its change from the current zones, and its difference from the bonded
+    pad on each mesh. Writes a JSON file and a figure to output/coarse_zone/interface/.
+
+    Args:
+        output_dir: Folder with pad_study_summary.json, interface/ and coarse_zone/.
+        coarse_rows: Dictionary of case name -> coarse friction summary.
+    """
+    coarse_dir = output_dir / "coarse_zone"
+    fine_bonded = json.loads((output_dir / "pad_study_summary.json").read_text(encoding="utf-8"))
+    coarse_bonded = json.loads((coarse_dir / "pad_study_summary.json").read_text(encoding="utf-8"))
+    fine_friction = json.loads((output_dir / "interface" / "interface_summary.json").read_text(encoding="utf-8"))
+    depth_keys = ("dsig_yy_depth_1m_kPa", "dsig_yy_depth_3m_kPa", "dsig_yy_depth_5m_kPa", "dsig_yy_depth_10m_kPa")
+    rows = {}
+    for name, cf in coarse_rows.items():
+        ff = fine_friction[name]["friction"]
+        cb = coarse_bonded[name]
+        bins_ff, bins_cf = ff["contact_bins_kPa"], cf["contact_bins_kPa"]
+        mid = len(bins_ff) // 2
+        rows[name] = {
+            "soil_nodes": {"fine": ff["soil_nodes"], "coarse": cf["soil_nodes"]},
+            "depth_kPa": {key: {"fine_friction": ff[key], "coarse_friction": cf[key], "coarse_bonded": cb[key]}
+                          for key in depth_keys},
+            "contact_bins_kPa": {"fine_friction": bins_ff, "coarse_friction": bins_cf,
+                                 "coarse_bonded": cb["contact_bins_kPa"]},
+            "pipe_level_kPa": {"fine_friction": ff["dsig_yy_pipe_level_kPa"], "coarse_friction": cf["dsig_yy_pipe_level_kPa"]},
+            "settlement_mm": {"fine_friction": ff["pad_base_settlement_centre_mm"],
+                              "coarse_friction": cf["pad_base_settlement_centre_mm"]},
+            "friction_checks": {"shear_over_limit_max": cf["interface_shear_over_limit_max"],
+                                "fraction_at_limit": cf["interface_fraction_at_friction_limit"],
+                                "normal_change_last_pass": cf["friction_normal_change_last_pass"]},
+        }
+        depth_change = max(abs(cf[k] - ff[k]) / ff[k] for k in depth_keys)
+        mid_change = abs(bins_cf[mid] - bins_ff[mid]) / bins_ff[mid]
+        edge_change = max(abs(b - a) / a for a, b in zip(bins_ff, bins_cf))
+        vs_bonded = max(abs(cf[k] - cb[k]) for k in depth_keys)
+        print(f"  {name}: soil nodes {ff['soil_nodes']} -> {cf['soil_nodes']} | friction depth change up to "
+              f"{100 * depth_change:.1f} % | middle bin {100 * mid_change:.1f} % | edge bins up to {100 * edge_change:.1f} % "
+              f"| pipe level {ff['dsig_yy_pipe_level_kPa']:.2f} -> {cf['dsig_yy_pipe_level_kPa']:.2f} kPa | coarse friction "
+              f"vs coarse bonded, depths up to {vs_bonded:.2f} kPa | shear/limit max "
+              f"{cf['interface_shear_over_limit_max']:.3f}", flush=True)
+    out_dir = coarse_dir / "interface"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "coarse_friction_vs_fine.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    n_bins = int(math.ceil(pad_width / (0.5 * m)))
+    centres = []
+    for b in range(n_bins):
+        lo = pad_left + b * 0.5 * m
+        hi = min(lo + 0.5 * m, pad_right)
+        centres.append(0.5 * (lo + hi) / m)
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
+    for ax, (name, r) in zip(axes.ravel(), rows.items()):
+        case = next(c for c in pad_cases if c["name"] == name)
+        ax.plot(centres, fine_bonded[name]["contact_bins_kPa"], marker="o", lw=1.4, label="bonded, current zones")
+        ax.plot(centres, r["contact_bins_kPa"]["coarse_bonded"], marker="s", lw=1.4, ls="--", label="bonded, coarser zones")
+        ax.plot(centres, r["contact_bins_kPa"]["fine_friction"], marker="^", lw=1.4, label="friction, current zones")
+        ax.plot(centres, r["contact_bins_kPa"]["coarse_friction"], marker="v", lw=1.4, ls="--", label="friction, coarser zones")
+        ax.axhline(surcharge / kPa, color="k", ls=":", lw=1.0)
+        ax.set_title(_case_label(case), fontsize=9)
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("contact stress (kPa)")
+    axes.ravel()[0].legend(fontsize=7)
+    fig.suptitle("Pad contact stress: bonded and friction models on the current and coarser zones (0.5 m bins)")
+    fig.tight_layout()
+    fig.savefig(out_dir / "coarse_friction_contact.png", dpi=110)
+    plt.close(fig)
+
+
 def compare_coarse(fine_dir: Path, coarse_dir: Path) -> None:
     """Key results of the coarser pad zones against the current study: a table per case and a contact comparison.
 
@@ -1569,6 +1660,22 @@ def make_stress_sliders(output_dir: Path, case_names: list) -> None:
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
+    if "--coarse-friction" in sys.argv:
+        # The friction model on the coarser pad zones of the --coarse study (same settings and passes).
+        h_pad_max = 1000.0 * mm
+        h_mid = 2000.0 * mm
+        pad_size_divisor = 2
+        coarse_dir = output_dir / "coarse_zone" / "interface"
+        coarse_dir.mkdir(parents=True, exist_ok=True)
+        rows = {}
+        for case in pad_cases:
+            if case["thickness"] is None:
+                continue
+            rows[case["name"]] = run_friction_iteration(coarse_dir / "friction", case)
+        (coarse_dir / "coarse_friction_summary.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+        compare_friction_coarse(output_dir, rows)
+        print("coarse friction study complete", flush=True)
+        raise SystemExit(0)
     if "--coarse" in sys.argv:
         # Coarser zones around the pad: the coarse pad target of the Impact from Pipe 300 Coarse Mesh model (1000 mm),
         # a 2000 mm wider zone and pad elements of thickness / 2. The pipe, cut and far-field sizes are unchanged.

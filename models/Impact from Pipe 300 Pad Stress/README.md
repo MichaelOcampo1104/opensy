@@ -93,6 +93,7 @@ Settlement at the pad centre: 29.4 mm with no pad; 26.6–27.2 mm with a pad.
 - `interface/interface_summary.json` and `interface/pad_interface_comparison.png`: the bonded, frictionless and friction results side by side.
 - `interface/frictionless/cases/` and `interface/friction/cases/`: per-case results for the interface models.
 - `coarse_zone/`: the five cases with coarser zones, with `coarse_vs_fine.json` and `coarse_vs_fine_contact.png` comparing them with the current study.
+- `coarse_zone/interface/`: the friction model on the coarser zones, with `coarse_friction_summary.json`, `coarse_friction_vs_fine.json` and `coarse_friction_contact.png`.
 - `cases/<case>_stress.npz` and `cases/<case>_results.json`: element stresses and per-case results.
 - `cases/<case>_frames.npz`: stress at each load step, used by the animations.
 - `vis_01` to `vis_05` (HTML), `ModelData-1.zarr` and `RespStepData-1.odb`: opstool checkpoints and response data for the no-pad case. `vis_05_defo_surcharge.html` is at true scale.
@@ -144,6 +145,7 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 - **Depth values** move by 4.2% at most, and the settlement by 0.2 mm at most. The depth and middle-bin results are reasonably robust.
 - **Edge bins** move by up to 25% for the 1.2 m pad, and the coarse run is asymmetric (141 kPa on the left, 191 kPa on the right). The current study is also not perfectly symmetric: the right edge is 7 to 8% above the left in three of the four pad cases. So the edge bins are uncertain at roughly ±8%.
 - **Pipe-level stress** for the 0.3 m pad moves by 34%, so that value is not converged and should not be used as a result.
+- **Friction model on the coarser zones** (`python model.py --coarse-friction`, mu 0.4, three passes): the changes from the current zones match the bonded ones. Depths move by 4.4% at most, middle bins by 2.8%, edge bins by up to 25% (1.2 m pad), and the 0.3 m pipe-level stress by 35%. On the same coarse mesh, the friction and bonded depths differ by 0.54 kPa at most, so the two still agree at both mesh sizes.
 - The current study remains the reference.
 
 ## Notes and limitations
@@ -160,4 +162,4 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 
 ## Reproduce
 
-Run `model.py` with the project venv. The five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes).
+Run `model.py` with the project venv. The five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes). `python model.py --coarse-friction` runs the friction model on the coarser zones (about 3 minutes).
