@@ -585,3 +585,25 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 109. A parallel version's main process holds no model, so its post-processing writes empty outputs that a conversion must not take as results
 - Evidence: the source's parallel script calls `ops.printModel` and `PLOT_2D_FRAME` in its main process, after the jobs have run. In a fresh main process the model has no nodes and no elements, and `printModel` writes a 391-byte file with no model in it (checked with openseespy 3.8.0). The conversion does not reproduce those outputs, and its README says so.
 - Rule: in a parallel or multi-process version, check which calls run in the main process and what model they see. A call on an empty model produces an empty output, which is not a result.
+
+## 2026-11-26 — SalarDelavar_CQC_Response_Spectrum_Analysis (response spectrum analysis with CQC combination, 2D frame)
+
+### 110. A source label can name another unit than the numbers beside it, and an unconverted mass can put the period outside the given spectrum: check both before choosing a reading
+- Evidence: the source's spectrum plot labels Sa in g, but its values are in m/s2: the plateau 4.903 is 0.5 x 9.806, and 1.9612 and 3.72628 are 0.2 and 0.38 x 9.806. Its mass is labelled [kg] and used as written, which is 500000 N.s^2/mm per node; the first period is then 38.3 s, beyond the 6 s end of the spectrum. Reading the mass in kg (divided by 1000) and the spectrum in m/s2 (times 1000) gives a first period of 1.21 s, inside the range. The as-written run is kept as a check.
+- Rule: check each label against its numbers (a plateau that is a round multiple of g in m/s2 shows the unit), and check that the implied period falls inside the given data before adopting a reading. State the adopted reading as a judgement for the user, and keep the literal result.
+
+### 111. A variable reused for an output file name makes a source read the wrong quantity: trace which file each printed result comes from
+- Evidence: the source assigns `filename` to three recorder files in turn, so when its TEST 00 and TEST 01 read the file, it is the beam's file (element 3), not the column's, while its docstring and its TEST 02 report the column base moment. Its TEST 01 prints the same values as TEST 00, because the list it reads is built from a file that still holds the TEST 00 rows first.
+- Rule: when a source reuses a variable for output paths, find the file each read uses, and check each printed value against the quantity its label names. A repeated printed value is a finding to trace, not a confirmation.
+
+### 112. A response-spectrum call over all modes stores no element response: read each mode with its own call
+- Evidence: after `responseSpectrumAnalysis` without `-mode`, `eleResponse` returns -5.6 x 10^-7 N.mm for the column moment, in both the Path and the list forms, while the mode-by-mode calls return the mode responses (-1.5447 x 10^9 N.mm for mode 1 with the converted inputs). The source's all-modes values exist only in its recorder, which AGENT.md §4 forbids.
+- Rule: after a combined analysis call, read the element response once to see what it stores. When the source relies on a recorder for per-mode values, convert to a per-mode loop with one ODB step per mode.
+
+### 113. A combination coefficient built on an eigenvalue ratio: check its argument against the formula, and check whether the affected modes take part
+- Evidence: the source's CQC function passes b = lambda_i / lambda_j, a ratio of eigenvalues (omega^2), where the standard coefficient takes the frequency ratio omega_j / omega_i. The converted model keeps the source's function and checks the standard form. Both give 1.5446530596 x 10^9 N.mm here, because the second mode has no X participation (Gamma_2 = 0), so the error does not change this result.
+- Rule: check a correlation or combination coefficient's argument against its published formula. Where the argument is wrong, check which modes take part: if none of the affected pairs do, the error has no effect on the result, and the README should say so.
+
+### 114. A linear modal calculation runs no solver iteration, so the source's solver setup need not be carried over: state the exception to the SmartAnalyze rule
+- Evidence: the source sets constraints, numberer, system, test, algorithm, integrator and analysis("Static") before its modal and spectrum calls. A probe with the analysis object set and without it gave the same column moment to 1 x 10^-15 (relative). AGENT.md §10 lists one exception, for LoadControl gravity, and none for this calculation, so the conversion calls no ops.analyze, takes one ODB step per mode, and records the choice in the README for the user to confirm.
+- Rule: before carrying over a source's solver setup, check whether the command iterates at all. Where it does not, leave the setup out, and state in the README that SmartAnalyze does not apply.

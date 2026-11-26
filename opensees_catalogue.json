@@ -2098,5 +2098,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_%26_REBAR_%26_Cdepth_FREE_VIBRATION/PARALLEL_COMPUTING (source repository; the PDF and PowerPoint were not parsed)",
     "Notes": "Source py_ref/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_&_REBAR_&_Cdepth_FV_PARALLEL_COMPUTING.py converted to the AGENT.md layout. The source's joblib runs are replaced by three processes, each case in its own working folder (LESSONS 85, 88). Every case agrees bit for bit with the seventh sub-model (LESSON 107). PLOT_2D.py is not in the source folder, so the seventh sub-model's copy is used (LESSON 108). The source's main process holds no model, so its printModel and PLOT_2D_FRAME outputs are empty and are not reproduced (LESSON 109). HISTOGRAM_BOXPLOT_FUN.py is not called by the script."
+  },
+  {
+    "UniqueID": "SalarDelavar_CQC_Response_Spectrum_Analysis",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CQC_RESPONSE_SPECTRUM_ANALYSIS/EXAMPLE_01",
+    "num_models": "1",
+    "purpose": "Response spectrum analysis of a one-bay, one-storey reinforced-concrete frame, mode by mode, with the CQC combination of the column base moments (converted from the source's EXAMPLE_01, with its mass and spectrum units converted and its recorders replaced).",
+    "Description of Building Structural System": "Single-storey, single-bay reinforced-concrete portal frame with both bases fixed: 3 m columns of 400 x 400 mm and a 5 m beam of 300 x 400 mm; elastic members with Ec = 4700 sqrt(fc), fc 30 MPa.",
+    "Description of Model": "2D model: three forceBeamColumn elements with Lobatto integration, lumped masses of 500 N.s^2/mm at the top nodes (converted from 500000 kg), and the given response spectrum in X (103 points, T 0 to 6 s; Sa converted from m/s^2 to mm/s^2), with 5 % modal damping.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Elastic (Ec = 4700 sqrt(fc) = 25,743 MPa, fc = 30 MPa)",
+    "Lateral system": "Portal frame with fixed bases",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Response spectrum analysis in X, 5 % modal damping, CQC combination of modes 1 and 2",
+    "Earthquake records": "NA (given response spectrum, no ground-motion record)",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CQC_RESPONSE_SPECTRUM_ANALYSIS/EXAMPLE_01 (source repository; the source's two video links are not parsed)",
+    "Notes": "Source py_ref/RESPONSE_SPECTRUM_ANALYSIS.py converted to the AGENT.md layout. The source's mass is labelled kg and its spectrum values are in m/s2 (its plot says g): both are converted (LESSON 110). Its recorders are replaced by per-mode element reads with CreateODB steps; its all-modes calls are not converted (LESSONS 111, 112). Its CQC coefficient uses the eigenvalue ratio, not the frequency ratio; the effect is nil here (LESSON 113). The analysis runs no solver iteration, so SmartAnalyze does not apply (LESSON 114)."
   }
 ]
