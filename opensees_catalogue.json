@@ -2119,5 +2119,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CQC_RESPONSE_SPECTRUM_ANALYSIS/EXAMPLE_01 (source repository; the source's two video links are not parsed)",
     "Notes": "Source py_ref/RESPONSE_SPECTRUM_ANALYSIS.py converted to the AGENT.md layout. The source's mass is labelled kg and its spectrum values are in m/s2 (its plot says g): both are converted (LESSON 110). Its recorders are replaced by per-mode element reads with CreateODB steps; its all-modes calls are not converted (LESSONS 111, 112). Its CQC coefficient uses the eigenvalue ratio, not the frequency ratio; the effect is nil here (LESSON 113). The analysis runs no solver iteration, so SmartAnalyze does not apply (LESSON 114)."
+  },
+  {
+    "UniqueID": "SalarDelavar_Creep_And_Shrinkage_Analysis",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CREEP_AND_SHRINKAGE/CREEP_AND_SHRINKAGE_ANALYSIS",
+    "num_models": "1",
+    "purpose": "Creep and shrinkage of a 2D reinforced-concrete frame over 5 years of analysis time (TDConcrete, ACI 209R-92), with Steel01 and Hysteretic reinforcement, converted from the source's CREEP_AND_SHRINKAGE_ANALYSIS. The load grows with the analysis time, as the source computes it.",
+    "Description of Building Structural System": "Single-storey, single-bay reinforced-concrete portal frame with both bases fixed: 3 m columns of 500 x 500 mm (six 25 mm bars) and a 7 m beam of 500 x 300 mm (eight 18 mm bars), 50 mm cover, 25 MPa concrete.",
+    "Description of Model": "2D model: four corotational nonlinearBeamColumn elements with fibre sections (TDConcrete core and cover; Steel01 or Hysteretic bars); top-node loads on a Linear series (load factor = analysis time); 73 load steps of 25 days from day 28 to day 1853; beam confinement ratio 1.1 (the source's section function uses 1.2).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "TDConcrete (f'c 25 MPa; ACI 209R-92 creep and shrinkage) and Steel01 or Hysteretic (f_y 4000 MPa)",
+    "Lateral system": "Portal frame with fixed bases",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Top-node loads on a Linear time series (1 N horizontal, 10 kN vertical and 2.5e5 N.mm moment per node); the load factor equals the analysis time, from day 28 to day 1853",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CREEP_AND_SHRINKAGE/CREEP_AND_SHRINKAGE_ANALYSIS (source repository; the source's book and paper links are in its header)",
+    "Notes": "Source py_ref/CONCRETE_FRAME_CREEP_AND_SHRINKAGE.py converted to the AGENT.md layout. The load grows with time as the source computes it (LESSON 115). The beam's Kfc argument is overridden by the source's section function: the converted beam uses 1.1, and a check run at 1.2 reproduces the source (LESSON 116). The source's first analysis is untested; it gets the same fallback ladder (LESSON 117). Moment checks use the deformed node positions (LESSON 118). The manual load loop is the AGENT.md section 3c exception, pending approval. The Excel export is replaced by CSV (openpyxl absent)."
   }
 ]

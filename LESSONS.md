@@ -607,3 +607,21 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 114. A linear modal calculation runs no solver iteration, so the source's solver setup need not be carried over: state the exception to the SmartAnalyze rule
 - Evidence: the source sets constraints, numberer, system, test, algorithm, integrator and analysis("Static") before its modal and spectrum calls. A probe with the analysis object set and without it gave the same column moment to 1 x 10^-15 (relative). AGENT.md §10 lists one exception, for LoadControl gravity, and none for this calculation, so the conversion calls no ops.analyze, takes one ODB step per mode, and records the choice in the README for the user to confirm.
 - Rule: before carrying over a source's solver setup, check whether the command iterates at all. Where it does not, leave the setup out, and state in the README that SmartAnalyze does not apply.
+
+## 2026-11-26 — SalarDelavar_Creep_And_Shrinkage_Analysis (creep and shrinkage of a 2D RC frame under a time-scaled load)
+
+### 115. A Linear load series advanced by a LoadControl time step scales the load with the analysis time: check the load factor against the stated loads before reading the response
+- Evidence: the source's loads sit on a Linear time series, and its analysis advances the time with LoadControl steps of 25 days, so the load factor is the analysis time, 28 + 25n. At every step the base shear and axial force equal 2 N and 20 kN times that factor, so the stated 10 kN per node has grown to 1853 times its value at 5 years, and the concrete passes its compressive strain limit from day 203.
+- Rule: for a time-dependent analysis, check the load factor against the stated loads at each step before reading the response. A load that scales with the analysis time is a modelling choice to state and check, not a default.
+
+### 116. A helper that receives an argument and overrides it: reproduce the source's printed values to find which value it used
+- Evidence: the source's section function takes Kfc as an argument, but its first lines set Kfc = 1.2, so the beam's call (1.1) has no effect. The source's printed values are reproduced exactly only with 1.2 for the beam, which confirms what the function does. The conversion uses the named value and keeps a check run at 1.2 that reproduces the source to 1 x 10^-9.
+- Rule: check that each argument a helper receives is used. Where a call's value and the helper's computed value differ, reproduce the source to see which one it used, then state the value adopted and its effect.
+
+### 117. A first analysis whose return code is not tested can carry an unconverged state forward: give every analysis the same convergence check
+- Evidence: the source does not test its first analysis, at the creep age (load factor 28). With the beam at Kfc 1.1 that analysis returns -3 on OpenSees' default test, and the steps that follow start from it. The conversion gives it the source's fallback ladder, which converges on the first attempt. The check run (Kfc 1.2) converges on the default test and matches the source exactly, so the added check changes nothing where the source converges.
+- Rule: test the return code of every analysis, including the first, and record the attempts. Keep a check run that follows the source's path, to show that the added check changes nothing where the source converges.
+
+### 118. A corotational analysis applies loads at deformed positions: a moment check about the origin must use the displaced positions of the loaded nodes
+- Evidence: with the loads at their undeformed positions, the moment balance about the origin has a relative residual of 5.8 x 10^-5 in every run. With the loaded nodes at their displaced positions (node 3 at (u_3x, 3000 + u_3y) and node 4 at (7000 + u_4x, 3000 + u_4y)) the residual is 5 x 10^-13. The difference is the moment of each vertical load through its node's sideways displacement.
+- Rule: for a large-displacement analysis (corotational or P-delta), check moment equilibrium with the displacements of the loaded nodes. Report the undeformed residual as a displacement effect, not as an error.
