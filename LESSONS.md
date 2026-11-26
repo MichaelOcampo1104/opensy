@@ -501,3 +501,41 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 90. opstool writes an empty `.opstool.output` folder into the working folder, and the repository's .gitignore does not cover it
 - Evidence: empty `.opstool.output` folders appeared inside model folders during several runs (the first sub-model's, and the optimisation search's). The .gitignore covers only `Opensees_references/**/.opstool.output/`, so the folder shows as untracked and would be committed with its model if it were staged.
 - Rule: before staging a model folder, check for `.opstool.output` and remove it. A `.gitignore` rule for `models/**/.opstool.output/` would prevent this; that rule is not added here.
+
+## 2026-11-26 — Impact from Pipe 300 Pad Stress (2D stress under a pad foundation; quad elements, gmsh size fields)
+
+### 91. A gmsh Box size field returns its outside value everywhere beyond its transition, so a Min over fields caps the whole mesh
+- Evidence: the first pad field was a Box with the pad size inside and 250 mm outside. Min over the fields took that 250 mm everywhere, so the 0.3 m pad case meshed to 939,350 quads instead of about 12,300. A Box with a very large outside value, plus a Threshold band with `StopAtDistMax = 1`, gave 12,314 quads.
+- Rule: when a Box or Threshold value goes into a Min, check its value outside its own region: a finite outside value becomes a cap on the whole mesh. Use a very large outside value, or a Threshold with `StopAtDistMax`, and count the quads after meshing. A count far above the estimate means a field is capping the mesh.
+
+### 92. OpenSees returns too few values from `resistingForce` for a 4-node quad, so nodal forces from quads have to come from the element stiffness
+- Evidence: `ops.eleResponse(tag, "resistingForce")` returned fewer values than the four nodes need, and the run stopped with IndexError right after the gravity step (converged in 2.4 s). The `stress` response works for quads. The 8 x 8 stiffness from the 2 x 2 Gauss rule, times the change in nodal displacement, reproduces the closed-form nodal forces of a unit rectangle to 1e-12.
+- Rule: for quad nodal forces, use K times the change in displacement, and test the routine on a rectangle with a known uniform strain before using it on a model.
+
+### 93. Nodal contact forces from element-average stress missed a uniform load by 5 to 20 %; K times the change in displacement gives the applied load exactly
+- Evidence: in the flexible case the exact contact is 75 kPa at every ground node. Element-average stress gave 71.3 to 90.3 kPa at those nodes and 364.2 N in total against 368.6 N applied. K times the change in displacement gives 75.000 kPa at every node, and 368.591 N in all five cases.
+- Rule: test a contact routine on a uniform surface load first. Every nodal value must equal the applied pressure and the total must equal the applied force, before the routine is used under a pad.
+
+### 94. With all-quad subdivision gmsh makes elements about half the size target, so count the elements before the run
+- Evidence: the 25 mm pipe target gave 76 nodes on the 942 mm outer circumference, about 12.4 mm each. The fine model's 12.5 mm target gave 152 nodes, about 6.2 mm. A 75 mm target in the 0.3 m pad gave 8 rows through its thickness (1,056 quads).
+- Rule: with `SubdivisionAlgorithm = 1`, expect elements about half the target. Check the node count on a short edge, here the pipe circumference, or the quad count in one region against the count wanted, and set the target from that.
+
+### 95. A corner peak in a bonded contact depends on the mesh: report the mean over a fixed width, which converges, and not the single node
+- Evidence: for the 0.3 m pad, halving the pad element size moved the largest corner-node contact from 757 to 980 kPa. The 0.5 m bin averages moved by under 1 % (edge bins 127.5 to 127.8 kPa and 136.3 to 137.0 kPa; centre 59.0 to 59.1 kPa). Halving the zone size (500 to 250 mm target) moved the bins by under 0.7 kPa.
+- Rule: when a load concentrates at a corner, report the mean over a fixed width and test two mesh sizes. The single-node peak is a mesh measure, not a result.
+
+### 96. A depth profile is only as good as the elements at that depth: refine to at least twice the depth of interest before reading it
+- Evidence: the first refinement stopped 2 m below ground, so the 4 m far-field elements governed from about 5 m down. The flexible load then read 33 kPa at 10 m, against 22.5 kPa from the closed-form strip solution. Refining to 12 m, with 250 mm and 500 mm elements, gave 22.5 kPa at 10 m (closed form 22.53 kPa). The flexible profile is then within 3 % at 1, 3, 5 and 10 m.
+- Rule: before reading a stress at depth, refine the mesh to at least twice that depth, and check the flexible or uniform case against a closed form.
+
+### 97. A linear elastic model with a linear load ramp has frames equal to the final stress times the load fraction, so its animation shows build-up, not a change of shape
+- Evidence: in all five cases each frame matched the final stress times its load fraction to within 1e-6 kPa (deviations 6e-9 to 1e-6 kPa). The animation therefore shows the same pattern at a smaller scale at each step.
+- Rule: check the frames against the load fraction before describing an animation of a linear run, and say in its caption that the shape does not change. A shape change needs a non-linear material or staged construction.
+
+### 98. A cell-based stress map drawn with edgecolors='none' shows white seams between cells; edgecolors='face' with a thin linewidth removes them
+- Evidence: the maps and animation frames drawn with `edgecolors="none"` showed thin white lines along every cell edge. With `edgecolors="face"` and `linewidths=0.15` the same figures show no seams.
+- Rule: draw cell-based stress maps with `edgecolors="face"` and a thin linewidth, and check the figure at full size before reporting it.
+
+### 99. A bonded pad with a modulus 1000 times the soil's concentrated the contact at its edges even when thin, which the plate stiffness index does not predict; the interface has not been varied
+- Evidence: the 0.3 m pad (K = 0.02) carried 127.5 and 136.3 kPa in its two edge half-metre bins and 59.0 kPa in the middle. The 0.6 m pad at E 3 GPa (also K = 0.02) gave 132.6 and 142.4 kPa at the edges and 59.3 kPa in the middle. A flexible-plate expectation is near-uniform contact at small K. The frictionless case has not been run, so the cause is open.
+- Rule: do not read a plate stiffness index as the contact shape of a bonded pad. Run the frictionless interface, or report the edge pattern as unconfirmed.
