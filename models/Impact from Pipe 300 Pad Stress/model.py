@@ -46,6 +46,10 @@ TS_ZERO = 2                  # constant factor 0.0: surcharge pattern before the
 TS_RAMP = 3                  # linear time series: load factor of the surcharge
 PAT_WEIGHT = 1               # pipe self-weight pattern
 PAT_SURCHARGE = 2            # surcharge pattern
+NODE_PADCOPY_BASE = 4000000  # pad base nodes separated from the soil in the interface models: + k
+ELE_PADIF_BASE = 5000000     # pad interface springs (zeroLength): ELE_PADIF_BASE + k
+MAT_PADIF_N_BASE = 3000000   # pad interface normal materials (ENT): MAT_PADIF_N_BASE + k
+MAT_PADIF_T_BASE = 6000000   # pad interface shear materials (ElasticPP, friction model): MAT_PADIF_T_BASE + k
 ODB_TAG = 1                  # CreateODB tag
 GMSH_QUAD4 = 3               # gmsh element type code for 4-node quadrangles
 NODE_BEAM_BASE = 1000000     # pipe ring nodes (3 DOF): NODE_BEAM_BASE + k
@@ -137,6 +141,10 @@ box_thickness = 3.0 * m                     # transition from the zones to the f
 coord_tol = 1.0e-3 * mm
 unit_length = 1.0 * mm
 
+# Pad-soil interface: used by the frictionless and friction models only (the default is a bonded pad)
+pad_interface_thickness = 1.0 * mm          # PLACEHOLDER: normal and shear stiffness per area = E_soil / this
+pad_friction_coefficient = 0.4              # PLACEHOLDER: Coulomb coefficient of the friction model
+
 # Analysis controls
 n_surcharge_steps = 20
 tol_disp = 1.0e-6 * mm
@@ -184,6 +192,16 @@ def define_materials(mesh: dict, case: dict) -> None:
         ops.uniaxialMaterial("ENT", MAT_IF_N_BASE + k, spring_n)
         # ElasticPP yields at a displacement, so the yield force is spring_t * interface_yield_disp
         ops.uniaxialMaterial("ElasticPP", MAT_IF_T_BASE + k, spring_t, interface_yield_disp)
+    if mesh.get("interface", "bonded") != "bonded" and case["thickness"] is not None:
+        k_area = e_soil / pad_interface_thickness
+        for k, (_, length) in enumerate(mesh["ground_tribs"]):
+            k_node = k_area * length * unit_length                 # N/mm for this pad base node
+            ops.uniaxialMaterial("ENT", MAT_PADIF_N_BASE + k, k_node)
+            if mesh["interface"] == "friction":
+                guess = mesh.get("normal_guess")
+                n_est = guess[k] if guess is not None else (surcharge + gamma_pad * case["thickness"]) * length * unit_length   # N, sets the friction limit
+                ops.uniaxialMaterial("ElasticPP", MAT_PADIF_T_BASE + k, k_node,
+                                     pad_friction_coefficient * n_est / k_node)
 
 
 # ── 6. SECTIONS ──────────────────────────────────────────────────────────────
@@ -460,6 +478,12 @@ def define_nodes(mesh: dict) -> None:
     for tag in mesh["soil_nodes"]:
         x, y = mesh["nodes"][tag]
         ops.node(tag, x, y)
+    if mesh.get("interface", "bonded") != "bonded" and mesh.get("pad_thickness", 0.0) > 0.0:
+        mesh["pad_copy"] = {}
+        for k, (tag, _) in enumerate(mesh["ground_tribs"]):
+            x, y = mesh["nodes"][tag]
+            ops.node(NODE_PADCOPY_BASE + k, x, y)
+            mesh["pad_copy"][tag] = NODE_PADCOPY_BASE + k
     for k, (tag, _) in enumerate(mesh["iface"]):
         x, y = mesh["nodes"][tag]
         ops.node(NODE_AUX_BASE + k, x, y)
@@ -478,6 +502,10 @@ def define_boundary_conditions(mesh: dict) -> None:
         ops.fix(tag, 0, 1)
     for k in range(len(mesh["iface"])):
         ops.equalDOF(NODE_AUX_BASE + k, NODE_BEAM_BASE + k, 1, 2)
+    if mesh.get("pad_copy"):
+        x_c = 0.5 * (pad_left + pad_right)
+        centre = min(mesh["ground_tribs"], key=lambda item: abs(mesh["nodes"][item[0]][0] - x_c))[0]
+        ops.fix(mesh["pad_copy"][centre], 1, 0)
 
 
 # ── 9. ELEMENTS ──────────────────────────────────────────────────────────────
@@ -499,7 +527,8 @@ def define_elements(mesh: dict, section: dict, case: dict) -> None:
     ops.model("basic", "-ndm", 2, "-ndf", 2)          # soil and pad quads and springs need 2 DOF per node
     for q in mesh["quads"]:
         if q["pad"]:
-            ops.element("quad", q["tag"], *q["nodes"], unit_length, "PlaneStrain", MAT_PAD,
+            pad_nodes = tuple(mesh.get("pad_copy", {}).get(n, n) for n in q["nodes"])
+            ops.element("quad", q["tag"], *pad_nodes, unit_length, "PlaneStrain", MAT_PAD,
                         0.0, 0.0, 0.0, -gamma_pad)
         else:
             ops.element("quad", q["tag"], *q["nodes"], unit_length, "PlaneStrain", MAT_SOIL,
@@ -510,6 +539,14 @@ def define_elements(mesh: dict, section: dict, case: dict) -> None:
         ops.element("zeroLength", ELE_SPRING_BASE + k, NODE_AUX_BASE + k, tag,
                     "-mat", MAT_IF_N_BASE + k, MAT_IF_T_BASE + k, "-dir", 1, 2,
                     "-orient", c, s, 0.0, -s, c, 0.0)
+    if mesh.get("pad_copy"):
+        for k, (tag, _) in enumerate(mesh["ground_tribs"]):
+            if mesh["interface"] == "friction":
+                mats, dirs = [MAT_PADIF_T_BASE + k, MAT_PADIF_N_BASE + k], [1, 2]
+            else:
+                mats, dirs = [MAT_PADIF_N_BASE + k], [2]
+            ops.element("zeroLength", ELE_PADIF_BASE + k, tag, mesh["pad_copy"][tag],
+                        "-mat", *mats, "-dir", *dirs)
 
 
 # ── 10. OUTPUT DATABASE (ODB) ────────────────────────────────────────────────
@@ -772,13 +809,14 @@ def run_gravity(odb, mesh: dict, results: dict) -> None:
     results["gravity"] = collect_state(mesh)
 
 
-def run_surcharge(odb, mesh: dict, results: dict) -> list:
+def run_surcharge(odb, mesh: dict, results: dict, per_step_odb: bool = False) -> list:
     """Surcharge ramp on the pad (or the ground), in n_surcharge_steps steps.
 
     Args:
         odb: CreateODB or _NoODB.
         mesh: Mesh dictionary from build_mesh().
         results: Results dictionary, updated in place.
+        per_step_odb: Write the database after every load step (for the stress sliders), not only at the end.
 
     Returns:
         Element stresses (MPa, see _stresses()) after each load step, for the stress animations.
@@ -791,8 +829,11 @@ def run_surcharge(odb, mesh: dict, results: dict) -> list:
     steps = []
     for step in range(1, n_surcharge_steps + 1):
         _advance(f"surcharge step {step}")
+        if per_step_odb:
+            odb.fetch_response_step()
         steps.append(_stresses(mesh))
-    odb.fetch_response_step()
+    if not per_step_odb:
+        odb.fetch_response_step()
     results["surcharge_final"] = collect_state(mesh, load_factor=1.0)
     return steps
 
@@ -917,7 +958,7 @@ def summarise_case(case: dict, mesh: dict, results: dict, ref: np.ndarray, fin: 
     return {"summary": summary, "data": data}
 
 
-def run_case(output_dir: Path, case: dict) -> dict:
+def run_case(output_dir: Path, case: dict, interface: str = "bonded", normal_guess=None) -> dict:
     """Run one case: build, gravity, surcharge, stress extraction. The base case also writes the checkpoints.
 
     Args:
@@ -929,6 +970,8 @@ def run_case(output_dir: Path, case: dict) -> dict:
     """
     full = case["thickness"] is None
     mesh = build_mesh(case)
+    mesh["interface"] = interface
+    mesh["normal_guess"] = normal_guess
     section = define_sections()
     init_model()
     define_materials(mesh, case)
@@ -949,9 +992,11 @@ def run_case(output_dir: Path, case: dict) -> dict:
     run_gravity(odb, mesh, results)
     ref = _stresses(mesh)
     u_ref = _soil_displacements(mesh)
+    pad_ref = _pad_base_uy(mesh)
     steps = run_surcharge(odb, mesh, results)
     fin = _stresses(mesh)
     u_fin = _soil_displacements(mesh)
+    pad_fin = _pad_base_uy(mesh)
     d_if = _soil_force_change(mesh, u_ref, u_fin)
     if full:
         odb.save_response()
@@ -959,6 +1004,11 @@ def run_case(output_dir: Path, case: dict) -> dict:
             vis_defo(output_dir, filename="vis_05_defo_surcharge.html", odb_tag=ODB_TAG,
                      resp_dof="UY", scale=1.0)
     out = summarise_case(case, mesh, results, ref, fin, d_if)
+    out["summary"]["interface"] = mesh.get("interface", "bonded")
+    if mesh.get("pad_copy"):
+        out["summary"]["pad_base_settlement_centre_mm"] = float(-(pad_fin - pad_ref))
+        out["summary"].update(_interface_checks(mesh))
+        out["data"]["interface_normal_N"] = _interface_normal(mesh)
     s = out["summary"]
     print(f"  {case['name']}: contact total {s['contact_total_N']:.3f} N, applied {s['surcharge_N']:.3f} N", flush=True)
     cases_dir = output_dir / "cases"
@@ -981,6 +1031,198 @@ def run_case(output_dir: Path, case: dict) -> dict:
                     "summary": out["summary"]}, indent=2), encoding="utf-8")
     print(f"case {case['name']} done", flush=True)
     return out
+
+
+def _pad_base_uy(mesh: dict):
+    """Vertical displacement (mm) of the pad base node under the pad centre, in the interface models; None if bonded.
+
+    Args:
+        mesh: Mesh dictionary from build_mesh(), with the pad base copies from define_nodes().
+
+    Returns:
+        Displacement in mm, or None.
+    """
+    if not mesh.get("pad_copy"):
+        return None
+    x_c = 0.5 * (pad_left + pad_right)
+    centre = min(mesh["ground_tribs"], key=lambda item: abs(mesh["nodes"][item[0]][0] - x_c))[0]
+    return ops.nodeDisp(mesh["pad_copy"][centre], 2)
+
+
+def _interface_normal(mesh: dict) -> np.ndarray:
+    """Normal force (N per 1 mm slice) in each pad interface spring after the surcharge, per pad base node."""
+    return np.array([abs(ops.eleResponse(ELE_PADIF_BASE + k, "localForce")[-1])
+                     for k in range(len(mesh["ground_tribs"]))])
+
+
+def _interface_checks(mesh: dict) -> dict:
+    """Pad interface after the surcharge. The normal forces are compared with the estimate that sets the friction
+    limit. For the friction model the shear is compared with the Coulomb limit, mu times the actual normal force.
+
+    Args:
+        mesh: Mesh dictionary from build_mesh(), with the interface springs from define_elements().
+
+    Returns:
+        Dictionary of numbers for the summary file.
+    """
+    friction = mesh["interface"] == "friction"
+    normal, shear = [], []
+    for k in range(len(mesh["ground_tribs"])):
+        f = ops.eleResponse(ELE_PADIF_BASE + k, "localForce")
+        if friction:
+            shear.append(abs(f[0]))
+            normal.append(abs(f[1]))
+        else:
+            normal.append(abs(f[0]))
+    normal = np.array(normal)
+    est = np.array([(surcharge + gamma_pad * mesh["pad_thickness"]) * length * unit_length
+                    for _, length in mesh["ground_tribs"]])
+    out = {
+        "interface_total_normal_N": float(normal.sum()),
+        "interface_normal_over_estimate_min": float((normal / est).min()),
+        "interface_normal_over_estimate_max": float((normal / est).max()),
+    }
+    if friction:
+        shear = np.array(shear)
+        ratio = shear / np.maximum(pad_friction_coefficient * normal, 1e-12)
+        out["interface_shear_over_limit_max"] = float(ratio.max())
+        out["interface_fraction_at_friction_limit"] = float((ratio >= 0.99).mean())
+    return out
+
+
+def make_interface_figure(output_dir: Path, rows: dict) -> None:
+    """Contact stress under the pad (0.5 m bins) for the bonded, frictionless and friction interfaces; one panel per case.
+
+    Args:
+        output_dir: Folder for the figure (interface/ is created).
+        rows: Dictionary of case name -> {'bonded', 'frictionless', 'friction'} summaries.
+    """
+    n_bins = int(math.ceil(pad_width / (0.5 * m)))
+    centres = []
+    for b in range(n_bins):
+        lo = pad_left + b * 0.5 * m
+        hi = min(lo + 0.5 * m, pad_right)
+        centres.append(0.5 * (lo + hi) / m)
+    labels = {"bonded": "bonded", "frictionless": "frictionless",
+              "friction": f"friction, mu = {pad_friction_coefficient:g}"}
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
+    for ax, (name, variants) in zip(axes.ravel(), rows.items()):
+        case = next(c for c in pad_cases if c["name"] == name)
+        for key in ("bonded", "frictionless", "friction"):
+            ax.plot(centres, variants[key]["contact_bins_kPa"], marker="o", lw=1.6, label=labels[key])
+        ax.axhline(surcharge / kPa, color="k", ls="--", lw=1.0)
+        ax.set_title(_case_label(case), fontsize=9)
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("contact stress (kPa)")
+    axes.ravel()[0].legend(fontsize=8)
+    fig.suptitle("Pad contact stress from the 75 kPa surcharge: bonded, frictionless and friction interfaces")
+    fig.tight_layout()
+    (output_dir / "interface").mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / "interface" / "pad_interface_comparison.png", dpi=110)
+    plt.close(fig)
+
+
+def run_interface_study(output_dir: Path) -> None:
+    """Frictionless and friction pad-soil interfaces for each pad case, compared with the bonded results.
+
+    Writes output/interface/<mode>/cases, output/interface/interface_summary.json and a comparison figure.
+
+    Args:
+        output_dir: Folder with the bonded results in cases/.
+    """
+    runs = {}
+    for mode in ("frictionless", "friction"):
+        for case in pad_cases:
+            if case["thickness"] is None:
+                continue
+            if mode == "frictionless":
+                runs[(mode, case["name"])] = run_case(output_dir / "interface" / mode, case, interface=mode)["summary"]
+                continue
+            guess = None
+            change = float("nan")
+            for _ in range(3):                       # friction limit from the normal force of the previous pass
+                res = run_case(output_dir / "interface" / mode, case, interface=mode, normal_guess=guess)
+                normal = res["data"]["interface_normal_N"]
+                if guess is not None:
+                    change = float(np.max(np.abs(normal - guess) / np.maximum(normal, 1e-9)))
+                guess = normal
+            res["summary"]["friction_passes"] = 3
+            res["summary"]["friction_normal_change_last_pass"] = change
+            runs[(mode, case["name"])] = res["summary"]
+    rows = {}
+    for case in pad_cases:
+        if case["thickness"] is None:
+            continue
+        with open(output_dir / "cases" / f"{case['name']}_results.json", encoding="utf-8") as fh:
+            bonded = json.load(fh)["summary"]
+        rows[case["name"]] = {"bonded": bonded,
+                              "frictionless": runs[("frictionless", case["name"])],
+                              "friction": runs[("friction", case["name"])]}
+    (output_dir / "interface").mkdir(parents=True, exist_ok=True)
+    (output_dir / "interface" / "interface_summary.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    make_interface_figure(output_dir, rows)
+    for name, variants in rows.items():
+        for key in ("bonded", "frictionless", "friction"):
+            s = variants[key]
+            bins = s["contact_bins_kPa"]
+            print(f"  {name} [{key}]: depth 1/3/5/10 m {s['dsig_yy_depth_1m_kPa']:.1f} / {s['dsig_yy_depth_3m_kPa']:.1f}"
+                  f" / {s['dsig_yy_depth_5m_kPa']:.1f} / {s['dsig_yy_depth_10m_kPa']:.1f} kPa | contact edge"
+                  f" {bins[0]:.1f} / middle {bins[len(bins) // 2]:.1f} / edge {bins[-1]:.1f} kPa | pad settlement"
+                  f" {s.get('pad_base_settlement_centre_mm', s['settlement_pad_centre_mm']):.2f} mm", flush=True)
+    print("interface study complete", flush=True)
+
+
+def compare_coarse(fine_dir: Path, coarse_dir: Path) -> None:
+    """Key results of the coarser pad zones against the current study: a table per case and a contact comparison.
+
+    Args:
+        fine_dir: Folder with the current pad_study_summary.json.
+        coarse_dir: Folder with the coarser-zone pad_study_summary.json; the comparison is written here.
+    """
+    fine = json.loads((fine_dir / "pad_study_summary.json").read_text(encoding="utf-8"))
+    coarse = json.loads((coarse_dir / "pad_study_summary.json").read_text(encoding="utf-8"))
+    depth_keys = ("dsig_yy_depth_1m_kPa", "dsig_yy_depth_3m_kPa", "dsig_yy_depth_5m_kPa", "dsig_yy_depth_10m_kPa")
+    rows = {}
+    for name in fine:
+        f, c = fine[name], coarse[name]
+        rows[name] = {
+            "soil_nodes": {"fine": f["soil_nodes"], "coarse": c["soil_nodes"]},
+            "depth_kPa": {key: {"fine": f[key], "coarse": c[key]} for key in depth_keys},
+            "pipe_level_kPa": {"fine": f["dsig_yy_pipe_level_kPa"], "coarse": c["dsig_yy_pipe_level_kPa"]},
+            "settlement_mm": {"fine": f["settlement_pad_centre_mm"], "coarse": c["settlement_pad_centre_mm"]},
+            "contact_bins_kPa": {"fine": f["contact_bins_kPa"], "coarse": c["contact_bins_kPa"]},
+            "contact_total_N": {"fine": f["contact_total_N"], "coarse": c["contact_total_N"]},
+        }
+    (coarse_dir / "coarse_vs_fine.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    for name, r in rows.items():
+        depth_change = max(abs(r["depth_kPa"][k]["coarse"] - r["depth_kPa"][k]["fine"]) / r["depth_kPa"][k]["fine"]
+                           for k in depth_keys)
+        bins_f, bins_c = r["contact_bins_kPa"]["fine"], r["contact_bins_kPa"]["coarse"]
+        bin_change = max(abs(b - a) / a for a, b in zip(bins_f, bins_c))
+        print(f"  {name}: soil nodes {r['soil_nodes']['fine']} -> {r['soil_nodes']['coarse']} | depth change up to "
+              f"{100 * depth_change:.1f} % | contact bins change up to {100 * bin_change:.1f} % | pipe level "
+              f"{r['pipe_level_kPa']['fine']:.2f} -> {r['pipe_level_kPa']['coarse']:.2f} kPa", flush=True)
+    n_bins = int(math.ceil(pad_width / (0.5 * m)))
+    centres = []
+    for b in range(n_bins):
+        lo = pad_left + b * 0.5 * m
+        hi = min(lo + 0.5 * m, pad_right)
+        centres.append(0.5 * (lo + hi) / m)
+    pad_rows = {name: r for name, r in rows.items() if name != "flexible_no_pad"}
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True, sharey=True)
+    for ax, (name, r) in zip(axes.ravel(), pad_rows.items()):
+        case = next(c for c in pad_cases if c["name"] == name)
+        ax.plot(centres, r["contact_bins_kPa"]["fine"], marker="o", lw=1.6, label="current zones")
+        ax.plot(centres, r["contact_bins_kPa"]["coarse"], marker="s", lw=1.6, ls="--", label="coarser zones")
+        ax.axhline(surcharge / kPa, color="k", ls=":", lw=1.0)
+        ax.set_title(_case_label(case), fontsize=9)
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("contact stress (kPa)")
+    axes.ravel()[0].legend(fontsize=8)
+    fig.suptitle("Pad contact stress: current and coarser zones (0.5 m bins)")
+    fig.tight_layout()
+    fig.savefig(coarse_dir / "coarse_vs_fine_contact.png", dpi=110)
+    plt.close(fig)
 
 
 def make_study_figures(output_dir: Path, runs: list) -> None:
@@ -1191,10 +1433,167 @@ def make_stress_animations(output_dir: Path, case_names: list) -> None:
     print("  animation written: stress_all_cases.gif", flush=True)
 
 
+def create_plane_odb(output_dir: Path):
+    """Response database with plane-element stresses written at every load step, for the opstool stress sliders.
+
+    Nodal projection is off, so the stresses are stored per element. That halves the write time per step.
+
+    Args:
+        output_dir: Folder for the database files.
+
+    Returns:
+        The CreateODB instance.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    opst.post.set_odb_path(str(output_dir))
+    odb = opst.post.CreateODB(odb_tag=ODB_TAG, save_plane_resp=True, project_gauss_to_nodes=False)
+    odb.save_model_data()
+    return odb
+
+
+def run_stress_odb(output_dir: Path, case: dict) -> Path:
+    """Full model (self-weight, then the surcharge) with the plane stresses written at every step.
+
+    The gravity state is the first stored step, so the slider can show each step minus the gravity state, which is
+    the surcharge increment.
+
+    Args:
+        output_dir: Folder with the outputs; the database goes in animations/odb/<case name>.
+        case: One entry of pad_cases.
+
+    Returns:
+        Folder holding the database.
+    """
+    odb_dir = output_dir / "animations" / "odb" / case["name"]
+    mesh = build_mesh(case)
+    section = define_sections()
+    init_model()
+    define_materials(mesh, case)
+    define_nodes(mesh)
+    define_boundary_conditions(mesh)
+    define_elements(mesh, section, case)
+    define_gravity_loads(mesh)
+    define_surcharge_loads(mesh)
+    odb = create_plane_odb(odb_dir)
+    results: dict = {}
+    run_gravity(odb, mesh, results)
+    run_surcharge(odb, mesh, results, per_step_odb=True)
+    odb.save_response()
+    print(f"  {case['name']}: stress database written to {odb_dir}", flush=True)
+    return odb_dir
+
+
+def make_stress_sliders(output_dir: Path, case_names: list) -> None:
+    """Interactive stress slider per case, built with opstool: the soil stress increase (kPa) at each load step.
+
+    The figure is opstool's animation of the stored plane stresses: the mesh is stored once and each frame carries only
+    its colours, which keeps the HTML small. The colours are the surcharge increments behind the static maps (the saved
+    element stresses), so the slider and the maps agree. The page has Play, Pause and a slider.
+
+    Args:
+        output_dir: Folder with animations/odb/<case> from run_stress_odb().
+        case_names: Case names, in pad_cases order.
+    """
+    import plotly.graph_objects as go
+
+    slider_dir = output_dir / "animations" / "opstool"
+    slider_dir.mkdir(parents=True, exist_ok=True)
+    for name in case_names:
+        case = next(c for c in pad_cases if c["name"] == name)
+        opst.post.set_odb_path(str(output_dir / "animations" / "odb" / name))
+        fig = opst.vis.plotly.plot_unstruct_responses_animation(
+            odb_tag=ODB_TAG, ele_type="Plane", resp_type="Stresses", resp_dof="sigma22",
+            show_defo=False, show_model=False, unit_factor=-1000.0, unit_symbol="kPa")
+        mesh_idx = next(i for i, tr in enumerate(fig.frames[0].data) if type(tr).__name__ == "Mesh3d")
+        # Keep only the filled mesh. opstool's element edges, vertex markers and support symbols cover the colours.
+        fig.data = tuple(tr for tr in fig.data if type(tr).__name__ == "Mesh3d")
+        base_idx = next(i for i, tr in enumerate(fig.data) if type(tr).__name__ == "Mesh3d")
+        # Element values: the saved stresses behind the static maps, placed on opstool's elements by centroid. opstool's
+        # own values are Gauss-point means, which differ from these at re-entrant corners, so the slider uses the maps'.
+        geo = fig.frames[0].data[mesh_idx]
+        xs = np.asarray(geo.x, dtype=float).reshape(-1, 4)
+        ys = np.asarray(geo.y, dtype=float).reshape(-1, 4)
+        cen_plot = np.column_stack([xs.mean(axis=1), ys.mean(axis=1)])
+        with np.load(output_dir / "cases" / f"{name}_frames.npz") as z:
+            cen_saved = np.column_stack([z["cx"], z["cy"]])
+            saved = z["dsig_yy"].astype(float)          # saved[0] = gravity state; saved[k] = after load step k
+        match = np.empty(len(cen_plot), dtype=int)
+        for s in range(0, len(cen_plot), 300):
+            d2 = ((cen_plot[s:s + 300, None, :] - cen_saved[None, :, :]) ** 2).sum(axis=2)
+            match[s:s + 300] = d2.argmin(axis=1)
+        n_steps = len(saved) - 1
+        increments = [np.repeat(saved[k][match] - saved[0][match], 4) for k in range(len(saved))]
+        loads = [surcharge / kPa * k / n_steps for k in range(len(saved))]
+        frames = [go.Frame(data=[go.Mesh3d(intensity=inc)], traces=[base_idx], name=f"s{k:02d}")
+                  for k, inc in enumerate(increments)]
+        mesh_trace = fig.data[base_idx]
+        mesh_trace.intensity = increments[-1]          # shown at the final load until the slider is moved
+        mesh_trace.update(cmin=0.0, cmax=100.0, lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0, fresnel=0.0),
+                          colorbar=dict(title=dict(text="vertical soil stress increase (kPa)")))
+        fig.frames = frames
+        fig.update_layout(
+            title=dict(text=f"Soil stress increase from the 75 kPa surcharge: {_case_label(case)}"),
+            coloraxis=dict(cmin=0.0, cmax=100.0, colorbar=dict(title=dict(text="vertical soil stress increase (kPa)"))),
+            scene=dict(
+                xaxis=dict(title="x (mm)", range=[0.0, 36000.0]),
+                yaxis=dict(title="y (mm)", range=[-15000.0, 12500.0]),
+                zaxis=dict(visible=False),
+                aspectmode="manual", aspectratio=dict(x=1.0, y=0.76, z=0.01),
+                camera=dict(eye=dict(x=0.0, y=0.0, z=1.3), up=dict(x=0.0, y=1.0, z=0.0),
+                            projection=dict(type="orthographic"))),
+            updatemenus=[dict(
+                type="buttons", showactive=False, x=0.0, y=0.0, xanchor="left", yanchor="top", pad=dict(t=0, r=10),
+                buttons=[
+                    dict(label="Play", method="animate",
+                         args=[None, dict(frame=dict(duration=250, redraw=True), fromcurrent=True,
+                                          transition=dict(duration=0))]),
+                    dict(label="Pause", method="animate",
+                         args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate",
+                                            transition=dict(duration=0))]),
+                ])],
+            sliders=[dict(
+                active=len(frames) - 1, x=0.12, y=0.0, len=0.85, pad=dict(t=30),
+                currentvalue=dict(prefix="Surcharge applied: ", suffix=" kPa", visible=True),
+                steps=[dict(method="animate", label=f"{load:.2f}",
+                            args=[[fr.name], dict(mode="immediate", frame=dict(duration=0, redraw=True),
+                                                  transition=dict(duration=0))])
+                       for load, fr in zip(loads, frames)])])
+        html = slider_dir / f"stress_slider_{name}.html"
+        fig.write_html(str(html), include_plotlyjs=True, full_html=True)
+        fig.write_image(str(slider_dir / f"stress_slider_{name}_final.png"), width=900, height=640)
+        print(f"  {name}: slider written, {len(frames)} frames, "
+              f"{html.stat().st_size / 1e6:.1f} MB", flush=True)
+
+
 # ── 14. MAIN ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     output_dir = Path(__file__).parent / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
+    if "--coarse" in sys.argv:
+        # Coarser zones around the pad: the coarse pad target of the Impact from Pipe 300 Coarse Mesh model (1000 mm),
+        # a 2000 mm wider zone and pad elements of thickness / 2. The pipe, cut and far-field sizes are unchanged.
+        h_pad_max = 1000.0 * mm
+        h_mid = 2000.0 * mm
+        pad_size_divisor = 2
+        coarse_dir = output_dir / "coarse_zone"
+        coarse_dir.mkdir(parents=True, exist_ok=True)
+        runs = [run_case(coarse_dir, case) for case in pad_cases]
+        summary = {r["summary"]["name"]: r["summary"] for r in runs}
+        (coarse_dir / "pad_study_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        compare_coarse(output_dir, coarse_dir)
+        print("coarse zone study complete", flush=True)
+        raise SystemExit(0)
+    if "--interface" in sys.argv:
+        run_interface_study(output_dir)
+        raise SystemExit(0)
+    if "--sliders-only" in sys.argv:
+        make_stress_sliders(output_dir, [case["name"] for case in pad_cases])
+        raise SystemExit(0)
+    if "--sliders" in sys.argv:
+        for case in pad_cases:
+            run_stress_odb(output_dir, case)
+        make_stress_sliders(output_dir, [case["name"] for case in pad_cases])
+        raise SystemExit(0)
     if "--animations-only" in sys.argv:
         make_stress_animations(output_dir, [case["name"] for case in pad_cases])
         print("animations complete", flush=True)
