@@ -1932,6 +1932,27 @@
     "Notes": "Source py_ref/CONCRETE_FRAME_DUCTILITY_DAMAGE_INDEX_CONFINEMENT_ENHANCEMENT_RATIO.py converted to the AGENT.md layout. Inelastic only. SSF_X = 0.01 (the first sub-model uses 10), so the damage index is negative here: the peak displacement lies below the yield displacement of the fit (Note 12). The source's logarithmic-decrement helper returns NaN for this record (LESSON 80). The source's masses labelled kg are used as N.s^2/mm (LESSON 71). The ramp load is t N (LESSON 73)."
   },
   {
+    "UniqueID": "Impact from Pipe 300",
+    "URL": "local: models/Impact from Pipe 300 (not published)",
+    "num_models": "1",
+    "purpose": "Response of the ground and of a 300 mm pipe to a 75 kPa surcharge on a cut section, with placeholder soil and pipe data.",
+    "Description of Building Structural System": "NA (buried pipe beside a shallow open cut; surcharge pad on the ground)",
+    "Description of Model": "2D transverse section from the DXF (x -60 to 85 m, base 100 m below ground). Open cut present as the initial geometry; surcharge applied in 20 load steps with per-step frames and an animation. Pipe as an elastic beam ring with interface springs.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Soil linear elastic placeholder (E 30 MPa, nu 0.30); pipe elastic placeholder (E 3000 MPa, wall 12 mm); interface placeholder springs",
+    "Lateral system": "NA",
+    "building occupancy class": "NA",
+    "Lateral Loading": "None; static vertical surcharge 75 kPa on the ground, applied in 20 load steps",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26",
+    "model generator": "NA (hand-written; geometry from the DXF)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA (no published source; geometry from models/Impact from Pipe 300/Impact to 300mm Pipe.dxf)",
+    "Notes": "Placeholder soil and pipe values. The manual static loop is a documented exception (AGENT.md 3c). Mesh and box chosen by a convergence study (README.md). Gravity settlement at x = 0 is 2224 mm against the 1-D closed form 2228 mm; the settlement depends on the box depth because the placeholder stiffness is uniform."
+  },
+  {
     "UniqueID": "SalarDelavar_Ductility_Damage_Index_Confinement_Rigid_Roof",
     "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/DUCTILITY_DAMAGE_INDEX_CONFINEMENT_ENHANCEMENT_RATIO_RIGID_ROOF",
     "num_models": "1",
@@ -1953,6 +1974,27 @@
     "Notes": "Source py_ref/CONCRETE_FRAME_DUCTILITY_DAMAGE_INDEX_CONFINEMENT_ENHANCEMENT_RATIO_RIGID_ROOF.py converted to the AGENT.md layout. Inelastic only. The roof rotations are restrained at nodes 3, 4, 9 and 10: a rotation restraint, not a rigid diaphragm (LESSON 82). SSF_X = 1.00, so the record is applied at full scale. The bilinear fit has a negative post-yield tangent, so Omega_0 is 0.97 and the damage indices are negative (LESSON 83). The logarithmic-decrement helper returns 0 for this record (LESSON 80)."
   },
   {
+    "UniqueID": "Impact from Pipe 300 Coarse Mesh",
+    "URL": "local: models/Impact from Pipe 300 Coarse Mesh (not published)",
+    "num_models": "1",
+    "purpose": "Coarse-mesh variant of Impact from Pipe 300 (75 kPa surcharge on a cut section beside a 300 mm pipe, placeholder soil and pipe data), for quick runs.",
+    "Description of Building Structural System": "NA (buried pipe beside a shallow open cut; surcharge pad on the ground)",
+    "Description of Model": "Same 2D transverse section, box (x -60 to 85 m, base 100 m below ground), interface and load as Impact from Pipe 300, on a coarser gmsh mesh: 25 mm at the pipe, 400 mm in the cut, 1 m under the pad, 4 m in the far field (about 9,100 soil nodes against 36,900).",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Soil linear elastic placeholder (E 30 MPa, nu 0.30); pipe elastic placeholder (E 3000 MPa, wall 12 mm); interface placeholder springs",
+    "Lateral system": "NA",
+    "building occupancy class": "NA",
+    "Lateral Loading": "None; static vertical surcharge 75 kPa on the ground, applied in 20 load steps",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26",
+    "model generator": "NA (copy of Impact from Pipe 300 with the mesh sizes changed)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA (no published source; geometry from models/Impact from Pipe 300/Impact to 300mm Pipe.dxf)",
+    "Notes": "Accuracy against the fine model (README.md): pipe-moment increments within 4%, settlements within 1%. The moment increments are the quantities to check against the fine model before using this mesh for a result."
+  },
+  {
     "UniqueID": "SalarDelavar_Optimization_Confinement_Enhancement_Ratio",
     "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/OPTIMIZATION_CONFINEMENT_ENHANCEMENT_RATIO",
     "num_models": "1",
@@ -1972,5 +2014,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/OPTIMIZATION_CONFINEMENT_ENHANCEMENT_RATIO (source repository; the source's PDF and PowerPoint were not parsed)",
     "Notes": "Source py_ref/CONCRETE_FRAME_OPTIMIZATION_CONFINEMENT_ENHANCEMENT_RATIO.py converted to the AGENT.md layout. The Newton search on the column ratio (start 1.40, target ductility 5.5) converges in five iterations to X* = 2.147387; the optimum's over-strength factor is 1.1256 and its ductility 5.5 (LESSON 86). The source's transient branch is never called and is not converted (LESSON 84). The column fibre mesh has one fibre across the width, which does not change the in-plane response (LESSON 87). The search runs its pushovers in separate processes (LESSON 85) and saves each iteration (LESSON 88)."
+  },
+  {
+    "UniqueID": "Impact from Pipe 300 Pad Stress",
+    "URL": "local: models/Impact from Pipe 300 Pad Stress (not published)",
+    "num_models": "1",
+    "purpose": "Soil stress increase (kPa) from a 75 kPa surcharge carried by a pad foundation of different thickness and stiffness, beside a 300 mm pipe at an open cut (placeholder soil and pad data).",
+    "Description of Building Structural System": "NA (buried pipe beside a shallow open cut; surcharge on the ground or on a pad foundation)",
+    "Description of Model": "Same 2D transverse section, box, interface and load as Impact from Pipe 300 Coarse Mesh, with refined zones under and beside the pad reaching 12 m depth. Five cases: a flexible load on the ground, bonded pads of 0.3, 0.6 and 1.2 m thickness at E = 30 GPa, and a 0.6 m pad at E = 3 GPa.",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "Soil linear elastic placeholder (E 30 MPa, nu 0.30); pad linear elastic placeholder (nu 0.20; E 30 or 3 GPa); pipe elastic placeholder (E 3000 MPa, wall 12 mm); interface placeholder springs",
+    "Lateral system": "NA",
+    "building occupancy class": "NA",
+    "Lateral Loading": "None; static vertical surcharge 75 kPa on the ground or on the pad top, applied in 20 load steps",
+    "Earthquake records": "NA",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26",
+    "model generator": "NA (copy of Impact from Pipe 300 Coarse Mesh with a pad parameter set and a stress post-process)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "NA (no published source; geometry from models/Impact from Pipe 300/Impact to 300mm Pipe.dxf)",
+    "Notes": "Stress increase (kPa) from a 75 kPa surcharge: flexible load on the ground and bonded pads of 0.3, 0.6 and 1.2 m (E 30 GPa) and 0.6 m (E 3 GPa). Contact sums to the applied 368.6 N. Edge contact is mesh-sensitive at single nodes, so 0.5 m bin averages are reported. Stress animations for each case are in the output/animations folder. Placeholder values; the bonded contact has not been checked against a frictionless interface."
   }
 ]
