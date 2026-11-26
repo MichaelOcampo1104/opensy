@@ -2077,5 +2077,26 @@
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_%26_REBAR_%26_Cdepth_FREE_VIBRATION (source repository; the source's PDF and PowerPoint were not parsed)",
     "Notes": "Source py_ref/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_&_REBAR_&_Cdepth_FREE_VIBRATION.py converted to the AGENT.md layout. The 18 cases run three at a time, each in its own process, and each completed case is saved (LESSONS 85, 88); the source's last pushover is run again for its plots (LESSON 86). The masses are used as written, and the other reading is reported (LESSONS 71, 106). The source's logarithmic decrement is NaN in every case (LESSON 105). The case 500 mm, 28 mm reproduces the sixth sub-model's 28 mm case (LESSON 107). The reinforcement ratios and the section offsets follow the sixth sub-model (LESSONS 100, 101). The source's PARALLEL_COMPUTING variant is not converted."
+  },
+  {
+    "UniqueID": "SalarDelavar_Sensitivity_Cdepth_Free_Vibration_Parallel",
+    "URL": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_%26_REBAR_%26_Cdepth_FREE_VIBRATION/PARALLEL_COMPUTING",
+    "num_models": "1",
+    "purpose": "The parallel computing version of the seventh sub-model's sensitivity study (column depth, rebar and free vibration; 18 cases), checked bit for bit against the seventh sub-model.",
+    "Description of Building Structural System": "Single-storey portal frame with fixed bases: two 3 m columns of 500 mm width and a 7 m beam of 500 x 300 mm (50 mm cover). The column depth is 350 to 600 mm and the column rebar 28, 30 or 32 mm (the beam bars are 4 mm smaller); the confinement enhancement ratio is 1.25.",
+    "Description of Model": "SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_&_REBAR_&_Cdepth_FV_PARALLEL_COMPUTING",
+    "Year of design and construction": "NA",
+    "2D/3D": "2D",
+    "Material": "RC (Concrete01 confined core and cover, f'c 25 MPa; Hysteretic reinforcement as written)",
+    "Lateral system": "Portal frame with the column depth and rebar varied",
+    "building occupancy class": "NA",
+    "Lateral Loading": "Pushover (horizontal displacement control of node 4 to 675 mm) and free vibration of node 3 from initial conditions under a ramp load; 18 cases",
+    "Earthquake records": "NA (no ground motion: the free vibration starts from initial conditions)",
+    "Opensees Version": "openseespy 3.8.0, opstool 1.0.26 (converted)",
+    "model generator": "NA (manual conversion of Python source)",
+    "file format": ".py",
+    "Suggested Model citation": "NA",
+    "Links to Papers / Design Reports": "https://github.com/salardelavar/OPENSEES_SALAR/tree/main/CONCRETE_FRAME_EXAMPLES/CONFINEMENT_ENHANCEMENT_RATIO/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_%26_REBAR_%26_Cdepth_FREE_VIBRATION/PARALLEL_COMPUTING (source repository; the PDF and PowerPoint were not parsed)",
+    "Notes": "Source py_ref/SENSITIVITY_CONFINEMENT_ENHANCEMENT_RATIO_&_REBAR_&_Cdepth_FV_PARALLEL_COMPUTING.py converted to the AGENT.md layout. The source's joblib runs are replaced by three processes, each case in its own working folder (LESSONS 85, 88). Every case agrees bit for bit with the seventh sub-model (LESSON 107). PLOT_2D.py is not in the source folder, so the seventh sub-model's copy is used (LESSON 108). The source's main process holds no model, so its printModel and PLOT_2D_FRAME outputs are empty and are not reproduced (LESSON 109). HISTOGRAM_BOXPLOT_FUN.py is not called by the script."
   }
 ]

@@ -575,3 +575,13 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 ### 107. A case that two sub-models share is a cross-check of the shared conversion, and it must reproduce the same results
 - Evidence: the case 500 mm, 28 mm, Kfc 1.25 of the seventh sub-model has the same frame and sections as the 28 mm, Kfc 1.25 case of the sixth. Both give a ductility of 5.738404, R 7.0480 and the same residual steps (8420 and 10746 to 10750), so the section code and the solver path agree across the two conversions.
 - Rule: where two sub-models of one source share a case, compare that case between them before reporting either, and record the agreement.
+
+## 2026-11-26 — SalarDelavar_Sensitivity_Cdepth_Free_Vibration_Parallel (parallel computing version of the seventh sub-model)
+
+### 108. A source folder can list a script that imports a module the folder does not contain: check every import against the folder listing before converting
+- Evidence: the source's `PARALLEL_COMPUTING` script imports `PLOT_2D` and calls `PLOT_2D_FRAME`, but its folder has no `PLOT_2D.py`, so the script cannot run from the folder as published. The conversion takes `PLOT_2D.py` from the seventh sub-model's `py_ref/`. The six helper files the folder shares with that sub-model are byte-identical to it, which supports the copy, and the README records which copy is used.
+- Rule: before converting a script, list each `import` and check it against the folder listing. Where a module is missing, take it from the nearest sibling folder, record the copy used, and compare the files the two folders share.
+
+### 109. A parallel version's main process holds no model, so its post-processing writes empty outputs that a conversion must not take as results
+- Evidence: the source's parallel script calls `ops.printModel` and `PLOT_2D_FRAME` in its main process, after the jobs have run. In a fresh main process the model has no nodes and no elements, and `printModel` writes a 391-byte file with no model in it (checked with openseespy 3.8.0). The conversion does not reproduce those outputs, and its README says so.
+- Rule: in a parallel or multi-process version, check which calls run in the main process and what model they see. A call on an empty model produces an empty output, which is not a result.
