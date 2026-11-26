@@ -80,7 +80,9 @@ Settlement at the pad centre: 29.4 mm with no pad; 26.6–27.2 mm with a pad.
 - **Pad element size:** halving the pad element size (thickness / 4 to thickness / 8) for the 0.3 m case changes the contact bins by under 1% and the depth values by 2% or less.
 - **Soil zone:** halving the zone size (500 to 250 mm target) for the 0.3 m case changes the contact bins by under 0.7 kPa and the depth values by under 0.5%.
 
-## Outputs (`output/`)
+## Outputs (`output/`, fine mesh)
+
+Default runs use the coarse mesh and write the same layout to `output/coarse/`. `--fine` writes the reference set described here to `output/`. The `--coarse` comparison studies write to `output/coarse_zone/`.
 
 - `pad_study_summary.json`: results for each case.
 - `pad_stress_maps_kPa.png`: stress maps, colour scale capped at 100 kPa.
@@ -89,9 +91,16 @@ Settlement at the pad centre: 29.4 mm with no pad; 26.6–27.2 mm with a pad.
 - `animations/stress_<case>.gif`: one per case. The applied surcharge is shown above the stress map, over 21 load steps.
 - `animations/stress_all_cases.gif`: all five cases side by side at the same load step.
 - `animations/opstool/stress_slider_<case>.html`: one opstool slider per case, with Play, Pause and a surcharge slider from 0 to 75 kPa. The colours are the same element stresses as the maps. About 18 to 19 MB each. A static preview at 75 kPa is saved beside each one as `stress_slider_<case>_final.png`.
-- `animations/odb/<case>/`: opstool response databases for the sliders (full run, gravity state first, plane stresses at every step).
+- `odb/<case>/`: opstool response databases for the sliders (full run, gravity state first, plane stresses at every step). Databases from earlier runs are in `animations/odb/<case>/`; the shorter `odb/` name keeps the paths under the Windows 260-character limit.
 - `interface/interface_summary.json` and `interface/pad_interface_comparison.png`: the bonded, frictionless and friction results side by side.
 - `interface/frictionless/cases/` and `interface/friction/cases/`: per-case results for the interface models.
+- `interface/friction/animations/stress_<case>.gif` and `stress_all_cases.gif`: friction-model animations for the four pad cases, 21 load steps, from the friction solve at each step (not scaled copies of the final state).
+- `interface/friction/animations/opstool/stress_slider_<case>.html` and `stress_slider_<case>_final.png`: friction-model opstool sliders, with Play, Pause and a surcharge slider from 0 to 75 kPa. About 18 to 19 MB each.
+- `interface/friction/odb/<case>/`: plane response databases for the friction runs, used by the sliders (earlier runs: `interface/friction/animations/odb/<case>/`).
+- `interface/c2d/contact2d_summary.json`: the zeroLengthContact2D check. The folders are named `c2d` and `mu04` so that database paths stay under the Windows 260-character limit. Per-case results are in `normal_only/cases/` (friction coefficient 0) and `mu04/cases/` (mu = 0.4).
+- `interface/c2d/mu04/animations/stress_<case>.gif` and `stress_all_cases.gif`: zeroLengthContact2D animations (mu = 0.4), 21 load steps from the solve at each step, not scaled copies of the final state.
+- `interface/c2d/mu04/animations/opstool/stress_slider_<case>.html` and `stress_slider_<case>_final.png`: zeroLengthContact2D sliders (mu = 0.4), with Play, Pause and a surcharge slider from 0 to 75 kPa. Written by `--contact2d-animation`, or one case at a time by `--contact2d-case <name>`.
+- `coarse/interface/c2d/vis/<case>/` (default, coarse mesh) and `interface/c2d/vis/<case>/` (fine mesh): zeroLengthContact2D vis pages for each pad case. `vis_01_nodes.html`, `vis_02_model.html`, `vis_03_loads.html` and `vis_04_pre_analysis.html` are 2D overviews of the mesh, pipe, supports and surcharge, which open quickly. Each case folder has one `plotly.min.js` (4.85 MB) that its pages load, so keep the pages beside it. The earlier 3D pages are kept as `*_3d.html` in the fine folder. `vis_05_defo_surcharge.html` shows the deformed shape after the surcharge. Written by `--contact2d-vis-case <name>`.
 - `coarse_zone/`: the five cases with coarser zones, with `coarse_vs_fine.json` and `coarse_vs_fine_contact.png` comparing them with the current study.
 - `coarse_zone/interface/`: the friction model on the coarser zones, with `coarse_friction_summary.json`, `coarse_friction_vs_fine.json` and `coarse_friction_contact.png`.
 - `cases/<case>_stress.npz` and `cases/<case>_results.json`: element stresses and per-case results.
@@ -105,6 +114,7 @@ The main results tie the pad to the soil: the pad's base nodes are shared with t
 - **Normal spring:** compression only, stiffness E_soil / 1 mm per area (PLACEHOLDER). It adds under 0.01 mm of settlement under the surcharge.
 - **Frictionless model:** no shear spring.
 - **Friction model:** an elastic-plastic shear spring that yields at mu N, with mu = 0.4 (PLACEHOLDER). N is the pad base normal force from the previous pass; the first pass uses the pad weight plus the surcharge per node. Three passes were run, and the friction limit changed by at most 2.5% between the last two.
+- **OpenSees contact element:** in a single-node test (scratch, not part of this model), `zeroLengthContact2D` and `zeroLengthContactNTS2D` both drop the sliding friction to zero at each slip, averaging about half of mu N, in openseespy 3.8.0. The spring pair above is therefore the friction model. The contact element check is in the next subsection.
 - One pad base node is pinned horizontally. No horizontal load is applied, so this only removes the rigid-body mode.
 
 | Case | Model | 1 m | 3 m | 5 m | 10 m | Edge bins | Middle bin | Pad settlement (mm) |
@@ -130,6 +140,19 @@ Stresses are kPa. The middle bin is the sixth of ten 0.5 m bins.
 - **Checks:** contact totals are 368.59 N in every model. After the friction limit iteration, the shear is within 2.5% of mu times the actual normal force, and 13 to 26% of the pad base nodes are at the limit.
 - **Linearity:** the frictionless runs stay linear (deviations of 1e-6 kPa or less). The friction runs do not: once the base slips, the stress is not proportional to the load (deviations of 10 to 78 kPa across the passes). The stress animations in the Outputs section are only a scaling of the final state for the bonded model; a friction animation would need the full nonlinear history.
 
+### Contact element check: zeroLengthContact2D (`python model.py --contact2d`)
+
+Each pad base node is joined to the soil by one `zeroLengthContact2D` element, with the same penalty stiffness as the spring pair. The pad base starts 0.1 µm into the soil, because a zero-gap contact is inactive. The normal-only check uses friction coefficient 0. The friction check uses mu = 0.4 and is compared with the spring-pair friction model above.
+
+| Case | Normal only vs frictionless: max difference | Friction vs spring-pair friction: max depth difference (kPa) | Max bin difference (kPa) | Max settlement difference (mm) | Base nodes at mu N: contact element / spring pair |
+|------|------|------|------|------|------|
+| Pad 0.3 m, E 30 GPa | 0.0 | 0.09 | 0.31 | 0.02 | 1.5% / 22.6% |
+| Pad 0.6 m, E 30 GPa | 0.0 | 0.10 | 0.69 | 0.02 | 2.9% / 15.9% |
+| Pad 1.2 m, E 30 GPa | 0.0 | 0.15 | 0.82 | 0.03 | 0.0% / 13.5% |
+| Pad 0.6 m, E 3 GPa | 0.0 | 0.14 | 0.47 | 0.03 | 1.4% / 26.1% |
+
+The normal-only results equal the frictionless results to four decimal places. The friction results agree with the spring pair within the differences above, and no solver failures occurred. The contact element holds the friction limit at far fewer base nodes, and its largest shear is 0.997 mu N, against up to 1.025 mu N for the spring pair. The single-node test showed why: the element's sliding friction drops to zero at each slip. So the stress results here depend only weakly on which element is used, but the spring pair remains the friction model.
+
 ## Coarser zones (mesh sensitivity)
 
 The same five cases were run with coarser zones: a pad target of 1000 mm (the coarse pad target of the Impact from Pipe 300 Coarse Mesh model), a 2000 mm wider zone and pad elements of thickness / 2. The pipe, cut and far-field sizes are unchanged. `python model.py --coarse` writes `output/coarse_zone/`, with `coarse_vs_fine.json` and `coarse_vs_fine_contact.png` comparing the two.
@@ -153,7 +176,7 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 - **Placeholders:** all soil, pad, pipe and interface values. Replace them before using any result.
 - **Bonded pad:** the main results assume a bonded pad, whose E is 1000 times the soil's. The friction model at mu = 0.4 and the frictionless model are in the section above. The edge concentration is present in all three, so the bonded base does not cause it. The interface stiffness and mu are placeholders, and the friction limit is an iteration over passes rather than a contact solver.
 - **Corner peaks and edge bins:** single nodes at the pad corners depend on mesh size. The edge bins are uncertain at about ±8% and change by up to 25% with coarser zones (see the section above). Use the middle bins and the depth values as the main results, and treat the edge bins as indicative.
-- **Animations:** the model is linear elastic and the ramp is linear, so each frame is the final stress scaled by the load fraction. The animations show the stress building up, not a change in shape. A non-linear soil model would change this.
+- **Animations:** the model is linear elastic and the ramp is linear, so each frame is the final stress scaled by the load fraction. The animations show the stress building up, not a change in shape. A non-linear soil model would change this. The friction animations are the exception: their frames are the friction solve's own load steps, not scaled copies of the final state.
 - **Plane strain:** valid only if the pipe, the cut and the pad are all long and parallel.
 - **Box:** the base is fixed 100 m below ground. Stresses at depth depend on that and on the uniform placeholder stiffness.
 - **Pipe present from the start:** as in Impact from Pipe 300. Its self-weight is in the gravity state.
@@ -162,4 +185,4 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 
 ## Reproduce
 
-Run `model.py` with the project venv. The five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes). `python model.py --coarse-friction` runs the friction model on the coarser zones (about 3 minutes).
+Run `model.py` with the project venv. It uses the coarse mesh by default (the `--coarse` settings) and writes to `output/coarse/`, to save time and memory. Add `--fine` to use the reference mesh and write to `output/`. The times below are for the fine mesh, so the coarse runs are faster. On the fine mesh, the five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes). `python model.py --coarse-friction` runs the friction model on the coarser zones (about 3 minutes). `python model.py --friction-animation` runs the friction model on the four pad cases and writes their friction sliders, GIFs and response databases (about 30 minutes). `python model.py --contact2d` runs the zeroLengthContact2D check for the four pad cases, normal-only and friction (about 7 minutes). `python model.py --contact2d-animation` writes the zeroLengthContact2D sliders and GIFs for the mu = 0.4 case, running the four cases one after another (about 40 minutes, estimated). `python model.py --contact2d-case <name>` runs one of those cases and its slider, so separate cases can run in parallel from separate folders (about 10 minutes per case, estimated). `python model.py --contact2d-vis-case <name>` writes the vis_01 to vis_05 pages for one pad case on the coarse mesh (about 2 minutes per case). Each overview page embeds the plotly library (about 4.8 MB), which is most of its size.

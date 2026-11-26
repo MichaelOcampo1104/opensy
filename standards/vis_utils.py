@@ -82,6 +82,7 @@ def vis_defo(
     resp_dof: str | None = None,
     resp_type: str = "disp",
     scale: float = 10.0,
+    include_plotlyjs: object = True,
 ) -> None:
     """V5/V6 — Deformed shape coloured by displacement ($resp_dof or magnitude).
 
@@ -93,6 +94,7 @@ def vis_defo(
                   If None, colours by total displacement magnitude.
         resp_type: Response type — ``"disp"``, ``"vel"``, ``"accel"``, etc.
         scale: Deformation scale factor.
+        include_plotlyjs: True embeds the plotly library in the page; "directory" writes one plotly.min.js beside it.
     """
     if _headless():
         return
@@ -105,7 +107,7 @@ def vis_defo(
         show_defo=True,
         show_undeformed=False,
     )
-    fig.write_html(str(output_dir / filename))
+    fig.write_html(str(output_dir / filename), include_plotlyjs=include_plotlyjs)
 
 
 def vis_slider(
