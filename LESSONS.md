@@ -620,8 +620,70 @@ the opensy standard. Each entry states the evidence so it can be re-checked.
 
 ### 117. A first analysis whose return code is not tested can carry an unconverged state forward: give every analysis the same convergence check
 - Evidence: the source does not test its first analysis, at the creep age (load factor 28). With the beam at Kfc 1.1 that analysis returns -3 on OpenSees' default test, and the steps that follow start from it. The conversion gives it the source's fallback ladder, which converges on the first attempt. The check run (Kfc 1.2) converges on the default test and matches the source exactly, so the added check changes nothing where the source converges.
-- Rule: test the return code of every analysis, including the first, and record the attempts. Keep a check run that follows the source's path, to show that the added check changes nothing where the source converges.
+- Rule: test the return code of every analysis, including the first, and record the attempts. Keep a check run that follows the source's path, to show that the added check changes nothing where the source converges. (Qualified by LESSON 127 and LESSON 130: where the source does not test an analysis and its own results depend on the unconverged state, reproduce that state instead (LESSON 127). For a run the source does not perform, compare its early response with a converging run before accepting an unchecked start (LESSON 130). The creep model's main runs keep the ladder.)
 
 ### 118. A corotational analysis applies loads at deformed positions: a moment check about the origin must use the displaced positions of the loaded nodes
 - Evidence: with the loads at their undeformed positions, the moment balance about the origin has a relative residual of 5.8 x 10^-5 in every run. With the loaded nodes at their displaced positions (node 3 at (u_3x, 3000 + u_3y) and node 4 at (7000 + u_4x, 3000 + u_4y)) the residual is 5 x 10^-13. The difference is the moment of each vertical load through its node's sideways displacement.
 - Rule: for a large-displacement analysis (corotational or P-delta), check moment equilibrium with the displacements of the loaded nodes. Report the undeformed residual as a displacement effect, not as an error.
+
+## 2026-11-26 — SalarDelavar_Creep_And_Shrinkage_Period_Analysis (structural periods during creep and shrinkage)
+
+### 119. A period labelled as the minimum or maximum of several computed modes names a mode: say which mode each one is
+- Evidence: the source's period plot labels its curves as the minimum and maximum periods, computed as the smallest and largest of four modes from the eigenvalue analysis. The smallest is a vertical mode of the top nodes (about 0.0132 s, nearly constant over the 5 years), and the largest is the first sway mode (0.133 to 0.155 s). A reader would take the minimum for the shortest period of the lateral response, which it is not.
+- Rule: when a result is the minimum or maximum over several modes, state which mode it is, from the mode shapes, and check it against the lateral and vertical periods separately.
+
+### 120. A figure's x and y must come from the same analysis: check the run of each array before reading the figure
+- Evidence: the source plots the Steel01 displacements against the periods of the Hysteretic run, because its call for the Steel01 run discards its period results (`_, _`). The two runs have identical periods here, so the figure looks right, but it would show wrong pairs for any run that differed. The conversion plots each run against its own displacement.
+- Rule: for each x-y pair in a figure, check that both arrays come from the same analysis. This extends LESSON 102.
+
+### 121. A generalised eigenvalue solver with massless DOFs: check its finite eigenvalues against static condensation of the massless DOFs
+- Evidence: the source's periods use `ops.eigen('-fullGenLapack', 4)` with zero rotational masses. On an elastic check frame with the same nodes, members and masses, the four eigenvalues agree with numpy's static condensation of the massless DOFs to 3.6 x 10^-14 (relative), for the SI mass and for the source's mass, and they scale exactly as 1/mass.
+- Rule: where a model has massless DOFs, compute the finite eigenvalues by static condensation in numpy and compare them with the solver on the same frame. Use an elastic frame of the same layout, so that the check does not depend on the nonlinear state.
+
+## 2026-11-27 — SalarDelavar_Reversed_Cyclic_Pushover_Frame (reversed cyclic pushover of a reinforced-concrete frame)
+
+### 122. An imposed history: check its peak against the amplitude the source names before reading the response
+- Evidence: the source builds each cycle's amplitude as i^2 times a scale, and it subtracts the previous cycle's whole array before the arrays are concatenated. The increments therefore accumulate to a peak of 410.7 mm, while the source's `max_value` names 80 mm. The converted model reproduces the peak exactly, so the README states the protocol's effect rather than the amplitude the source names.
+- Rule: for a protocol built from arrays, check the peak of the imposed history against the stated amplitude before reading the response, and say which one the run imposes.
+
+### 123. A solver's recovery settings persist after the first recovery: reproduce the settings in force, not the helper's defaults
+- Evidence: the source's fallback ladder runs once, at the first zero increment, and sets the test (NormDispIncr, 1e-6, 5000 iterations) and the algorithm (KrylovNewton with `-initial`) for the rest of the run. The converted model first used the helper's default test (EnergyIncr, 1e-10), which gave a step-2 base shear 1e-3 N away from the source. With the source's settings, steps 2 and 3 agree to 1e-16, and all 30,000 steps of both runs agree with the source's table.
+- Rule: when a converted solver replaces a source's recovery path, find which settings the source has in force after the recovery and start from those, not from the helper's defaults. Check against the source at the first few steps.
+
+### 124. Pass the source's increments unchanged: a difference of cumulative targets rounds them and can move the solver's path
+- Evidence: the first version passed the difference between two cumulative displacement targets (SmartAnalyze's static_split). That rounds each increment at about 10^-13 mm. The two versions agreed for the first 1501 steps and first differed at step 1502, and the difference then grew to about 2 x 10^-7 of the peak responses. Passing each increment unchanged removed the difference over the full run.
+- Rule: pass the source's increments to the solver exactly as the source passes them. Increments derived as differences of accumulated values can differ at the rounding level, and a loose convergence test can turn that into a different converged state.
+
+### 125. A force-balance check must use the solver's own convergence tolerance, not a tighter value
+- Evidence: the source's test (NormDispIncr at 1e-6) bounds the displacement increments, not the force unbalance, so the base reactions balance the reference load only to about the displacement tolerance times the stiffness. The residuals are 10^-8 to 2 x 10^-7 relative. A check at 10^-9 would fail on the source's own settings, for a reason unrelated to the conversion.
+- Rule: set the tolerance of a balance check to the test the solver uses, and state that tolerance in the check's report line.
+
+### 126. Python floats and numpy differ at zero: a ratio with a zero denominator raises in Python but gives NaN or inf in numpy
+- Evidence: the cyclic source computes its secant stiffnesses with numpy, so the first zero increment gives 0/0 = NaN without an error. The converted model's Python floats raised ZeroDivisionError at step 1 of the first run. The fix is a helper that uses numpy's division, which gives the same NaN and inf as the source.
+- Rule: where a converted script takes a ratio that the source computes with numpy, use numpy's division (or check the denominator), so that a zero gives the source's NaN or inf rather than an exception.
+
+## 2026-11-27 — SalarDelavar_Creep_And_Shrinkage_Sensitivity_Rebar_Cdepth (sensitivity of creep and shrinkage to rebar diameter and column depth)
+
+### 127. An analysis the source does not check can leave an unconverged state for the steps that follow: reproduce that state, and do not add a check that changes the results
+- Evidence: the source's analysis at the creep age is unchecked. It does not converge in 10 of the 36 cases (return code -3), and the load steps then start from its unconverged state, which the source's table reflects. The first converted sweep ran a ladder there, as the creep model does (LESSON 117). That changed those 10 cases by up to about 7 % in the over-strength factor and 13 % in R, and the sweep stopped matching the source. Keeping the source's behaviour and recording each return code reproduces all 36 cases exactly.
+- Rule: before adding a check to an analysis the source does not check, compare the sweep with the source. If the source's results depend on the unconverged state, keep that state, record the return codes, count the cases, and put the choice to the user.
+
+### 128. Python prints and the solver's C output interleave in a redirected file: attribute a solver message by the solver's own step, not by its line position
+- Evidence: in the source's stdout, redirected to a file, the solver's failure messages sat after Python lines that belong to a later case. Python buffers its prints and the solver writes directly, so the file's order differs from the order of the run. Counting messages per case by line position therefore gave the wrong cases. The solver's own load factor (53 at the first load step) identified the case and the step.
+- Rule: when attributing solver messages to a case or a step in a redirected log, use the solver's own step or load factor, not the position of the line, and do not trust the order of lines written through different buffers.
+
+### 129. To find where two codes first disagree in a sweep, rule out carry-over with one case run alone, then compare every solver call of that case
+- Evidence: four of the 36 cases disagreed with the source's table. Running the source's own function for one of them in a fresh process reproduced its table value, so the source's results do not depend on the earlier cases. Recording every analysis call of that case in both codes showed the first difference at the creep-age call: both returned -3, and only the converted model re-solved it. The fix followed from that call, not from the fitted values.
+- Rule: when two codes disagree in a sweep, run one case alone in each to rule out carry-over between cases, then record every solver call of that case in both and compare the first call that differs.
+
+## 2026-11-27 — SalarDelavar_Creep_And_Shrinkage_Analysis (revision of LESSON 117 under the source's unchecked creep-age analysis)
+
+### 130. A source-faithful policy applied to a run the source does not perform can dominate that run: compare its early response with a run that converges before accepting it
+- Evidence: the creep model's main runs use the beam's named confinement value of 1.1, which the source never computes (its effective value is 1.2). Applying the source's unchecked creep-age analysis to them (LESSON 127) left the first load steps from an unconverged state. The displacement at day 53 fell from 0.479 mm (in the check run at 1.2, and in the earlier version with the ladder) to 0.0078 mm, and the fitted Steel01 ductility rose from 1.78 to 1.90. The equilibrium checks still pass, because each step is in equilibrium with its own state. The ladder was restored for these runs on review. The sensitivity sweep keeps the source's unchecked behaviour, because its own table depends on it (LESSON 127).
+- Rule: when a source-faithful policy is applied to a run the source does not perform, compare that run's early response with a run that converges, such as the check run, before accepting the policy. Treat equilibrium checks as necessary, not sufficient.
+
+## 2026-11-27 — Approval of the AGENT.md §3c exception for the creep-family models (creep, period and sensitivity)
+
+### 131. A permitted exception needs its approval recorded where the model is documented: record the date and the scope in the README, the catalogue entry and the lessons
+- Evidence: the creep, period and sensitivity models run load-controlled steps as manual `ops.analyze` loops, because SmartAnalyze's static mode forces displacement control (LESSON 53). AGENT.md §3c and item 22 allow such a loop only with documented approval. The user approved it for the three models on 2026-11-27. The approval is recorded in each model's README (Note 3) and in its catalogue notes, as LESSON 53 records its own approval.
+- Rule: when a permitted exception is approved, record the date and the scope (the models and the loops it covers) in each affected README and catalogue entry, and add the approval to LESSONS, so that the audit item can be checked against the record.
