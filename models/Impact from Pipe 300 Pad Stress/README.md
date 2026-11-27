@@ -171,6 +171,35 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 - **Friction model on the coarser zones** (`python model.py --coarse-friction`, mu 0.4, three passes): the changes from the current zones match the bonded ones. Depths move by 4.4% at most, middle bins by 2.8%, edge bins by up to 25% (1.2 m pad), and the 0.3 m pipe-level stress by 35%. On the same coarse mesh, the friction and bonded depths differ by 0.54 kPa at most, so the two still agree at both mesh sizes.
 - The current study remains the reference.
 
+## Pipe-soil interface: zeroLengthContact2D (`python model.py --pipe-contact2d`)
+
+The pipe-soil springs can be replaced by zeroLengthContact2D elements, the element that the pad contact models use. `--pipe-contact2d` runs the same five cases on the coarse mesh with the bonded pad, and writes `output/coarse/pipe_contact2d/`. The `pipe_interface_compare.json` there compares it with the spring pair in `output/coarse/`, which stays the default.
+
+Set-up:
+- Each contact joins the soil node (node i) to the pipe-side node (node j, tied to the ring by equalDOF as in the spring pair). The normal points radially outward, so the contact is active when the pipe side moves out into the soil.
+- Stiffnesses: the spring pair's, normal `k_interface` and tangential `k_tangent`, per tributary length. Friction is Coulomb with `pipe_friction_coefficient` = 0.4, a placeholder equal to the pad's.
+- Each pipe-side node starts 1e-4 mm into the soil (committed), as the pad contacts do.
+- The gravity solve is repeated until the ring displacements stop changing. In every case the first solve stops early (ring displacements still change by 0.05 to 0.09 mm), and the second changes them by less than 1e-9 mm.
+
+Checks written to every result, for gravity and after the surcharge:
+- The force from the contacts on the pipe equals the pipe weight upward (143.2185 N) in all five cases, with no sideways force.
+- No contact carries tension in any case.
+- The largest shear over mu times N is 0.98, and no contact reaches the friction limit, so no contact slips and the sawtooth noted for the pad does not occur here.
+
+Results against the spring pair (coarse mesh, no pad and four pad cases):
+
+| Case | Surcharge change in vertical diameter, springs (mm) | contact2d (mm) | 90 deg moment after surcharge, springs (N mm per mm) | contact2d | Largest shear / (mu N) |
+|---|---|---|---|---|---|
+| No pad | +0.257 | +0.265 | +225 | +254 | 0.65 |
+| Pad 0.3 m, E 30 GPa | +0.291 | +0.303 | +222 | +250 | 0.64 |
+| Pad 0.6 m, E 30 GPa | +0.305 | +0.323 | +221 | +248 | 0.65 |
+| Pad 1.2 m, E 30 GPa | +0.307 | +0.327 | +218 | +245 | 0.98 |
+| Pad 0.6 m, E 3 GPa | +0.305 | +0.324 | +221 | +248 | 0.65 |
+
+- The surcharge changes the vertical diameter by a similar amount in both models, 3 to 7% more with contacts. The 90 deg moment is about 12 to 13% higher with contacts.
+- The gravity state differs more. With no pad, the vertical diameter change is -4.03 mm with contacts and -3.75 mm with springs. The cause is not isolated. The contact law differs: a unilateral penalty normal with Coulomb friction, against compression-only springs with friction capped at tau times the length.
+- The partial BeamContact2D output in `output/coarse/beamcontact/` is not valid (see its `NOT_VALID.txt`) and can be deleted.
+
 ## Notes and limitations
 
 - **Placeholders:** all soil, pad, pipe and interface values. Replace them before using any result.
@@ -185,4 +214,4 @@ The same five cases were run with coarser zones: a pad target of 1000 mm (the co
 
 ## Reproduce
 
-Run `model.py` with the project venv. It uses the coarse mesh by default (the `--coarse` settings) and writes to `output/coarse/`, to save time and memory. Add `--fine` to use the reference mesh and write to `output/`. The times below are for the fine mesh, so the coarse runs are faster. On the fine mesh, the five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes). `python model.py --coarse-friction` runs the friction model on the coarser zones (about 3 minutes). `python model.py --friction-animation` runs the friction model on the four pad cases and writes their friction sliders, GIFs and response databases (about 30 minutes). `python model.py --contact2d` runs the zeroLengthContact2D check for the four pad cases, normal-only and friction (about 7 minutes). `python model.py --contact2d-animation` writes the zeroLengthContact2D sliders and GIFs for the mu = 0.4 case, running the four cases one after another (about 40 minutes, estimated). `python model.py --contact2d-case <name>` runs one of those cases and its slider, so separate cases can run in parallel from separate folders (about 10 minutes per case, estimated). `python model.py --contact2d-vis-case <name>` writes the vis_01 to vis_05 pages for one pad case on the coarse mesh (about 2 minutes per case). Each overview page embeds the plotly library (about 4.8 MB), which is most of its size.
+Run `model.py` with the project venv. It uses the coarse mesh by default (the `--coarse` settings) and writes to `output/coarse/`, to save time and memory. Add `--fine` to use the reference mesh and write to `output/`. The times below are for the fine mesh, so the coarse runs are faster. On the fine mesh, the five cases take about 15 minutes on this machine. `python model.py --animations-only` rebuilds the GIFs from the saved frames without re-solving. `python model.py --sliders` writes the five response databases (about 25 minutes) and the opstool sliders. `python model.py --sliders-only` rebuilds only the sliders from the existing databases (about 2 minutes). `python model.py --interface` runs the frictionless and friction interface models for the four pad cases and writes the comparison (about 4 minutes). `python model.py --coarse` runs the five cases with coarser zones and writes the comparison (about 5 minutes). `python model.py --coarse-friction` runs the friction model on the coarser zones (about 3 minutes). `python model.py --friction-animation` runs the friction model on the four pad cases and writes their friction sliders, GIFs and response databases (about 30 minutes). `python model.py --contact2d` runs the zeroLengthContact2D check for the four pad cases, normal-only and friction (about 7 minutes). `python model.py --contact2d-animation` writes the zeroLengthContact2D sliders and GIFs for the mu = 0.4 case, running the four cases one after another (about 40 minutes, estimated). `python model.py --contact2d-case <name>` runs one of those cases and its slider, so separate cases can run in parallel from separate folders (about 10 minutes per case, estimated). `python model.py --contact2d-vis-case <name>` writes the vis_01 to vis_05 pages for one pad case on the coarse mesh (about 2 minutes per case). Each overview page embeds the plotly library (about 4.8 MB), which is most of its size. `python model.py --pipe-contact2d` runs the five cases with the pipe-soil springs replaced by zeroLengthContact2D on the coarse mesh and writes the comparison with the spring pair to `output/coarse/pipe_contact2d/` (about 2 minutes).

@@ -93,6 +93,7 @@ k_interface = e_soil / interface_thickness  # N/mm³ per unit area (normal)
 tau_interface = 30.0 * kPa                  # PLACEHOLDER
 interface_yield_disp = 2.0 * mm             # PLACEHOLDER
 k_tangent = tau_interface / interface_yield_disp
+pipe_friction_coefficient = 0.4              # PLACEHOLDER: Coulomb coefficient of the pipe-soil contact (contact2d option)
 
 # Open cut: DXF Boundary polyline, 45-degree sides, floor at y = 8.257 m. The soil is already cut.
 trench_floor_y = 8.257244422105941 * m
@@ -543,6 +544,18 @@ def define_elements(mesh: dict, section: dict, case: dict) -> None:
                         0.0, 0.0, 0.0, -gamma_soil)
     for k, (tag, theta) in enumerate(mesh["iface"]):
         c, s = math.cos(theta), math.sin(theta)
+        if mesh.get("pipe", "springs") == "contact2d":
+            # zeroLengthContact2D, as in the pad contact models: node i is the soil node, node j the pipe-side node. The
+            # normal points from j to i, radially outward, so the contact is active when the pipe side moves out into the
+            # soil. The stiffnesses are the spring pair's: normal k_interface and tangential k_tangent per tributary length.
+            length = mesh["iface_length"][k]
+            ops.element("zeroLengthContact2D", ELE_SPRING_BASE + k, tag, NODE_AUX_BASE + k,
+                        k_interface * length * unit_length, k_tangent * length * unit_length,
+                        pipe_friction_coefficient, "-normal", c, s)
+            # the pipe-side node starts contact_start_penetration into the soil: a zero gap is singular at step 0
+            ops.setNodeDisp(NODE_AUX_BASE + k, 1, contact_start_penetration * c, "-commit")
+            ops.setNodeDisp(NODE_AUX_BASE + k, 2, contact_start_penetration * s, "-commit")
+            continue
         # local x = radial outward (normal), local y = tangential; node I is the pipe side
         ops.element("zeroLength", ELE_SPRING_BASE + k, NODE_AUX_BASE + k, tag,
                     "-mat", MAT_IF_N_BASE + k, MAT_IF_T_BASE + k, "-dir", 1, 2,
@@ -674,6 +687,45 @@ def _nearest_ground(mesh: dict, x: float) -> int:
     return min(alive, key=lambda t: abs(mesh["nodes"][t][0] - x))
 
 
+def _pipe_contact_checks(mesh: dict) -> dict:
+    """Forces of the pipe-soil zeroLengthContact2D contacts at the current state.
+
+    The element response gives [Fx, Fy] of the soil node and of the pipe-side node (j). Its sign is the reverse of the force
+    on the pipe: for a compressed contact the pipe-side response points outward, along the normal. So the compression is
+    the response along the outward normal, and the force on the pipe is minus the response. Checked: the force on the
+    pipe from the contacts equals the pipe weight, upward, once the solve has settled.
+
+    Args:
+        mesh: Mesh dictionary from build_mesh(), with the contacts from define_elements().
+
+    Returns:
+        Dictionary with 'pipe_contact_compression_N' (positive in compression, one value per interface node),
+        'pipe_contact_shear_N' (magnitude), 'pipe_contacts_active' (compression above 1e-9 N),
+        'pipe_contacts_at_limit' (active contacts with shear >= 0.98 mu N), 'pipe_friction_ratio_max' (largest
+        shear / (mu N) over the active contacts) and 'pipe_contacts_total_N' (force from the contacts on the pipe, x and y).
+    """
+    comp, shear = [], []
+    total_x = total_y = 0.0
+    for k, (_, theta) in enumerate(mesh["iface"]):
+        c, s = math.cos(theta), math.sin(theta)
+        f = ops.eleResponse(ELE_SPRING_BASE + k, "force")
+        fx, fy = float(f[2]), float(f[3])           # response at the pipe-side node (node j)
+        total_x += fx
+        total_y += fy
+        comp.append(fx * c + fy * s)
+        shear.append(abs(-fx * s + fy * c))
+    active = [k for k, v in enumerate(comp) if v > 1e-9]
+    ratios = [shear[k] / (pipe_friction_coefficient * comp[k]) for k in active]
+    return {
+        "pipe_contact_compression_N": comp,
+        "pipe_contact_shear_N": shear,
+        "pipe_contacts_active": len(active),
+        "pipe_contacts_at_limit": sum(1 for r in ratios if r >= 0.98),
+        "pipe_friction_ratio_max": max(ratios) if ratios else 0.0,
+        "pipe_contacts_total_N": [-total_x, -total_y],
+    }
+
+
 def collect_state(mesh: dict, load_factor: float = 0.0) -> dict:
     """Read the pipe, interface, ground and equilibrium quantities.
 
@@ -713,7 +765,7 @@ def collect_state(mesh: dict, load_factor: float = 0.0) -> dict:
     for label, x in (("x_pipe", pipe_centre_x), ("x_pad_centre", 0.5 * (pad_left + pad_right))):
         ground_uy[label] = ops.nodeDisp(_nearest_ground(mesh, x), 2)
 
-    return {
+    out = {
         "load_factor": load_factor,
         "base_sum_ry_N": base_ry,
         "soil_weight_N": soil_weight,
@@ -726,6 +778,9 @@ def collect_state(mesh: dict, load_factor: float = 0.0) -> dict:
         "pipe_moment_at_deg_N_mm_per_mm": moment_at_deg,
         "ground_uy_mm": ground_uy,
     }
+    if mesh.get("pipe") == "contact2d":
+        out.update(_pipe_contact_checks(mesh))
+    return out
 
 
 def _stresses(mesh: dict) -> np.ndarray:
@@ -810,6 +865,35 @@ def _soil_force_change(mesh: dict, u_ref: dict, u_fin: dict) -> dict:
     return forces
 
 
+def _settle_pipe_contacts(mesh: dict, max_solves: int = 10) -> None:
+    """Repeat the gravity solve with the pipe contacts until the ring displacements stop changing.
+
+    The first gravity solve can stop before the zeroLengthContact2D contacts settle: in the no-pad case the next solve at
+    the same load moved the ring by 0.03 mm and changed the force on the pipe from 142.0 N to the pipe weight, 143.2 N.
+    The solve is repeated until no ring displacement changes by more than 1e-6 mm.
+
+    Args:
+        mesh: Mesh dictionary from build_mesh(), with the contacts from define_elements().
+        max_solves: Limit on the repeated solves.
+
+    Raises:
+        RuntimeError: If the displacements have not settled after max_solves solves.
+    """
+    def ring_state() -> list:
+        return [ops.nodeDisp(NODE_BEAM_BASE + k, j) for k in range(len(mesh["iface"])) for j in (1, 2)]
+
+    before = ring_state()
+    for solve in range(1, max_solves + 1):
+        _advance(f"gravity settle {solve}")
+        after = ring_state()
+        change = max(abs(a - b) for a, b in zip(after, before))
+        print(f"  gravity settle {solve}: largest ring displacement change {change:.2e} mm", flush=True)
+        if change < 1.0e-6 * mm:
+            return
+        before = after
+    raise RuntimeError("the gravity solve did not settle with the pipe contacts")
+
+
 def run_gravity(odb, mesh: dict, results: dict) -> None:
     """Gravity on the cut section: soil, pad and pipe self-weight in one full step (body forces are not
     scaled by the load factor in OpenSeesPy, checked in Impact from Pipe 300).
@@ -822,6 +906,8 @@ def run_gravity(odb, mesh: dict, results: dict) -> None:
     _set_solver()
     ops.integrator("LoadControl", 1.0)
     _advance("gravity")
+    if mesh.get("pipe") == "contact2d":
+        _settle_pipe_contacts(mesh)
     odb.fetch_response_step()
     ops.loadConst("-time", 0.0)
     results["gravity"] = collect_state(mesh)
@@ -1038,30 +1124,34 @@ def write_pad_overviews(mesh: dict, output_dir: Path, preview: bool = False) -> 
 
 
 def run_case(output_dir: Path, case: dict, interface: str = "bonded", normal_guess=None, write_odb: bool = False,
-             vis: bool = False) -> dict:
+             vis: bool = False, pipe: str = "springs") -> dict:
     """Run one case: build, gravity, surcharge, stress extraction. The base case also writes the checkpoints.
 
     Args:
         output_dir: Folder for the outputs.
         case: One entry of pad_cases.
+        pipe: Pipe-soil interface: "springs" (the spring pair, default) or "contact2d" (zeroLengthContact2D). The vis
+            pages and the response database are written for the spring-pair model only.
 
     Returns:
         The dictionary from summarise_case().
     """
     full = case["thickness"] is None
-    pages = full or vis                  # vis_* pages and the response database: the no-pad model, or a vis pass
+    show = pipe == "springs"             # the vis_* pages and the response database are for the spring-pair model
+    pages = (full or vis) and show       # vis_* pages and the response database: the no-pad model, or a vis pass
     mesh = build_mesh(case)
     mesh["interface"] = interface
     mesh["normal_guess"] = normal_guess
+    mesh["pipe"] = pipe
     section = define_sections()
     init_model()
     define_materials(mesh, case)
     define_nodes(mesh)
     define_boundary_conditions(mesh)
-    if full:
+    if full and show:
         vis_nodes(output_dir)
     define_elements(mesh, section, case)
-    if full:
+    if full and show:
         vis_model(output_dir)
     if pages:
         odb = create_odb(output_dir)
@@ -1071,7 +1161,7 @@ def run_case(output_dir: Path, case: dict, interface: str = "bonded", normal_gue
         odb = _NoODB()
     define_gravity_loads(mesh)
     define_surcharge_loads(mesh)
-    if full:
+    if full and show:
         vis_loads(output_dir)
         vis_pre_analysis(output_dir)
     if vis and not full:
@@ -1095,6 +1185,7 @@ def run_case(output_dir: Path, case: dict, interface: str = "bonded", normal_gue
                      resp_dof="UY", scale=1.0, include_plotlyjs="directory" if vis else True)
     out = summarise_case(case, mesh, results, ref, fin, d_if)
     out["summary"]["interface"] = mesh.get("interface", "bonded")
+    out["summary"]["pipe_interface"] = pipe
     if mesh.get("pad_copy"):
         out["summary"]["pad_base_settlement_centre_mm"] = float(-(pad_fin - pad_ref))
         out["summary"].update(_interface_checks(mesh))
@@ -1457,6 +1548,47 @@ def compare_coarse(fine_dir: Path, coarse_dir: Path) -> None:
     fig.tight_layout()
     fig.savefig(coarse_dir / "coarse_vs_fine_contact.png", dpi=110)
     plt.close(fig)
+
+
+def compare_pipe_interfaces(spring_dir: Path, pipe_dir: Path) -> None:
+    """Pipe results of the spring pair and of the zeroLengthContact2D pipe, side by side for each pad case.
+
+    Reads cases/<name>_results.json from both folders, prints the vertical diameter change and the mean settlement after
+    gravity and after the surcharge, and writes pipe_interface_compare.json to pipe_dir. Cases without a result are skipped.
+
+    Args:
+        spring_dir: Folder of the spring-pair run (run_case outputs).
+        pipe_dir: Folder of the zeroLengthContact2D pipe run.
+    """
+    keys = ("pipe_mean_uy_mm", "pipe_dD_vertical_mm", "pipe_dD_horizontal_mm")
+    rows = {}
+    for case in pad_cases:
+        name = case["name"]
+        if not (pipe_dir / "cases" / f"{name}_results.json").exists():
+            print(f"{name}: no zeroLengthContact2D result (see failed_cases.json)", flush=True)
+            continue
+        spring = json.loads((spring_dir / "cases" / f"{name}_results.json").read_text(encoding="utf-8"))
+        pipe = json.loads((pipe_dir / "cases" / f"{name}_results.json").read_text(encoding="utf-8"))
+        row = {}
+        for state in ("gravity", "surcharge_final"):
+            row[state] = {
+                "springs": {k: spring[state][k] for k in keys},
+                "contact2d": {k: pipe[state][k] for k in keys},
+                "moments_springs": spring[state]["pipe_moment_at_deg_N_mm_per_mm"],
+                "moments_contact2d": pipe[state]["pipe_moment_at_deg_N_mm_per_mm"],
+            }
+        row["contact2d_after_surcharge"] = {
+            k: pipe["surcharge_final"][k]
+            for k in ("pipe_contacts_active", "pipe_contacts_at_limit", "pipe_friction_ratio_max", "pipe_contacts_total_N")
+        }
+        rows[name] = row
+        print(name, flush=True)
+        for state in ("gravity", "surcharge_final"):
+            s, p = row[state]["springs"], row[state]["contact2d"]
+            print(f"  {state:16s} vertical diameter change {s['pipe_dD_vertical_mm']:+.4f} mm (springs) vs "
+                  f"{p['pipe_dD_vertical_mm']:+.4f} mm (contact2d); mean uy {s['pipe_mean_uy_mm']:+.4f} vs "
+                  f"{p['pipe_mean_uy_mm']:+.4f} mm", flush=True)
+    (pipe_dir / "pipe_interface_compare.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
 
 
 def make_study_figures(output_dir: Path, runs: list) -> None:
@@ -1893,6 +2025,27 @@ if __name__ == "__main__":
         (coarse_dir / "pad_study_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         compare_coarse(output_dir, coarse_dir)
         print("coarse zone study complete", flush=True)
+        raise SystemExit(0)
+    if "--pipe-contact2d" in sys.argv:
+        # The pipe-soil interface with zeroLengthContact2D elements (the pad contact element), with the spring pair's
+        # stiffnesses and the friction coefficient pipe_friction_coefficient. The same pad cases and bonded pad as the
+        # spring-pair run; written to <run folder>/pipe_contact2d and compared with it.
+        pipe_dir = run_dir / "pipe_contact2d"
+        pipe_dir.mkdir(parents=True, exist_ok=True)
+        runs, failed = [], []
+        for case in pad_cases:
+            try:
+                runs.append(run_case(pipe_dir, case, pipe="contact2d"))
+            except RuntimeError as error:          # a case that does not converge is recorded; the others still run
+                failed.append({"case": case["name"], "error": str(error)})
+                print(f"  {case['name']} did not converge: {error}", flush=True)
+        (pipe_dir / "failed_cases.json").write_text(json.dumps(failed, indent=2), encoding="utf-8")
+        summary = {r["summary"]["name"]: r["summary"] for r in runs}
+        (pipe_dir / "pad_study_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        if runs:
+            make_study_figures(pipe_dir, runs)
+        compare_pipe_interfaces(run_dir, pipe_dir)
+        print("pipe contact2d study complete", flush=True)
         raise SystemExit(0)
     if "--interface" in sys.argv:
         run_interface_study(run_dir)

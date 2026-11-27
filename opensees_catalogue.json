@@ -2034,7 +2034,7 @@
     "file format": ".py",
     "Suggested Model citation": "NA",
     "Links to Papers / Design Reports": "NA (no published source; geometry from models/Impact from Pipe 300/Impact to 300mm Pipe.dxf)",
-    "Notes": "Stress increase (kPa) from a 75 kPa surcharge: flexible load on the ground and bonded pads of 0.3, 0.6 and 1.2 m (E 30 GPa) and 0.6 m (E 3 GPa). Contact sums to the applied 368.6 N. Edge contact is mesh-sensitive at single nodes, so 0.5 m bin averages are reported. Stress animations for each case are in the output/animations folder. Placeholder values; the bonded contact has not been checked against a frictionless interface."
+    "Notes": "Stress increase (kPa) from a 75 kPa surcharge: flexible load on the ground and bonded pads of 0.3, 0.6 and 1.2 m (E 30 GPa) and 0.6 m (E 3 GPa). Contact sums to the applied 368.6 N. Edge contact is mesh-sensitive at single nodes, so 0.5 m bin averages are reported. Stress animations for each case are in the output/animations folder. Placeholder values; the bonded contact has not been checked against a frictionless interface. Pipe-soil interface options: the spring pair (default) and zeroLengthContact2D (--pipe-contact2d), with the same stiffnesses and Coulomb friction 0.4. With zeroLengthContact2D the surcharge changes the pipe's vertical diameter by 0.27 to 0.33 mm, against 0.26 to 0.31 mm with the springs; the contacts carry the pipe weight, and none is in tension. A BeamContact2D pipe option was tried and removed: BeamContact2D holds the contact in tension as well as compression, so it is not a pipe-soil interface (single-contact test; see the README)."
   },
   {
     "UniqueID": "SalarDelavar_Sensitivity_Confinement_Enhancement_Ratio_Rebar",
